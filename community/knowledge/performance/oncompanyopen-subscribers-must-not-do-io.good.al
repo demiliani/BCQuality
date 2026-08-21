@@ -2,17 +2,22 @@ codeunit 50100 "Login Subscriber IO Good"
 {
     [EventSubscriber(ObjectType::Codeunit, Codeunit::"System Initialization", OnAfterLogin, '', false, false)]
     local procedure OnAfterLogin()
+    var
+        TaskId: Guid;
+        StoredId: Text;
     begin
         // Guard to interactive sessions only; background task sessions also raise OnAfterLogin.
-        if not (Session.GetCurrentClientType() in [ClientType::Web, ClientType::Windows, ClientType::Desktop, ClientType::Tablet, ClientType::Phone]) then
+        if not (Session.CurrentClientType() in [ClientType::Web, ClientType::Windows, ClientType::Desktop, ClientType::Tablet, ClientType::Phone]) then
             exit;
 
-        // Idempotent: skip if a task for this codeunit is already queued.
-        if TaskScheduler.TaskExists(Codeunit::"Login Subscriber IO Work") then
-            exit;
+        // Idempotent: TaskExists requires the GUID returned by CreateTask, stored across logins.
+        if IsolatedStorage.Get('LoginSyncTaskId', DataScope::Company, StoredId) then
+            if Evaluate(TaskId, StoredId) then
+                if TaskScheduler.TaskExists(TaskId) then
+                    exit;
 
-        // Defer the I/O work; CreateTask is the only write allowed on this path.
-        TaskScheduler.CreateTask(Codeunit::"Login Subscriber IO Work", 0, true, CompanyName(), CurrentDateTime() + 60000);
+        TaskId := TaskScheduler.CreateTask(Codeunit::"Login Subscriber IO Work", 0, true, CompanyName(), CurrentDateTime() + 60000);
+        IsolatedStorage.Set('LoginSyncTaskId', Format(TaskId), DataScope::Company);
     end;
 }
 

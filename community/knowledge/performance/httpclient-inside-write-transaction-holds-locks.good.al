@@ -5,22 +5,21 @@ codeunit 50100 "HttpClient Holds Locks Good"
     begin
         Customer."Search Name" := Customer.Name;
         Customer.Modify(false);
-        TaskScheduler.CreateTask(Codeunit::"Customer Sync Task", 0, true, CompanyName(), CurrentDateTime());
+        // RecordId binds the task to this specific customer; the platform loads it into Rec on OnRun.
+        TaskScheduler.CreateTask(Codeunit::"Customer Sync Task", 0, true, CompanyName(), CurrentDateTime(), Customer.RecordId);
     end;
 }
 
 codeunit 50101 "Customer Sync Task"
 {
+    TableNo = Customer;
+
     trigger OnRun()
     var
         Client: HttpClient;
-        Customer: Record Customer;
         Response: HttpResponseMessage;
     begin
-        // Separate session: no write-transaction lock is held during the HTTP call.
-        if Customer.FindSet() then
-            repeat
-                Client.Get(StrSubstNo('https://example.local/sync/%1', Customer."No."), Response);
-            until Customer.Next() = 0;
+        // Separate session: Rec is the single customer passed via RecordId; no write-transaction lock is held.
+        Client.Get(StrSubstNo('https://example.local/sync/%1', Rec."No."), Response);
     end;
 }
