@@ -1,16 +1,16 @@
 codeunit 50100 "Skip LoadFields Write Bad"
 {
-    procedure UppercaseUsCustomerNames()
+    procedure CopyActiveCustomers(var TempCustomer: Record Customer temporary)
     var
         Customer: Record Customer;
     begin
-        // Partial load plus Modify forces a JIT full-row load per iteration.
-        Customer.SetLoadFields(Name);
-        Customer.SetRange("Country/Region Code", 'US');
-        if Customer.FindSet(true) then
+        // TransferFields requires all fields; partial load forces JIT per row.
+        Customer.SetLoadFields("No.", Name);
+        Customer.SetRange(Blocked, Customer.Blocked::" ");
+        if Customer.FindSet() then
             repeat
-                Customer.Name := UpperCase(Customer.Name);
-                Customer.Modify(false);
+                TempCustomer.TransferFields(Customer);
+                TempCustomer.Insert();
             until Customer.Next() = 0;
     end;
 }

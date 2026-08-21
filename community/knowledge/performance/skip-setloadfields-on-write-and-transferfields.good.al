@@ -1,15 +1,15 @@
 codeunit 50100 "Skip LoadFields Write Good"
 {
-    procedure UppercaseUsCustomerNames()
+    procedure CopyActiveCustomers(var TempCustomer: Record Customer temporary)
     var
         Customer: Record Customer;
     begin
-        // Write path: load the full row. SetLoadFields would JIT on Modify.
-        Customer.SetRange("Country/Region Code", 'US');
-        if Customer.FindSet(true) then
+        // TransferFields needs all fields; omit SetLoadFields so the initial read loads the full row.
+        Customer.SetRange(Blocked, Customer.Blocked::" ");
+        if Customer.FindSet() then
             repeat
-                Customer.Name := UpperCase(Customer.Name);
-                Customer.Modify(false);
+                TempCustomer.TransferFields(Customer);
+                TempCustomer.Insert();
             until Customer.Next() = 0;
     end;
 }

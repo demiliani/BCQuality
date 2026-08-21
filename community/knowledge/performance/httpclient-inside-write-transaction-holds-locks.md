@@ -17,7 +17,7 @@ The first database write opens an AL write transaction that the runtime holds un
 
 ## Best Practice
 
-Finish database writes and `Commit()` (or return from the write execution) before `HttpClient.Send`/`Get`/`Post`. If the call can be slow or retry, isolate it in a job queue or `TaskScheduler` task so UI and other sessions are not sitting on the writer's locks.
+Defer the HTTP call to a `TaskScheduler` task or job queue entry so it runs in a separate session after the write transaction has already ended. The database write completes and releases its locks naturally when the caller's transaction commits; the HTTP call then happens without holding any locks. Do **not** use `Commit()` as a general remedy: it irrevocably commits all prior writes in the current transaction, so any subsequent failure cannot roll them back. `Commit()` is appropriate only at top-level entry points where partial persistence is intentional and understood.
 
 See sample: `httpclient-inside-write-transaction-holds-locks.good.al`.
 

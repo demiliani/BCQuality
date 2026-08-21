@@ -37,7 +37,24 @@ page 50100 "Campaign Member List"
         }
         area(factboxes)
         {
-            part(Details; "Campaign Member List") { }
+            // Full list carries this FactBox on every dropdown open — expensive.
+            part(Details; "Campaign Member Details FB") { }
+        }
+    }
+}
+
+page 50101 "Campaign Member Details FB"
+{
+    PageType = CardPart;
+    SourceTable = "Campaign Member";
+
+    layout
+    {
+        area(content)
+        {
+            field("No."; Rec."No.") { }
+            field(Name; Rec.Name) { }
+            field("Balance (LCY)"; Rec."Balance (LCY)") { }
         }
     }
 }

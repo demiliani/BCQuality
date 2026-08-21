@@ -10,7 +10,7 @@ codeunit 50100 "CountApprox Progress Good"
         Customer.SetRange("Country/Region Code", 'US');
         Total := Customer.CountApprox();
         Window.Open('Processing #1###### of #2######');
-        if Customer.FindSet(true) then
+        if Customer.FindSet() then
             repeat
                 Counter += 1;
                 Window.Update(1, Counter);

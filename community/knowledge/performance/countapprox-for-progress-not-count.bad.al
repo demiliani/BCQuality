@@ -11,7 +11,7 @@ codeunit 50100 "CountApprox Progress Bad"
         // Exact Count() is a SELECT COUNT(*) just to drive a progress bar.
         Total := Customer.Count();
         Window.Open('Processing #1###### of #2######');
-        if Customer.FindSet(true) then
+        if Customer.FindSet() then
             repeat
                 Counter += 1;
                 Window.Update(1, Counter);

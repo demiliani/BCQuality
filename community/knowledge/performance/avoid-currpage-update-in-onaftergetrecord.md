@@ -17,7 +17,7 @@ application-area: [all]
 
 ## Best Practice
 
-Put display-only results in page variables assigned in `OnAfterGetRecord` without calling `Update`. If the page must refresh after an action, call `CurrPage.Update(false)` from `OnAction` or `OnAfterGetCurrRecord` once, not per row.
+Put display-only results in page variables assigned in `OnAfterGetRecord` without calling `Update`. If the page must refresh after an action, call `CurrPage.Update(false)` from `OnAction` once, not per row.
 
 See sample: `avoid-currpage-update-in-onaftergetrecord.good.al`.
 

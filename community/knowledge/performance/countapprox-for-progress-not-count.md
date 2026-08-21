@@ -13,7 +13,7 @@ application-area: [all]
 
 ## Description
 
-`Count()` asks SQL for an exact row count of the current filter. On a large table that is a `SELECT COUNT(*)` before any useful work starts — the usual cost of `Dialog.Open` with a percentage bar. `CountApprox()` exists for that UI case: it returns a cheap estimate (partition stats / metadata), accurate enough for a progress denominator. Agents default to `Count()` because the name matches "how many rows".
+`Count()` asks SQL for an exact row count of the current filter. When no SIFT key covers all filtered fields, this is a `SELECT COUNT(*)` against the data rows before any useful work starts — the usual cost of `Dialog.Open` with a percentage bar. (A filtered count on a table with a matching SIFT key is cheap, but SIFT coverage cannot be assumed for arbitrary filters.) `CountApprox()` exists for the progress-UI case: it returns a cheap estimate (partition stats / metadata), accurate enough for a progress denominator. Agents default to `Count()` because the name matches "how many rows".
 
 ## Best Practice
 
@@ -23,6 +23,6 @@ See sample: `countapprox-for-progress-not-count.good.al`.
 
 ## Anti Pattern
 
-`Total := Rec.Count(); Window.Open(...);` immediately before a `FindSet` over the same filter. The exact count is discarded after the bar finishes; the user paid a full scan to draw it.
+`Total := Rec.Count(); Window.Open(...);` immediately before a `FindSet` over the same filter. The exact count is discarded after the bar finishes; when the filter is not covered by a SIFT key, the user paid a full table scan just to draw the progress bar.
 
 See sample: `countapprox-for-progress-not-count.bad.al`.
