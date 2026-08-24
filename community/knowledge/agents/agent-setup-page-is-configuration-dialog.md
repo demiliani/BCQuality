@@ -16,6 +16,7 @@ Instance setup is not a Card or StandardDialog. The toolkit expects `PageType = 
 ## Best Practice
 
 Declare `PageType = ConfigurationDialog`, host `part(...; "Agent Setup Part")`, and put agent-specific fields in another group. Keep system OK/Cancel. Use a temporary source record and defer persistence until Update, as described in `agent-setup-source-table-is-temporary.md`.
+The Extensible property of the page must be set to false.
 
 See sample: `agent-setup-page-is-configuration-dialog.good.al`.
 

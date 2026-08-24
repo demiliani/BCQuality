@@ -4,6 +4,7 @@ page 50100 "Sales Review Agent Setup"
     Caption = 'Set up Sales Review Agent';
     SourceTable = "Sales Review Agent Setup";
     SourceTableTemporary = true;
+    Extensible = false;
 
     layout
     {

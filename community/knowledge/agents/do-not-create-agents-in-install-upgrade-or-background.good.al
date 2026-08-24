@@ -4,6 +4,7 @@ page 50100 "Sales Review Agent Setup"
     ApplicationArea = All;
     SourceTable = "Sales Review Agent Setup";
     SourceTableTemporary = true;
+    Extensible = false;
 
     layout
     {

@@ -8,6 +8,14 @@ profile "SALES REVIEW AGENT"
 
 pagecustomization "Sales Review Agent Sales Ord." customizes "Sales Order"
 {
+    layout
+    {
+        modify("Payment Terms Code")
+        {
+            Visible = false;
+        }
+    }
+
     actions
     {
         modify(Post)

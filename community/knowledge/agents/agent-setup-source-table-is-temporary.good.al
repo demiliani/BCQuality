@@ -3,6 +3,7 @@ page 50100 "Sales Review Agent Setup"
     PageType = ConfigurationDialog;
     SourceTable = "Sales Review Agent Setup";
     SourceTableTemporary = true;
+    Extensible = false;
 
     layout
     {

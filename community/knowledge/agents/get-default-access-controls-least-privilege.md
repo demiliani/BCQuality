@@ -15,7 +15,7 @@ application-area: [all]
 
 ## Best Practice
 
-Insert only the permission sets the agent needs, with the correct Scope and App ID. Recreate any BC-only sets as AL permissionset objects first. Prefer a dedicated permission set over a full-user role.
+Insert only the permission sets the agent needs. For an AL `permissionset` object, use `Scope::System` and the ID of the app that defines it. Recreate permission sets that exist only as user-defined configuration in Business Central as AL objects first. Prefer a dedicated permission set over a full-user role.
 
 See sample: `get-default-access-controls-least-privilege.good.al`.
 
