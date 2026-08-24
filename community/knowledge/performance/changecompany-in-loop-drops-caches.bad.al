@@ -5,6 +5,7 @@ codeunit 50100 "ChangeCompany Loop Bad"
         Customer: Record Customer;
         Company: Record Company;
     begin
+        Customer.SetLoadFields(Name);
         if Buffer.FindSet() then
             repeat
                 if Company.FindSet() then

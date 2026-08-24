@@ -1,25 +1,62 @@
 codeunit 50100 "HttpClient Holds Locks Good"
 {
-    // Write completes inside the caller's transaction; HTTP deferred so locks are released with it.
     procedure SyncCustomerLastName(var Customer: Record Customer)
+    var
+        CustomerSyncOutbox: Record "Customer Sync Outbox";
     begin
         Customer."Search Name" := Customer.Name;
         Customer.Modify(false);
-        // RecordId binds the task to this specific customer; the platform loads it into Rec on OnRun.
-        TaskScheduler.CreateTask(Codeunit::"Customer Sync Task", 0, true, CompanyName(), CurrentDateTime(), Customer.RecordId);
+
+        // This work item commits or rolls back with the customer change.
+        CustomerSyncOutbox."Customer No." := Customer."No.";
+        CustomerSyncOutbox.Insert();
     end;
 }
 
-codeunit 50101 "Customer Sync Task"
+table 50100 "Customer Sync Outbox"
 {
-    TableNo = Customer;
+    DataClassification = CustomerContent;
+
+    fields
+    {
+        field(1; "Entry No."; Integer)
+        {
+            AutoIncrement = true;
+        }
+        field(2; "Customer No."; Code[20]) { }
+    }
+
+    keys
+    {
+        key(PK; "Entry No.")
+        {
+            Clustered = true;
+        }
+    }
+}
+
+codeunit 50101 "Customer Sync Outbox Worker"
+{
+    // Configure this codeunit as a recurring job queue entry.
+    TableNo = "Job Queue Entry";
 
     trigger OnRun()
     var
+        Customer: Record Customer;
+        CustomerSyncOutbox: Record "Customer Sync Outbox";
         Client: HttpClient;
         Response: HttpResponseMessage;
     begin
-        // Separate session: Rec is the single customer passed via RecordId; no write-transaction lock is held.
-        Client.Get(StrSubstNo('https://example.local/sync/%1', Rec."No."), Response);
+        // Only committed work is visible here; a rolled-back change leaves no outbox row.
+        if not CustomerSyncOutbox.FindFirst() then
+            exit;
+
+        Customer.Get(CustomerSyncOutbox."Customer No.");
+        Client.Get(StrSubstNo('https://example.local/sync/%1', Customer."No."), Response);
+        if not Response.IsSuccessStatusCode() then
+            Error('Customer sync failed with HTTP status %1.', Response.HttpStatusCode());
+
+        // Delete only after HTTP completes, so no write lock is held during the call.
+        CustomerSyncOutbox.Delete();
     end;
 }

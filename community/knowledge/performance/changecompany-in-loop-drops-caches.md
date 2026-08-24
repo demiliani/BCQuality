@@ -17,7 +17,7 @@ application-area: [all]
 
 ## Best Practice
 
-Group work by company. Call `ChangeCompany` once per distinct company, then `FindSet`/`Get` that company's rows. Reset the variable back when the batch finishes.
+Group work by company. Call `ChangeCompany` once per distinct company, then `FindSet`/`Get` that company's rows. If the record variable is reused afterward, call `ChangeCompany()` without a company name to redirect it back to the current company.
 
 See sample: `changecompany-in-loop-drops-caches.good.al`.
 

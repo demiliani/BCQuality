@@ -11,14 +11,24 @@ page 50100 "GuiAllowed OData Guard Bad"
             repeater(Rows)
             {
                 field("No."; Rec."No.") { }
-                field(Name; Rec.Name) { }
+                field(Name; Rec.Name)
+                {
+                    StyleExpr = NameStyle;
+                }
             }
         }
     }
 
+    var
+        NameStyle: Text;
+
     trigger OnAfterGetRecord()
     begin
-        // Runs for every OData / Edit-in-Excel row with no UI.
+        // UI-only styling still runs for every OData / Edit-in-Excel row.
         Rec.CalcFields("Balance (LCY)");
+        if Rec."Balance (LCY)" > 0 then
+            NameStyle := 'Attention'
+        else
+            NameStyle := 'Standard';
     end;
 }
