@@ -4,7 +4,7 @@ enumextension 50100 "Sales Review Agent Metadata" extends "Agent Metadata Provid
     {
         Caption = 'Sales Review Agent';
         Implementation = IAgentFactory = "Sales Review Agent Factory",
-                         IAgentMetadata = "Sales Review Agent Metadata",
+                         IAgentMetadata = "Sales Review Agent Meta. Impl.",
                          IAgentTaskExecution = "Sales Review Agent Task";
     }
 }

@@ -4,6 +4,9 @@
   "minimumExpectedRecall": 1.0,
   "minimumCleanRate": 1.0,
   "overrides": {
+    "agents": {
+      "article": "wire-all-three-agent-interfaces"
+    },
     "appsource": {
       "context": "AppSourceCop mandatoryAffixes is configured to ABC."
     },

@@ -11,7 +11,7 @@ application-area: [all]
 
 ## Description
 
-The agent runtime looks for specific phrases: ask for assistance, request a review, reply, write an email, memorize, set a field, use lookup, invoke an action. Ordinary English such as get a human to look or remember this is weaker. Outbound reply and email always require review; that is platform policy, not optional tone.
+The agent runtime looks for specific phrases: ask for assistance, request a review, reply, write an email, memorize, `Set field`, use lookup, `Invoke action`. Ordinary English such as get a human to look or remember this is weaker. Outbound reply and email always require review; that is platform policy, not optional tone.
 
 ## Best Practice
 

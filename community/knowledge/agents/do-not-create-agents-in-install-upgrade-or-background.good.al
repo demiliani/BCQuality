@@ -21,17 +21,15 @@ page 50100 "Sales Review Agent Setup"
     trigger OnQueryClosePage(CloseAction: Action): Boolean
     var
         Agent: Codeunit Agent;
-        TempAgentAccessControl: Record "Agent Access Control" temporary;
+        AgentSetup: Codeunit "Agent Setup";
+        TempAgentSetupBuffer: Record "Agent Setup Buffer" temporary;
         AgentUserSecurityId: Guid;
     begin
         if CloseAction = CloseAction::Cancel then
             exit(true);
 
-        AgentUserSecurityId := Agent.Create(
-            Enum::"Agent Metadata Provider"::"Sales Review Agent",
-            'SALESREVIEW',
-            'Sales Review Agent',
-            TempAgentAccessControl);
+        CurrPage.AgentSetupPart.Page.GetAgentSetupBuffer(TempAgentSetupBuffer);
+        AgentUserSecurityId := AgentSetup.SaveChanges(TempAgentSetupBuffer);
         Agent.SetInstructions(AgentUserSecurityId, GetInstructions());
         Agent.Activate(AgentUserSecurityId);
         exit(true);

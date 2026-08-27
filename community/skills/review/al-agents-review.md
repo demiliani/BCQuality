@@ -14,7 +14,9 @@ application-area: [all]
 
 # AL agents review
 
-Reviews AL source changes against the `agents` knowledge domain in BCQuality and emits a findings report. This is a leaf action skill: it invokes no sub-skills.
+Reviews AL source changes against the `agents` knowledge domain in BCQuality and emits a findings report. This is a leaf action skill: it invokes no sub-skills. It is not one of the skills composed by `al-code-review`; Entry discovers and dispatches it as a top-level peer, so it produces an independent findings report.
+
+Agent findings apply to AL files that implement or invoke Agent SDK surfaces, including agent interfaces, setup, creation, task execution, capability registration, profiles, access controls, instructions, and session-bound subscribers. Return `not-applicable` when the diff contains no AL changes or no Agent SDK implementation or usage.
 
 An orchestrator invokes this skill with either a `pr-diff` or a `file-path`. The skill produces one JSON document conforming to the DO output contract.
 

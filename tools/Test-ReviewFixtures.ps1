@@ -203,7 +203,20 @@ foreach ($domain in $leafDomains) {
         }
         $selectedArticle = $articles | Where-Object BaseName -eq $articleName | Select-Object -First 1
         if (-not $selectedArticle) {
-            $problems.Add("${domain}: override article does not exist: $articleName.md") | Out-Null
+            $articleExists = @(
+                foreach ($layer in $layers) {
+                    $articleFile = Join-Path $Root "$($layer.Name)/knowledge/$domain/$articleName.md"
+                    if (Test-Path -LiteralPath $articleFile -PathType Leaf) {
+                        $articleFile
+                    }
+                }
+            ).Count -gt 0
+            if ($articleExists) {
+                $problems.Add("${domain}: override article does not have both .good.al and .bad.al companion samples: $articleName.md") | Out-Null
+            } else {
+                $problems.Add("${domain}: override article does not exist: $articleName.md") | Out-Null
+            }
+            continue
         }
     } else {
         $selectedArticle = $articles | Select-Object -First 1
@@ -214,7 +227,7 @@ foreach ($domain in $leafDomains) {
     }
 
     $articlePath = [string]$selectedArticle.ArticlePath
-    $sampleDirectory = Split-Path -Parent $articlePath
+    $sampleDirectory = (Split-Path -Parent $articlePath).Replace('\', '/')
     $context = if ($override -and ($override.PSObject.Properties.Name -contains 'context')) {
         [string]$override.context
     } else {

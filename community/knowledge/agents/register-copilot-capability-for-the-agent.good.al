@@ -20,7 +20,7 @@ codeunit 50101 "Sales Review Agent Install"
             CopilotCapability.RegisterCapability(
                 Enum::"Copilot Capability"::"Sales Review Agent",
                 Enum::"Copilot Availability"::Preview,
-                "Copilot Billing Type"::"Microsoft Billed",
+                Enum::"Copilot Billing Type"::"Microsoft Billed",
                 LearnMoreUrlTxt);
     end;
 }

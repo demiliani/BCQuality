@@ -90,7 +90,7 @@ Code examples belong in separate files, not in the knowledge file itself. Knowle
 
 ## Scope
 
-The current curated corpus is focused on **technical AL code review**: AppSource and compatibility, data modeling, error handling, events, interfaces, performance, privacy, Query objects, security, style, telemetry, testing, UI, upgrade, and web services. These are the domains backed by knowledge files and registered review leaves today.
+The current curated corpus is focused on **technical AL code review**: Agents, AppSource and compatibility, data modeling, error handling, events, interfaces, performance, privacy, Query objects, security, style, telemetry, testing, UI, upgrade, and web services. These are the domains backed by knowledge files and registered review leaves today.
 
 Business Central functional domains (Finance, Supply Chain Management, Manufacturing, Jobs, Warehousing, Service), PowerShell, pipelines, and Power Platform remain valid future repository scope, but they are **not current coverage claims** until corresponding knowledge and action skills exist. Consumers should derive supported review scope from the live knowledge index and dispatched skills, not from roadmap breadth.
 
