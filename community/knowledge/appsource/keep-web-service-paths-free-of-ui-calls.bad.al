@@ -5,13 +5,17 @@ codeunit 50100 "Rental Service"
     var
         RentalAgreement: Record "Rental Agreement";
     begin
-        if not Confirm('Close rental agreement %1?', false, AgreementNo) then
+        if not Confirm(CloseAgreementQst, false, AgreementNo) then
             exit(false);
 
         RentalAgreement.Get(AgreementNo);
         RentalAgreement.Closed := true;
         RentalAgreement.Modify(true);
-        Message('Rental agreement %1 was closed.', AgreementNo);
+        Message(AgreementClosedMsg, AgreementNo);
         exit(true);
     end;
+
+    var
+        CloseAgreementQst: Label 'Close rental agreement %1?';
+        AgreementClosedMsg: Label 'Rental agreement %1 was closed.';
 }

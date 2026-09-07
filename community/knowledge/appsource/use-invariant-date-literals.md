@@ -11,7 +11,7 @@ application-area: [all]
 
 ## Description
 
-Write fixed dates in AL with the invariant `yyyymmddD` syntax. A locale-dependent text value parsed with `Evaluate` can change meaning or fail under another user's regional settings, which makes the extension unreliable across AppSource markets.
+Write fixed dates in AL with the invariant `yyyymmddD` syntax. A locale-dependent text value parsed with `Evaluate` can change meaning or fail under another user's regional settings, which makes the Marketplace extension unreliable across markets.
 
 ## Best Practice
 

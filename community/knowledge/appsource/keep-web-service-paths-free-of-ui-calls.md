@@ -11,7 +11,7 @@ application-area: [all]
 
 ## Description
 
-Pages and codeunits exposed as web services run without an interactive client. Calls that require a UI callback, including `Message`, `Confirm`, `StrMenu`, and modal pages, can terminate the service request instead of completing the operation.
+Pages and codeunits exposed as web services run without an interactive client. Calls that require a UI callback, including `Confirm`, `StrMenu`, and modal pages, can terminate the service request instead of completing the operation. `Message` does not raise the callback error: the message is suppressed and logged, making it ineffective for communicating a service result.
 
 ## Best Practice
 
@@ -21,6 +21,6 @@ See sample: `keep-web-service-paths-free-of-ui-calls.good.al`.
 
 ## Anti Pattern
 
-A web-service-exposed page or codeunit calls an interactive UI method directly or indirectly. Detection signals include `Message`, `Confirm`, `StrMenu`, `Page.RunModal`, and confirmation-dialog pages on a service call path. Do not flag a controlled `Error` solely because it returns a service fault.
+A web-service-exposed page or codeunit calls an interactive UI method directly or indirectly. Detection signals include `Message`, `Confirm`, `StrMenu`, `Page.RunModal`, and confirmation-dialog pages on a service call path. Treat `Message` as suppressed and ineffective, not as a callback failure. Do not flag a controlled `Error` solely because it returns a service fault.
 
 See sample: `keep-web-service-paths-free-of-ui-calls.bad.al`.

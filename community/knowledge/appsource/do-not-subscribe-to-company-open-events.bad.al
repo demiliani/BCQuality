@@ -1,6 +1,6 @@
 codeunit 50100 "Rental Company Open"
 {
-    [EventSubscriber(ObjectType::Codeunit, Codeunit::"System Initialization", OnAfterCompanyOpen, '', false, false)]
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Application Management", OnAfterCompanyOpen, '', false, false)]
     local procedure InitializeRentalSetup()
     var
         RentalSetup: Record "Rental Setup";

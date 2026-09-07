@@ -11,7 +11,7 @@ application-area: [all]
 
 ## Description
 
-Profiles delivered by an AppSource extension must be declared as AL `profile` objects. A profile object is validated with its Role Center and page customizations when the extension is compiled and is registered through extension synchronization. Inserting profile-table records from install or setup code bypasses that object lifecycle.
+Profiles delivered by a Marketplace extension must be declared as AL `profile` objects. A profile object is validated with its Role Center and page customizations when the extension is compiled and is registered through extension synchronization. Inserting profile-table records from install or setup code bypasses that object lifecycle.
 
 ## Best Practice
 

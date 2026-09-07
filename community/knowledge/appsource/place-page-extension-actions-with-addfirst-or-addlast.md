@@ -21,6 +21,6 @@ See sample: `place-page-extension-actions-with-addfirst-or-addlast.good.al`.
 
 ## Anti Pattern
 
-Using `addbefore` or `addafter` to place newly added actions next to a specific action from another app. The syntax is valid AL, but the placement anchor is brittle for an AppSource extension.
+Using `addbefore` or `addafter` to place newly added actions next to a specific action from another app. The syntax is valid AL, but the placement anchor is brittle for a Marketplace extension.
 
 See sample: `place-page-extension-actions-with-addfirst-or-addlast.bad.al`.

@@ -11,7 +11,7 @@ application-area: [all]
 
 ## Description
 
-AppSource extensions run for users and services in many time zones. Adding a fixed offset to a `DateTime` assumes one locale, ignores daylight-saving transitions, and changes an absolute timestamp into an incorrect value for other regions.
+Marketplace extensions run for users and services in many time zones. Adding a fixed offset to a `DateTime` assumes one locale, ignores daylight-saving transitions, and changes an absolute timestamp into an incorrect value for other regions.
 
 ## Best Practice
 

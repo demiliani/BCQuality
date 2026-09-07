@@ -11,7 +11,7 @@ application-area: [all]
 
 ## Description
 
-AppSource extensions must not subscribe to `OnBeforeCompanyOpen` or `OnAfterCompanyOpen`. These events run on the sign-in path, where an error can prevent access and even small amounts of work affect every company open. Move initialization to installation, upgrade, new-company initialization, or the first use of the feature instead.
+Marketplace extensions must not subscribe to `OnBeforeCompanyOpen` or `OnAfterCompanyOpen`. These events run on the sign-in path, where an error can prevent access and even small amounts of work affect every company open. Move initialization to installation, upgrade, new-company initialization, or the first use of the feature instead.
 
 ## Best Practice
 
