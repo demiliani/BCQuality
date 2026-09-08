@@ -1,6 +1,6 @@
 codeunit 50115 "Scheduled Task Duplicate Good"
 {
-    procedure EnsureCleanupTask()
+    internal procedure EnsureCleanupTask()
     var
         TaskId: Guid;
         StoredTaskId: Text;

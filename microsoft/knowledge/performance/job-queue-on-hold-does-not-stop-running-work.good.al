@@ -27,10 +27,9 @@ codeunit 50114 "Job Queue On Hold Good"
 
     trigger OnRun()
     begin
-        repeat
+        while not IsStopRequested(Rec.ID) do
             if not ProcessNextBatch() then
                 exit;
-        until IsStopRequested(Rec.ID);
     end;
 
     local procedure IsStopRequested(JobQueueEntryId: Guid): Boolean

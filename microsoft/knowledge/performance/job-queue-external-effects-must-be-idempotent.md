@@ -13,7 +13,7 @@ application-area: [all]
 
 ## Description
 
-A job queue handler can successfully create something in an external system and then fail while updating Business Central. Business Central rolls back its database changes and retries the queued work, but it cannot roll back the external request. Without a way for the external system to recognize the repeated request, the retry can create a duplicate shipment, payment, notification, or other side effect.
+A job queue handler can successfully create something in an external system and then fail while updating Business Central. Business Central rolls back its database changes, but it cannot roll back the external request. The same work can later run again through configured retries, recurrence, rescheduling, or manual restart. Without a way for the external system to recognize the repeated request, a later run can create a duplicate shipment, payment, notification, or other side effect.
 
 ## Best Practice
 
@@ -25,6 +25,6 @@ See sample: `job-queue-external-effects-must-be-idempotent.good.al`.
 
 ## Anti Pattern
 
-Sending a state-changing request from a job queue handler with no stable request ID understood by the external API. Specifically, look for this sequence: read an outbox row, call `HttpClient.Post` or another side-effecting API, update or delete local data, and propagate an error that can cause the same outbox row to be retried. The key may be part of the request body, URI, headers, or an existing business key; a naturally idempotent remote operation is already safe and should not be flagged.
+Sending a state-changing request from a job queue handler with no stable request ID understood by the external API. Specifically, look for this sequence: read an outbox row, call `HttpClient.Post` or another side-effecting API, update or delete local data, and propagate an error after which the same outbox row can be processed again. The key may be part of the request body, URI, headers, or an existing business key; a naturally idempotent remote operation is already safe and should not be flagged.
 
 See sample: `job-queue-external-effects-must-be-idempotent.bad.al`.

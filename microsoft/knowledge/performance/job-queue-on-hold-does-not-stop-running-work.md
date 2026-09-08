@@ -17,7 +17,7 @@ The On Hold status prevents a job queue entry from starting again, but it does n
 
 ## Best Practice
 
-Use On Hold to pause future scheduling. When a long-running operation must support graceful cancellation, store a separate application-owned stop request and check it between bounded units of work. Exit only at a point where completed work and the checkpoint are consistent; use administrative session termination only when graceful cancellation is impossible.
+Use On Hold to pause future scheduling. When a long-running operation must support graceful cancellation, store a separate application-owned stop request and check it before every bounded unit of work, including the first. Exit only at a point where completed work and the checkpoint are consistent. The code that resumes scheduling must clear the stop request before restarting the job. Use administrative session termination only when graceful cancellation is impossible.
 
 See sample: `job-queue-on-hold-does-not-stop-running-work.good.al`.
 

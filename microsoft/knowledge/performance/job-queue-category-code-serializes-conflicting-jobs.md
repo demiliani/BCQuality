@@ -13,11 +13,11 @@ application-area: [all]
 
 ## Description
 
-Different job queue entries can run at the same time. When two jobs update the same exclusive resource, concurrent execution can cause lock contention, deadlocks, or conflicting results. Entries with the same Job Queue Category Code are serialized: while one runs, another entry in that category waits.
+Different job queue entries can run at the same time. When two jobs update the same exclusive resource, concurrent execution can cause lock contention, deadlocks, or conflicting results. Within one company, entries with the same Job Queue Category Code are serialized: while one runs, another entry in that category waits.
 
 ## Best Practice
 
-Assign the same non-empty Job Queue Category Code to jobs that must not overlap, regardless of which codeunit they run. Define categories around the shared resource or exclusivity requirement, not merely around object names. Leave independent jobs in different categories so they can still run concurrently.
+Assign the same non-empty Job Queue Category Code to job queue entries in the same company that must not overlap, regardless of which codeunit they run. Define categories around the shared resource or exclusivity requirement, not merely around object names. Leave independent jobs in different categories so they can still run concurrently. A category does not serialize work across companies or environments, or coordinate workers outside the job queue dispatcher. Protect shared external or cross-company resources with a separate application-level locking mechanism.
 
 See sample: `job-queue-category-code-serializes-conflicting-jobs.good.al`.
 
