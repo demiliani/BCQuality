@@ -60,11 +60,12 @@ Skills define how agents consume knowledge. They come in three flavors:
 
 ### Agent bootstrapping
 
-An orchestrator (such as AL-Go) points the agent at BCQuality's URL and provides a task context. The agent's first call is `/skills/entry.md`, which returns a dispatch record naming the action skill(s) to invoke. The agent then invokes each dispatched skill in turn, reading READ and DO on demand. No prior knowledge of BCQuality's structure is baked into the orchestrator — only the convention *"invoke `/skills/entry.md` first."*
+An orchestrator (such as AL-Go) points the agent at BCQuality's URL and provides a task context. The agent's first call is `/skills/entry.md`, which returns a dispatch record naming the action skill(s) to invoke. The agent then invokes the dispatched skills, reading READ and DO on demand. No prior knowledge of BCQuality's structure is baked into the orchestrator — only the convention *"invoke `/skills/entry.md` first."*
 
 ### Standalone plugin installation
 
-BCQuality can also be installed directly as a plugin. The plugin registers one
+BCQuality can also be installed directly as a plugin to review a complete AL
+app folder, a change set, or an individual file. The plugin registers one
 host-native skill,
 [`al-code-review`](skills/al-code-review/SKILL.md), which adapts the caller's
 request to the same Entry protocol used by orchestrators.
@@ -73,6 +74,24 @@ For GitHub Copilot CLI:
 
 ```shell
 copilot plugin install microsoft/BCQuality
+```
+
+#### Review a complete app folder
+
+1. Open the Business Central app folder in GitHub Copilot and start a fresh
+   session after installing the plugin.
+2. Ask:
+
+   > Use the installed `al-code-review` skill to review the complete Business
+   > Central app in this folder. Execute every dispatched review domain and
+   > return the complete BCQuality findings report.
+
+That is the complete walk-up flow. The folder does not need to be a Git
+repository; BCQuality reviews `app.json` and the AL source below it. To pick up
+a newer BCQuality release later, run:
+
+```shell
+copilot plugin update bcquality
 ```
 
 Plugin version `0.2.0` renamed the former `bcquality-al-review` skill to
@@ -107,6 +126,12 @@ The host adapter and internal action skill intentionally share the
 formats. Their paths make the boundary explicit. The adapter lives under
 `skills/al-code-review/SKILL.md`; the internal Microsoft-layer coordinator
 lives at `microsoft/skills/review/al-code-review.md`.
+
+Partners that want model selection, parallel leaf execution, retries, or usage
+telemetry can add a thin runner outside BCQuality. See
+[Build a lightweight standalone review runner](docs/standalone-runner.md) for the
+integration contract and a minimal implementation checklist. Architecture and
+partner guides are collected in the [documentation index](docs/README.md).
 
 ## Knowledge file format
 
@@ -153,16 +178,17 @@ Action skills follow a four-step pattern:
 
 Every action skill produces output in a common format that orchestrators can consume without skill-specific parsing. The format is JSON and includes an `outcome` (so a clean run, a not-applicable skill, and a partial failure are all distinguishable), `findings` (what the skill observed), structured `references` back to the knowledge files that informed each finding, per-finding `confidence`, and a `suppressed` list recording any knowledge files overridden by layer precedence. This contract is defined in the Action Skill meta-skill so that orchestrators and action skills remain independently evolvable.
 
-BCQuality is an **additive** knowledge layer: it augments the agent's review judgement, it does not replace it. Super-skills (such as `al-code-review`) run a self-review pass alongside their sub-skills and surface concerns the agent identified on its own, marked with `from-sub-skill: "agent"` and an empty `references: []` so consumers can render them distinctly from knowledge-backed findings. See [agent-consumption.md](agent-consumption.md) and [`skills/do.md`](skills/do.md) for the full contract.
+BCQuality is an **additive** knowledge layer: it augments the agent's review judgement, it does not replace it. Super-skills (such as `al-code-review`) run a self-review pass alongside their sub-skills and surface concerns the agent identified on its own, marked with `from-sub-skill: "agent"` and an empty `references: []` so consumers can render them distinctly from knowledge-backed findings. See [How agents consume BCQuality](docs/agent-consumption.md) and [`skills/do.md`](skills/do.md) for the full contract.
 
 The meta-skills in `/skills/` define this pattern. Every concrete action skill follows it.
 
-For the end-to-end flow — from orchestrator trigger through to how output reaches developers — see [agent-consumption.md](agent-consumption.md).
+For the end-to-end flow — from orchestrator trigger through to how output reaches developers — see [How agents consume BCQuality](docs/agent-consumption.md).
 
 ## Repository structure
 
 ```
 ├── /skills/              # Global: entry-point skill + meta-skill contracts (READ, DO, WRITE)
+├── /docs/                # Architecture and partner integration guides
 ├── /evaluation/          # Neutral good/bad review fixtures and scoring contract
 ├── /.github/             # Actions and workflows
 ├── /microsoft/           # Microsoft-endorsed layer
