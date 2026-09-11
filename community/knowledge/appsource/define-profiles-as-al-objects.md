@@ -17,10 +17,10 @@ Profiles delivered by a Marketplace extension must be declared as AL `profile` o
 
 Declare each app-owned profile with the `profile` object and set its `RoleCenter`, user-facing caption, and optional customizations in AL. Let installation and synchronization register the object.
 
-See sample: `define-profiles-as-al-objects.good.al`.
+See sample: [`define-profiles-as-al-objects.good.al`](define-profiles-as-al-objects.good.al).
 
 ## Anti Pattern
 
 Install, upgrade, or setup code that creates an app-owned profile by inserting a `Profile` table record. Detection signal: a `Record Profile` variable followed by `Insert` in profile provisioning code.
 
-See sample: `define-profiles-as-al-objects.bad.al`.
+See sample: [`define-profiles-as-al-objects.bad.al`](define-profiles-as-al-objects.bad.al).

@@ -17,10 +17,10 @@ Place new page-extension actions at the beginning or end of an existing action g
 
 Choose the semantic action area or group and append or prepend the extension's actions. This keeps placement deterministic without depending on the continued existence of one neighboring action.
 
-See sample: `place-page-extension-actions-with-addfirst-or-addlast.good.al`.
+See sample: [`place-page-extension-actions-with-addfirst-or-addlast.good.al`](place-page-extension-actions-with-addfirst-or-addlast.good.al).
 
 ## Anti Pattern
 
 Using `addbefore` or `addafter` to place newly added actions next to a specific action from another app. The syntax is valid AL, but the placement anchor is brittle for a Marketplace extension.
 
-See sample: `place-page-extension-actions-with-addfirst-or-addlast.bad.al`.
+See sample: [`place-page-extension-actions-with-addfirst-or-addlast.bad.al`](place-page-extension-actions-with-addfirst-or-addlast.bad.al).

@@ -4,7 +4,7 @@ codeunit 50100 "Rental Period Defaults"
     var
         PolicyStartDate: Date;
     begin
-        Evaluate(PolicyStartDate, '01/02/2025');
+        Evaluate(PolicyStartDate, '01/31/2025');
         exit(PolicyStartDate);
     end;
 }
