@@ -4,7 +4,7 @@ id: al-appsource-review
 version: 1
 title: AL AppSource review
 description: Performs an AL AppSource review against source and app metadata guidance from BCQuality.
-inputs: [pr-diff, file-path]
+inputs: [pr-diff, file-path, folder-path]
 outputs: [findings-report]
 bc-version: [all]
 technologies: [al]
@@ -16,11 +16,11 @@ application-area: [all]
 
 Reviews AL source and app metadata changes against the `appsource` knowledge domain in BCQuality and emits a findings report. This is a leaf action skill: it invokes no sub-skills. It is one of the skills composed by `al-code-review`.
 
-An orchestrator invokes this skill with either a `pr-diff` (the standard PR-review entry point) or a `file-path` (single-file review). AppSource findings are narrow by design — they apply when the diff touches AppSourceCop configuration, AL object or extension-member names, AppSource-facing `app.json` metadata, or AL constructs covered by an AppSource submission requirement. The skill returns `not-applicable` when none of those apply.
+An orchestrator invokes this skill with a `pr-diff` (the standard PR-review entry point), `file-path` (single-file review), or `folder-path`. AppSource findings are narrow by design — they apply when the diff touches AppSourceCop configuration, AL object or extension-member names, AppSource-facing `app.json` metadata, or AL constructs covered by an AppSource submission requirement. The skill returns `not-applicable` when none of those apply.
 
 ## Source
 
-Read the BCQuality knowledge index once — the `knowledge-index.json` BCQuality builds at the root of the knowledge checkout (Entry's preparation step regenerates it over the live, already-filtered clone — see `skills/entry.md`). It lists every article that survived layer and allow/deny filtering and carries, per article, its `path`, `layer`, `domain`, frontmatter dimensions, `keywords`, `title`, and a one-line `description` hint — exactly the fields Relevance and Worklist consume. Take the index entries whose `domain` is `appsource` as this skill's candidate set across every enabled Microsoft, community, and custom layer; do not open the individual article files at this step. Open an article's full body only once it enters the Worklist below, so a review reads the index plus the handful of worklisted articles instead of every file under `*/knowledge/appsource/**`.
+Use READ's **Bounded retrieval for review skills** workflow with `-Domain appsource`. Consume every catalog page across enabled layers before applying this leaf's Relevance and Worklist; preserve each exact catalog path and open complete bodies only for exact paths selected by the Worklist. If the helper or prepared index is unavailable or invalid, use READ's explicit path-discovery and bounded native-read fallback.
 
 ## Relevance
 
@@ -45,8 +45,6 @@ A file enters the candidate worklist when its `keywords` intersect the extracted
 
 The following targeted checks cover every current `appsource` article across the Microsoft and community layers. Treat each as a candidate-selection cue: when the signal appears in changed code, add the named article to the worklist and evaluate it in Action.
 
-- Select exactly one naming-collision owner. When no namespace declaration is present, a new/renamed object lacks the reserved prefix/suffix, or an extension object adds an unaffixed member to a base object — `object-affixes-prevent-collisions`.
-- For BC23 or later, use `two-level-namespace-replaces-object-affix-not-extension-member-affix` instead when the changed source actually declares or changes a namespace and relies on it as the owned-object affix alternative, but has fewer than two levels or incorrectly applies that exception to members on another publisher's object. Never worklist this article for an unaffixed source file with no namespace declaration.
 - The app has no assignable permission set covering its setup and usage paths, omits visible object/tabledata grants, or requires `SUPER` for normal operation — `permission-sets-cover-setup-and-usage-without-super`. Require repository-level app context; one isolated permission-set object cannot prove complete coverage.
 - An `EventSubscriber` attribute targets `OnBeforeCompanyOpen` or `OnAfterCompanyOpen` — `do-not-subscribe-to-company-open-events`.
 - Install, upgrade, or setup code provisions an app-owned profile through `Record Profile` and `Insert` instead of declaring a `profile` object — `define-profiles-as-al-objects`.
@@ -73,13 +71,13 @@ For each worklist entry, evaluate the diff against the file's `## Best Practice`
 
 Set `confidence` to:
 
-- `high` when the detection is based on an unambiguous pattern match (affix configuration/name or URL path depth).
+- `high` when the detection is based on an unambiguous pattern match such as URL path depth.
 - `medium` when detection relies on heuristics or when any frontmatter dimension was `unknown`.
 - `low` when the finding is an advisory derived only from applicability.
 
 After evaluating each worklist entry, also consider whether the diff exhibits an AppSource defect the agent recognises from its general AL knowledge that no knowledge file in the worklist covers. Such candidates are agent findings within this skill's domain — emit them with `references: []`, an `id` slug prefixed with `agent:`, `confidence` capped at `medium`, `severity` capped at `minor` (agent findings are advisory and non-gating), and a `message` that is self-contained (describing both the issue and a concrete recommendation, since there is no knowledge-file footer for the consumer to fall back on). Hold every candidate to the precision bar in `skills/do.md` (*Agent findings*): emit only a concrete, material AppSource defect a knowledgeable BC reviewer would agree is wrong — steelman it first and drop anything stylistic, speculative, dependent on code outside the diff, or merely a valid alternative; when in doubt, omit. The scope is strictly AppSource; defects outside this domain belong to other leaves and MUST NOT be emitted here. Before emitting, check the worklist for a knowledge file that matches the candidate — if one exists, upgrade the candidate to a knowledge-backed finding instead. See `skills/do.md` for the full contract.
 
-For every emitted finding, decide whether the fix is mechanical. A fix is mechanical when it is small, local, and unambiguous from the diff context (for example: add the configured affix to one object or extension member, or replace a deep help URL with a known two-level canonical URL). For mechanical findings, emit `findings[].suggested-code` with the literal replacement for the source lines indicated by `location`. The payload must be a verbatim replacement — no diff markers, no fences, no commentary — that the consumer can render as a one-click suggestion. When a `.good.al` companion exists and the diff context matches the `.bad.al` shape, adapt the `.good.al` replacement into `suggested-code`.
+For every emitted finding, decide whether the fix is mechanical. A fix is mechanical when it is small, local, and unambiguous from the diff context (for example, replacing a deep help URL with a known two-level canonical URL). For mechanical findings, emit `findings[].suggested-code` with the literal replacement for the source lines indicated by `location`. The payload must be a verbatim replacement — no diff markers, no fences, no commentary — that the consumer can render as a one-click suggestion. When a `.good.al` companion exists and the diff context matches the `.bad.al` shape, adapt the `.good.al` replacement into `suggested-code`.
 
 Omit `suggested-code` only when the appropriate fix depends on context the skill cannot determine, when multiple defensible replacements exist, or when the fix spans non-contiguous code. If a finding is mechanical-looking but you omit `suggested-code`, set `findings[].suggested-code-omission-reason` to a short explanation. See `skills/do.md` for the full contract.
 
@@ -87,7 +85,7 @@ Outcome selection:
 
 - `completed` — the skill evaluated every worklist item.
 - `no-knowledge` — no applicable AppSource knowledge survived filtering.
-- `not-applicable` — the diff touches no AppSource source, analyzer configuration, or app-metadata surface.
+- `not-applicable` — the diff touches no AppSource permission or app-metadata surface.
 - `partial` — a budget was hit before the worklist was exhausted.
 - `failed` — an unrecoverable error occurred.
 
@@ -105,19 +103,19 @@ Output conforms to the DO output contract. Every finding this skill emits MUST s
   },
   "findings": [
     {
-      "id": "microsoft/knowledge/appsource/object-affixes-prevent-collisions.md",
+      "id": "microsoft/knowledge/appsource/keep-copilot-help-url-to-two-path-levels.md",
       "severity": "major",
-      "message": "The tableextension adds an unaffixed Loyalty Points field to Customer, so it violates the configured AppSource affix and can collide with another extension.",
+      "message": "The app help URL is deeper than two path levels, so Copilot truncates it and may ground answers on unrelated sibling documentation.",
       "location": {
-        "file": "src/CustomerExt.TableExt.al",
-        "line": 8
+        "file": "app.json",
+        "line": 12
       },
       "references": [
-        { "path": "microsoft/knowledge/appsource/object-affixes-prevent-collisions.md" }
+        { "path": "microsoft/knowledge/appsource/keep-copilot-help-url-to-two-path-levels.md" }
       ],
       "confidence": "high",
       "domain": "AppSource",
-      "suggested-code": "field(50100; \"Loyalty Points ABC\"; Integer)"
+      "suggested-code": "\"help\": \"https://contoso.com/docs/myapp\""
     }
   ],
   "suppressed": []
