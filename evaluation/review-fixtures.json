@@ -30,6 +30,19 @@
     "privacy": {
       "article": "no-pii-in-telemetry-message-string"
     },
+    "reporting": {
+      "articles": [
+        "clear-report-variable-before-independent-runmodal",
+        "currreport-break-ends-the-current-trigger",
+        "currreport-quit-rolls-back-and-skips-onpostreport",
+        "currreport-skip-does-not-stop-trigger-code",
+        "report-output-in-a-loop-needs-one-client-download",
+        "reportextension-dataitem-trigger-order-is-explicit",
+        "reportextension-report-triggers-run-after-base-triggers",
+        "settableview-cannot-broaden-dataitemtableview",
+        "stop-when-runrequestpage-returns-empty-parameters"
+      ]
+    },
     "style": {
       "article": "label-comment-explains-placeholders"
     },

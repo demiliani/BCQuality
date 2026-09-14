@@ -25,6 +25,7 @@ sub-skills:
   - microsoft/skills/review/al-testing-review.md
   - microsoft/skills/review/al-data-modeling-review.md
   - microsoft/skills/review/al-query-review.md
+  - microsoft/skills/review/al-reporting-review.md
   - microsoft/skills/review/al-appsource-review.md
   - microsoft/skills/review/al-telemetry-review.md
 ---
