@@ -81,7 +81,7 @@ Outcome selection:
 
 - `completed` — the skill evaluated every worklist item.
 - `no-knowledge` — no applicable AppSource knowledge survived filtering.
-- `not-applicable` — the diff touches no AppSource permission or app-metadata surface.
+- `not-applicable` — the diff touches no Marketplace-related source, permission, or app-metadata surface.
 - `partial` — a budget was hit before the worklist was exhausted.
 - `failed` — an unrecoverable error occurred.
 
