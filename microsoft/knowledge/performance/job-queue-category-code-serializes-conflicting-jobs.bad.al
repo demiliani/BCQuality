@@ -1,9 +1,11 @@
 codeunit 50113 "Job Queue Category Bad"
 {
-    procedure ConfigurePostingJobs(var PostSales: Record "Job Queue Entry"; var PostPurchases: Record "Job Queue Entry")
+    procedure ConfigureJobsForSharedExclusiveResource(var SalesPostingJob: Record "Job Queue Entry"; var PurchasePostingJob: Record "Job Queue Entry"; ExclusiveResourceId: Text[250])
     begin
         // Both jobs update the same posting resources, but nothing prevents overlap.
-        PostSales.Validate("Job Queue Category Code", '');
-        PostPurchases.Validate("Job Queue Category Code", '');
+        SalesPostingJob.Validate("Parameter String", ExclusiveResourceId);
+        PurchasePostingJob.Validate("Parameter String", ExclusiveResourceId);
+        SalesPostingJob.Validate("Job Queue Category Code", '');
+        PurchasePostingJob.Validate("Job Queue Category Code", '');
     end;
 }
