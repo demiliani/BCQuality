@@ -27,6 +27,6 @@ See sample: [`report-output-in-a-loop-needs-one-client-download.bad.al`](report-
 
 ## References
 
-File handling in Business Central — https://learn.microsoft.com/dynamics365/business-central/dev-itpro/developer/devenv-file-handling
+`File.DownloadFromStream` method — https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/methods-auto/file/file-downloadfromstream-method
 
 `Data Compression` codeunit — https://learn.microsoft.com/dynamics365/business-central/application/system-application/codeunit/system.io.data-compression
