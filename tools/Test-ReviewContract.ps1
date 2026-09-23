@@ -1,12 +1,11 @@
 <#
 .SYNOPSIS
-    Validates the bounded leaf-range normalization contract.
+    Validates executable findings-report acceptance and bounded normalization.
 
 .DESCRIPTION
-    BCQuality has no executable findings-report consumer. These assertions keep
-    the normative DO contract, AL coordinator, and standalone runner aligned
-    while exercising the exact normalization predicate against representative
-    safe and ambiguous inputs.
+    These assertions keep the normative DO contract, executable validator, AL
+    coordinator, and standalone runner aligned while exercising semantic report
+    validation and the exact normalization predicate.
 #>
 [CmdletBinding()]
 param(
@@ -37,6 +36,24 @@ function Assert-Contains {
     )
 
     Assert-True $Text.Contains($Expected) $Message
+}
+
+function Assert-ThrowsLike {
+    param(
+        [scriptblock] $Action,
+        [string] $Pattern
+    )
+
+    try {
+        & $Action
+    }
+    catch {
+        if ($_.Exception.Message -like $Pattern) {
+            return
+        }
+        throw "Expected error like '$Pattern', received: $($_.Exception.Message)"
+    }
+    throw "Expected error like '$Pattern', but no error was thrown."
 }
 
 function Test-PositiveInteger {
@@ -168,4 +185,85 @@ Assert-True (-not ($candidateFinding.location.PSObject.Properties.Name -contains
 Assert-True ($candidateFinding.location.line -eq $rawFinding.location.line) 'candidate preserves the primary line'
 Assert-True ($candidateFinding.message -ceq $rawFinding.message) 'candidate preserves all other finding content'
 
-Write-Output "Review contract validation passed ($($cases.Count) normalization cases)."
+$validator = Join-Path $Root 'tools/Validate-FindingsReport.ps1'
+Assert-True (Test-Path -LiteralPath $validator -PathType Leaf) 'executable report validator exists'
+$tmp = Join-Path ([IO.Path]::GetTempPath()) ("reviewcontract_" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+try {
+    $sourcePath = 'src/codeunit.al'
+    $sourceFile = Join-Path $tmp 'src/codeunit.al'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $sourceFile) -Force | Out-Null
+    Set-Content -LiteralPath $sourceFile -Value @('line one', 'line two', 'line three') -Encoding utf8NoBOM
+    $articlePath = 'microsoft/knowledge/style/caption-required-on-page-fields.md'
+    $reportPath = Join-Path $tmp 'report.json'
+
+    $validReport = [ordered]@{
+        skill = [ordered]@{ id = 'al-style-review'; version = 1 }
+        outcome = 'completed'
+        summary = [ordered]@{
+            counts = [ordered]@{ blocker = 0; major = 0; minor = 1; info = 0 }
+            coverage = [ordered]@{ 'worklist-size' = 1; 'items-evaluated' = 1 }
+        }
+        findings = @(
+            [ordered]@{
+                id = $articlePath
+                severity = 'minor'
+                message = 'A concrete style defect.'
+                location = [ordered]@{
+                    file = $sourcePath
+                    line = 2
+                    range = [ordered]@{ 'start-line' = 2; 'end-line' = 3 }
+                }
+                references = @([ordered]@{ path = $articlePath })
+                confidence = 'high'
+                domain = 'Style'
+            }
+        )
+        suppressed = @()
+    }
+    Set-Content -LiteralPath $reportPath -Value ($validReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $accepted = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp `
+        -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    Assert-True (-not $accepted.normalized) 'valid report is accepted without normalization'
+
+    $invalidCounts = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $invalidCounts.summary.counts.minor = 0
+    Set-Content -LiteralPath $reportPath -Value ($invalidCounts | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*COUNT_MISMATCH*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp `
+            -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+
+    Set-Content -LiteralPath $reportPath -Value ($validReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*REFERENCE_NOT_RETRIEVED*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp -SourcePaths $sourcePath
+    }
+
+    $invalidAgent = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $invalidAgent.findings[0].id = 'agent:uncited-defect'
+    $invalidAgent.findings[0].references = @()
+    $invalidAgent.findings[0].confidence = 'high'
+    Set-Content -LiteralPath $reportPath -Value ($invalidAgent | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*AGENT_CONFIDENCE_INVALID*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp -SourcePaths $sourcePath
+    }
+
+    $normalizable = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $normalizable.findings[0].location.range.'start-line' = 1
+    Set-Content -LiteralPath $reportPath -Value ($normalizable | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*RANGE_START_MISMATCH*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp `
+            -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+    $normalized = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp `
+        -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath -AllowBoundedNormalization
+    Assert-True $normalized.normalized 'eligible range mismatch is normalized'
+    Assert-True ($normalized.removedRanges.Count -eq 1) 'normalization records one removed range'
+    Assert-True (-not ($normalized.report.findings[0].location.PSObject.Properties.Name -contains 'range')) `
+        'accepted normalized report removes only the optional range'
+}
+finally {
+    Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Output "Review contract validation passed ($($cases.Count) predicate cases plus executable acceptance cases)."

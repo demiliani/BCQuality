@@ -3,6 +3,7 @@
   "selection": "first-paired-al-article",
   "minimumExpectedRecall": 1.0,
   "minimumCleanRate": 1.0,
+  "coverageWaivers": [],
   "overrides": {
     "agents": {
       "article": "wire-all-three-agent-interfaces"
@@ -95,7 +96,11 @@
       "context": "The extended table existed in the previous app version and already contains rows."
     },
     "web-services": {
-      "article": "expose-systemid-as-the-api-key"
+      "articles": [
+        "expose-systemid-as-the-api-key",
+        "handle-httpclient-platform-failure-before-response-access",
+        "check-http-status-before-consuming-response-body"
+      ]
     }
   }
 }
