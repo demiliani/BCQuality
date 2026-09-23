@@ -76,7 +76,14 @@
         "reconcile-warehouse-adjustments-with-the-item-ledger",
         "post-transfers-through-shipment-and-receipt-codeunits",
         "use-date-aware-availability-for-promising",
-        "carry-out-requisition-actions-through-the-standard-workflow"
+        "carry-out-requisition-actions-through-the-standard-workflow",
+        "derive-base-quantities-through-the-line-unit-of-measure"
+      ]
+    },
+    "security": {
+      "articles": [
+        "al-has-no-built-in-htmlencode",
+        "do-not-concatenate-external-text-into-setfilter"
       ]
     },
     "style": {
@@ -89,7 +96,10 @@
       "article": "telemetry-event-id-stable-unique"
     },
     "testing": {
-      "article": "ui-handlers-in-tests"
+      "articles": [
+        "ui-handlers-in-tests",
+        "reset-per-test-state-before-the-isinitialized-guard"
+      ]
     },
     "upgrade": {
       "article": "initvalue-does-not-update-existing-rows",
@@ -99,7 +109,9 @@
       "articles": [
         "expose-systemid-as-the-api-key",
         "handle-httpclient-platform-failure-before-response-access",
-        "check-http-status-before-consuming-response-body"
+        "check-http-status-before-consuming-response-body",
+        "check-json-null-before-converting-values",
+        "format-exchanged-values-with-standard-format-9"
       ]
     }
   }
