@@ -60,8 +60,9 @@ only result.
    bounded optional-range case, record that normalization separately in private
    telemetry, and accept the candidate only if the entire copy passes the
   unchanged strict gate. Use `tools/Validate-FindingsReport.ps1`, passing the
-  exact source paths and fully retrieved article paths. The accepted report
-  contains no undeclared telemetry fields.
+  exact source paths and fully retrieved article paths; pass `-SkillKind super`
+  for the final rolled-up report. The accepted report contains no undeclared
+  telemetry fields.
 6. Collect each accepted findings-report into `sub-results` in the declared
    `sub-skills` order, not completion order. Run the super-skill self-review
    only after all leaves have finished.

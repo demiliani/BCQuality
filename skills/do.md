@@ -224,6 +224,7 @@ as a findings-report, a coordinator or host MUST validate it deterministically:
 
 Hosts SHOULD execute `tools/Validate-FindingsReport.ps1` with the exact source
 scope and the leaf's recorded set of fully retrieved article paths. Pass
+`-SkillKind super` when validating a super-skill's rolled-up report. Pass
 `-AllowBoundedNormalization` only when the host preserves the immutable raw
 payload and records `removedRanges` in private telemetry as required above.
 

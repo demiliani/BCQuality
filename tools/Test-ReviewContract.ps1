@@ -234,6 +234,84 @@ try {
             -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
     }
 
+    $completedUndercoverage = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $completedUndercoverage.summary.coverage.'items-evaluated' = 0
+    Set-Content -LiteralPath $reportPath -Value ($completedUndercoverage | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*COMPLETED_COVERAGE_INCOMPLETE*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp `
+            -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+
+    $partialFullCoverage = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $partialFullCoverage.outcome = 'partial'
+    $partialFullCoverage | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'Stopped early.'
+    Set-Content -LiteralPath $reportPath -Value ($partialFullCoverage | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*PARTIAL_COVERAGE_INVALID*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp `
+            -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+
+    $completedLeaf = [ordered]@{
+        skill = [ordered]@{ id = 'al-style-review'; version = 1 }
+        outcome = 'completed'
+        summary = [ordered]@{
+            counts = [ordered]@{ blocker = 0; major = 0; minor = 0; info = 0 }
+            coverage = [ordered]@{ 'worklist-size' = 1; 'items-evaluated' = 1 }
+        }
+        findings = @()
+        suppressed = @()
+    }
+    $leafWithSubResults = $completedLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $leafWithSubResults | Add-Member -NotePropertyName 'sub-results' -NotePropertyValue @($completedLeaf)
+    Set-Content -LiteralPath $reportPath -Value ($leafWithSubResults | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*LEAF_COMPOSITION_INVALID*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root
+    }
+
+    $validSuperReport = [ordered]@{
+        skill = [ordered]@{ id = 'al-code-review'; version = 1 }
+        outcome = 'completed'
+        summary = [ordered]@{
+            counts = [ordered]@{ blocker = 0; major = 0; minor = 0; info = 0 }
+            coverage = [ordered]@{ 'worklist-size' = 2; 'items-evaluated' = 2 }
+        }
+        findings = @()
+        suppressed = @()
+        'sub-results' = @($completedLeaf, $completedLeaf)
+    }
+    Set-Content -LiteralPath $reportPath -Value ($validSuperReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $acceptedSuper = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super
+    Assert-True (-not $acceptedSuper.normalized) 'valid super-skill report is accepted'
+
+    $failedLeaf = $completedLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $failedLeaf.outcome = 'failed'
+    $failedLeaf | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'Validation failed.'
+    $failedLeaf.summary.coverage.'items-evaluated' = 0
+    $partialSuperReport = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $partialSuperReport.outcome = 'partial'
+    $partialSuperReport | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'One sub-skill failed.'
+    $partialSuperReport.summary.coverage.'worklist-size' = 1
+    $partialSuperReport.summary.coverage.'items-evaluated' = 1
+    $partialSuperReport.'sub-results' = @($completedLeaf, $failedLeaf)
+    Set-Content -LiteralPath $reportPath -Value ($partialSuperReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $acceptedPartialSuper = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super
+    Assert-True (-not $acceptedPartialSuper.normalized) 'partial super-skill excludes failed coverage from its rollup'
+
+    $incorrectOutcome = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $incorrectOutcome.outcome = 'not-applicable'
+    Set-Content -LiteralPath $reportPath -Value ($incorrectOutcome | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_OUTCOME_MISMATCH*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super
+    }
+
+    $incorrectRollup = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $incorrectRollup.summary.coverage.'worklist-size' = 1
+    $incorrectRollup.summary.coverage.'items-evaluated' = 1
+    Set-Content -LiteralPath $reportPath -Value ($incorrectRollup | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_COVERAGE_MISMATCH*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super
+    }
+
     Set-Content -LiteralPath $reportPath -Value ($validReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     Assert-ThrowsLike -Pattern '*REFERENCE_NOT_RETRIEVED*' -Action {
         & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp -SourcePaths $sourcePath

@@ -10,6 +10,8 @@ param(
     [string] $SourceRoot,
     [string[]] $SourcePaths = @(),
     [string[]] $RetrievedArticlePaths = @(),
+    [ValidateSet('leaf', 'super')]
+    [string] $SkillKind = 'leaf',
     [switch] $AllowBoundedNormalization
 )
 
@@ -76,8 +78,38 @@ function Get-SemanticErrors {
         $errors.Add([pscustomobject]@{ Code = $Code; Path = $Path; Message = $Message }) | Out-Null
     }
 
+    function Get-DerivedSuperOutcome {
+        param([object[]] $SubResults)
+
+        if (-not $SubResults.Count) {
+            return 'not-applicable'
+        }
+
+        $outcomes = @($SubResults | ForEach-Object { $_.outcome })
+        if (-not @($outcomes | Where-Object { $_ -cne 'failed' }).Count) {
+            return 'failed'
+        }
+        if (($outcomes -ccontains 'partial') -or
+            (($outcomes -ccontains 'failed') -and @($outcomes | Where-Object { $_ -cne 'failed' }).Count)) {
+            return 'partial'
+        }
+        if (-not @($outcomes | Where-Object { $_ -cne 'not-applicable' }).Count) {
+            return 'not-applicable'
+        }
+        if (($outcomes -ccontains 'no-knowledge') -and
+            -not @($outcomes | Where-Object { $_ -cnotin @('no-knowledge', 'not-applicable') }).Count) {
+            return 'no-knowledge'
+        }
+        return 'completed'
+    }
+
     function Test-Report {
-        param([object] $Current, [string] $ReportPathPrefix)
+        param(
+            [object] $Current,
+            [string] $ReportPathPrefix,
+            [ValidateSet('leaf', 'super')]
+            [string] $CurrentSkillKind
+        )
 
         $findings = @($Current.findings)
         foreach ($severity in 'blocker', 'major', 'minor', 'info') {
@@ -86,14 +118,41 @@ function Get-SemanticErrors {
                 Add-Error 'COUNT_MISMATCH' "$ReportPathPrefix.summary.counts.$severity" "Expected $actual."
             }
         }
-        if ($Current.summary.coverage.'items-evaluated' -gt $Current.summary.coverage.'worklist-size') {
+        $worklistSize = $Current.summary.coverage.'worklist-size'
+        $itemsEvaluated = $Current.summary.coverage.'items-evaluated'
+        if ($itemsEvaluated -gt $worklistSize) {
             Add-Error 'COVERAGE_INVALID' "$ReportPathPrefix.summary.coverage" 'items-evaluated exceeds worklist-size.'
+        }
+        elseif ($Current.outcome -ceq 'completed' -and $itemsEvaluated -ne $worklistSize) {
+            Add-Error 'COMPLETED_COVERAGE_INCOMPLETE' "$ReportPathPrefix.summary.coverage" 'A completed report must evaluate its full worklist.'
+        }
+        elseif ($CurrentSkillKind -ceq 'leaf' -and $Current.outcome -ceq 'partial' -and
+            ($itemsEvaluated -le 0 -or $itemsEvaluated -ge $worklistSize)) {
+            Add-Error 'PARTIAL_COVERAGE_INVALID' "$ReportPathPrefix.summary.coverage" 'A partial report must evaluate a non-zero proper subset of its worklist.'
+        }
+
+        $hasSubResults = Test-HasProperty $Current 'sub-results'
+        $hasSkippedSubSkills = Test-HasProperty $Current 'skipped-sub-skills'
+        if ($CurrentSkillKind -ceq 'leaf') {
+            if ($hasSubResults -or $hasSkippedSubSkills) {
+                Add-Error 'LEAF_COMPOSITION_INVALID' $ReportPathPrefix 'A leaf report must not contain sub-results or skipped-sub-skills.'
+            }
+        }
+        elseif (-not $hasSubResults) {
+            Add-Error 'SUPER_SUB_RESULTS_REQUIRED' $ReportPathPrefix 'A super-skill report must contain sub-results.'
         }
 
         for ($index = 0; $index -lt $findings.Count; $index++) {
             $finding = $findings[$index]
             $findingPath = "$ReportPathPrefix.findings[$index]"
             $references = @($finding.references)
+            $hasProducer = Test-HasProperty $finding 'from-sub-skill'
+            if ($CurrentSkillKind -ceq 'leaf' -and $hasProducer) {
+                Add-Error 'LEAF_PRODUCER_INVALID' "$findingPath.from-sub-skill" 'A leaf finding must not contain from-sub-skill.'
+            }
+            elseif ($CurrentSkillKind -ceq 'super' -and -not $hasProducer) {
+                Add-Error 'SUPER_PRODUCER_REQUIRED' $findingPath 'A super-skill finding must identify its producer in from-sub-skill.'
+            }
             if (-not $references.Count) {
                 if ($finding.id -cnotmatch '(^|:)agent:[a-z0-9]+(?:-[a-z0-9]+)*$') {
                     Add-Error 'AGENT_ID_INVALID' "$findingPath.id" 'An agent finding id must contain an agent: slug marker.'
@@ -149,15 +208,30 @@ function Get-SemanticErrors {
             }
         }
 
-        if (Test-HasProperty $Current 'sub-results') {
+        if ($CurrentSkillKind -ceq 'super' -and $hasSubResults) {
             $subResults = @($Current.'sub-results')
             for ($index = 0; $index -lt $subResults.Count; $index++) {
-                Test-Report $subResults[$index] "$ReportPathPrefix.sub-results[$index]"
+                Test-Report $subResults[$index] "$ReportPathPrefix.sub-results[$index]" 'leaf'
+            }
+
+            $expectedOutcome = Get-DerivedSuperOutcome $subResults
+            if ($Current.outcome -cne $expectedOutcome) {
+                Add-Error 'SUPER_OUTCOME_MISMATCH' "$ReportPathPrefix.outcome" "Expected '$expectedOutcome' from sub-results."
+            }
+
+            $includedSubResults = @($subResults | Where-Object outcome -CNE 'failed')
+            $expectedWorklistSize = ($includedSubResults | Measure-Object -Property { $_.summary.coverage.'worklist-size' } -Sum).Sum
+            $expectedItemsEvaluated = ($includedSubResults | Measure-Object -Property { $_.summary.coverage.'items-evaluated' } -Sum).Sum
+            if ($null -eq $expectedWorklistSize) { $expectedWorklistSize = 0 }
+            if ($null -eq $expectedItemsEvaluated) { $expectedItemsEvaluated = 0 }
+            if ($worklistSize -ne $expectedWorklistSize -or $itemsEvaluated -ne $expectedItemsEvaluated) {
+                Add-Error 'SUPER_COVERAGE_MISMATCH' "$ReportPathPrefix.summary.coverage" `
+                    "Expected worklist-size $expectedWorklistSize and items-evaluated $expectedItemsEvaluated from non-failed sub-results."
             }
         }
     }
 
-    Test-Report $Candidate '$'
+    Test-Report $Candidate '$' $SkillKind
     if ($PermitRangeStartMismatch) {
         return @($errors | Where-Object Code -CNE 'RANGE_START_MISMATCH')
     }
