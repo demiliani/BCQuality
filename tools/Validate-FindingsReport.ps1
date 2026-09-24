@@ -103,6 +103,69 @@ function Get-SemanticErrors {
         return 'completed'
     }
 
+    function Get-RolledFindingId {
+        param([object] $Finding, [string] $ProducerId)
+
+        if (@($Finding.references).Count) {
+            return $Finding.id
+        }
+        return "${ProducerId}:$($Finding.id)"
+    }
+
+    function Test-RolledFindingMatches {
+        param([object] $RolledFinding, [object] $LeafFinding, [string] $ProducerId)
+
+        if ($RolledFinding.id -cne (Get-RolledFindingId $LeafFinding $ProducerId)) {
+            return $false
+        }
+        foreach ($name in 'severity', 'message', 'confidence', 'domain', 'suggested-code', 'suggested-code-omission-reason') {
+            $rolledHasProperty = Test-HasProperty $RolledFinding $name
+            $leafHasProperty = Test-HasProperty $LeafFinding $name
+            if ($rolledHasProperty -ne $leafHasProperty -or
+                ($rolledHasProperty -and $RolledFinding.$name -cne $LeafFinding.$name)) {
+                return $false
+            }
+        }
+
+        $rolledHasLocation = Test-HasProperty $RolledFinding 'location'
+        $leafHasLocation = Test-HasProperty $LeafFinding 'location'
+        if ($rolledHasLocation -ne $leafHasLocation) {
+            return $false
+        }
+        if ($rolledHasLocation) {
+            if ($RolledFinding.location.file -cne $LeafFinding.location.file -or
+                $RolledFinding.location.line -ne $LeafFinding.location.line) {
+                return $false
+            }
+            $rolledHasRange = Test-HasProperty $RolledFinding.location 'range'
+            $leafHasRange = Test-HasProperty $LeafFinding.location 'range'
+            if ($rolledHasRange -ne $leafHasRange -or
+                ($rolledHasRange -and
+                    ($RolledFinding.location.range.'start-line' -ne $LeafFinding.location.range.'start-line' -or
+                     $RolledFinding.location.range.'end-line' -ne $LeafFinding.location.range.'end-line'))) {
+                return $false
+            }
+        }
+
+        $rolledReferences = @($RolledFinding.references)
+        $leafReferences = @($LeafFinding.references)
+        if ($rolledReferences.Count -ne $leafReferences.Count) {
+            return $false
+        }
+        for ($index = 0; $index -lt $rolledReferences.Count; $index++) {
+            if ($rolledReferences[$index].path -cne $leafReferences[$index].path) {
+                return $false
+            }
+            $rolledHasSha = Test-HasProperty $rolledReferences[$index] 'sha'
+            $leafHasSha = Test-HasProperty $leafReferences[$index] 'sha'
+            if ($rolledHasSha -ne $leafHasSha -or
+                ($rolledHasSha -and $rolledReferences[$index].sha -cne $leafReferences[$index].sha)) {
+                return $false
+            }
+        }
+        return $true
+    }
+
     function Test-Report {
         param(
             [object] $Current,
@@ -227,6 +290,57 @@ function Get-SemanticErrors {
             if ($worklistSize -ne $expectedWorklistSize -or $itemsEvaluated -ne $expectedItemsEvaluated) {
                 Add-Error 'SUPER_COVERAGE_MISMATCH' "$ReportPathPrefix.summary.coverage" `
                     "Expected worklist-size $expectedWorklistSize and items-evaluated $expectedItemsEvaluated from non-failed sub-results."
+            }
+
+            $failedProducerIds = @($subResults | Where-Object outcome -CEQ 'failed' | ForEach-Object { $_.skill.id })
+            $eligibleFindingsById = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+            foreach ($subResult in $includedSubResults) {
+                foreach ($finding in @($subResult.findings)) {
+                    $rolledId = Get-RolledFindingId $finding $subResult.skill.id
+                    if (-not $eligibleFindingsById.ContainsKey($rolledId)) {
+                        $eligibleFindingsById[$rolledId] = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+                    }
+                    $eligibleFindingsById[$rolledId].Add([string]$subResult.skill.id) | Out-Null
+                }
+            }
+
+            $validRolledIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            for ($index = 0; $index -lt $findings.Count; $index++) {
+                $finding = $findings[$index]
+                $producerId = [string]$finding.'from-sub-skill'
+                if ($producerId -ceq 'agent') {
+                    continue
+                }
+                if ($producerId -cin $failedProducerIds) {
+                    Add-Error 'SUPER_FAILED_FINDING_LEAKAGE' "$ReportPathPrefix.findings[$index].from-sub-skill" `
+                        "Finding is attributed to failed sub-skill '$producerId'."
+                    continue
+                }
+                if (-not $eligibleFindingsById.ContainsKey($finding.id) -or
+                    -not $eligibleFindingsById[$finding.id].Contains($producerId)) {
+                    Add-Error 'SUPER_PRODUCER_INVALID' "$ReportPathPrefix.findings[$index].from-sub-skill" `
+                        "Sub-skill '$producerId' did not emit finding '$($finding.id)' in a non-failed result."
+                    continue
+                }
+                $producerLeafFindings = @(
+                    $includedSubResults |
+                        Where-Object { $_.skill.id -ceq $producerId } |
+                        ForEach-Object { $_.findings } |
+                        Where-Object { (Get-RolledFindingId $_ $producerId) -ceq $finding.id }
+                )
+                if (-not @($producerLeafFindings | Where-Object { Test-RolledFindingMatches $finding $_ $producerId }).Count) {
+                    Add-Error 'SUPER_FINDING_MISMATCH' "$ReportPathPrefix.findings[$index]" `
+                        "Rolled-up finding '$($finding.id)' does not preserve the finding emitted by '$producerId'."
+                    continue
+                }
+                $validRolledIds.Add([string]$finding.id) | Out-Null
+            }
+
+            foreach ($rolledId in $eligibleFindingsById.Keys) {
+                if (-not $validRolledIds.Contains($rolledId)) {
+                    Add-Error 'SUPER_FINDING_MISSING' "$ReportPathPrefix.findings" `
+                        "No valid rolled-up finding represents non-failed leaf finding '$rolledId'."
+                }
             }
         }
     }

@@ -283,7 +283,47 @@ try {
     $acceptedSuper = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super
     Assert-True (-not $acceptedSuper.normalized) 'valid super-skill report is accepted'
 
+    $styleFindingLeaf = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $securityFindingLeaf = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $securityFindingLeaf.skill.id = 'al-security-review'
+    $rolledFinding = $validReport.findings[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $rolledFinding | Add-Member -NotePropertyName 'from-sub-skill' -NotePropertyValue 'al-style-review'
+    $deduplicatedSuperReport = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $deduplicatedSuperReport.summary.counts.minor = 1
+    $deduplicatedSuperReport.findings = @($rolledFinding)
+    $deduplicatedSuperReport.'sub-results' = @($styleFindingLeaf, $securityFindingLeaf)
+    Set-Content -LiteralPath $reportPath -Value ($deduplicatedSuperReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $acceptedDeduplicatedSuper = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+        -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    Assert-True (-not $acceptedDeduplicatedSuper.normalized) 'one top-level finding may deduplicate the same citation from two leaves'
+
+    $omittedLeafFinding = $deduplicatedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $omittedLeafFinding.summary.counts.minor = 0
+    $omittedLeafFinding.findings = @()
+    Set-Content -LiteralPath $reportPath -Value ($omittedLeafFinding | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_FINDING_MISSING*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+            -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+
+    $nonexistentProducer = $deduplicatedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $nonexistentProducer.findings[0].'from-sub-skill' = 'al-missing-review'
+    Set-Content -LiteralPath $reportPath -Value ($nonexistentProducer | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_PRODUCER_INVALID*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+            -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+
+    $rewrittenLeafFinding = $deduplicatedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $rewrittenLeafFinding.findings[0].message = 'A rewritten rollup message.'
+    Set-Content -LiteralPath $reportPath -Value ($rewrittenLeafFinding | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_FINDING_MISMATCH*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+            -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+
     $failedLeaf = $completedLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $failedLeaf.skill.id = 'al-security-review'
     $failedLeaf.outcome = 'failed'
     $failedLeaf | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'Validation failed.'
     $failedLeaf.summary.coverage.'items-evaluated' = 0
@@ -296,6 +336,16 @@ try {
     Set-Content -LiteralPath $reportPath -Value ($partialSuperReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     $acceptedPartialSuper = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super
     Assert-True (-not $acceptedPartialSuper.normalized) 'partial super-skill excludes failed coverage from its rollup'
+
+    $failedLeafLeakage = $partialSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $failedLeafLeakage.summary.counts.minor = 1
+    $failedLeafLeakage.findings = @($rolledFinding | ConvertTo-Json -Depth 20 | ConvertFrom-Json)
+    $failedLeafLeakage.findings[0].'from-sub-skill' = 'al-security-review'
+    Set-Content -LiteralPath $reportPath -Value ($failedLeafLeakage | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_FAILED_FINDING_LEAKAGE*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+            -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
 
     $incorrectOutcome = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $incorrectOutcome.outcome = 'not-applicable'
