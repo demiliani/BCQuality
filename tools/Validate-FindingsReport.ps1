@@ -204,8 +204,12 @@ function Get-SemanticErrors {
         }
 
         $sameCorrection = Test-SameCorrection $RolledFinding $LeafFinding
+        $correctionsConflict = (Test-HasProperty $RolledFinding 'suggested-code') -and
+            (Test-HasProperty $LeafFinding 'suggested-code') -and
+            $RolledFinding.'suggested-code' -cne $LeafFinding.'suggested-code'
         $explicitCrossRuleMerge = $leafReferences.Count -and
             $rolledReferences.Count -gt $leafReferences.Count -and
+            -not $correctionsConflict -and
             (Test-ReferencesInclude $rolledReferences $leafReferences)
         if (-not $sameCorrection -and -not $explicitCrossRuleMerge) {
             return $false
