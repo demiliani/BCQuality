@@ -103,65 +103,98 @@ function Get-SemanticErrors {
         return 'completed'
     }
 
-    function Get-RolledFindingId {
-        param([object] $Finding, [string] $ProducerId)
-
-        if (@($Finding.references).Count) {
-            return $Finding.id
-        }
-        return "${ProducerId}:$($Finding.id)"
+    function Get-SeverityRank {
+        param([string] $Severity)
+        return @{'info' = 0; 'minor' = 1; 'major' = 2; 'blocker' = 3}[$Severity]
     }
 
-    function Test-RolledFindingMatches {
-        param([object] $RolledFinding, [object] $LeafFinding, [string] $ProducerId)
+    function Get-ConfidenceRank {
+        param([string] $Confidence)
+        return @{'low' = 0; 'medium' = 1; 'high' = 2}[$Confidence]
+    }
 
-        if ($RolledFinding.id -cne (Get-RolledFindingId $LeafFinding $ProducerId)) {
+    function Test-LocationsOverlap {
+        param([object] $First, [object] $Second)
+
+        $firstHasLocation = Test-HasProperty $First 'location'
+        $secondHasLocation = Test-HasProperty $Second 'location'
+        if ($firstHasLocation -ne $secondHasLocation) {
             return $false
         }
-        foreach ($name in 'severity', 'message', 'confidence', 'domain', 'suggested-code', 'suggested-code-omission-reason') {
-            $rolledHasProperty = Test-HasProperty $RolledFinding $name
-            $leafHasProperty = Test-HasProperty $LeafFinding $name
-            if ($rolledHasProperty -ne $leafHasProperty -or
-                ($rolledHasProperty -and $RolledFinding.$name -cne $LeafFinding.$name)) {
-                return $false
-            }
+        if (-not $firstHasLocation) {
+            return $true
         }
-
-        $rolledHasLocation = Test-HasProperty $RolledFinding 'location'
-        $leafHasLocation = Test-HasProperty $LeafFinding 'location'
-        if ($rolledHasLocation -ne $leafHasLocation) {
+        if ($First.location.file -cne $Second.location.file) {
             return $false
         }
-        if ($rolledHasLocation) {
-            if ($RolledFinding.location.file -cne $LeafFinding.location.file -or
-                $RolledFinding.location.line -ne $LeafFinding.location.line) {
-                return $false
-            }
-            $rolledHasRange = Test-HasProperty $RolledFinding.location 'range'
-            $leafHasRange = Test-HasProperty $LeafFinding.location 'range'
-            if ($rolledHasRange -ne $leafHasRange -or
-                ($rolledHasRange -and
-                    ($RolledFinding.location.range.'start-line' -ne $LeafFinding.location.range.'start-line' -or
-                     $RolledFinding.location.range.'end-line' -ne $LeafFinding.location.range.'end-line'))) {
+        $firstEnd = if (Test-HasProperty $First.location 'range') { $First.location.range.'end-line' } else { $First.location.line }
+        $secondEnd = if (Test-HasProperty $Second.location 'range') { $Second.location.range.'end-line' } else { $Second.location.line }
+        return $First.location.line -le $secondEnd -and $Second.location.line -le $firstEnd
+    }
+
+    function Test-SameCorrection {
+        param([object] $First, [object] $Second)
+
+        $firstHasCode = Test-HasProperty $First 'suggested-code'
+        $secondHasCode = Test-HasProperty $Second 'suggested-code'
+        if ($firstHasCode -or $secondHasCode) {
+            return $firstHasCode -and $secondHasCode -and $First.'suggested-code' -ceq $Second.'suggested-code'
+        }
+        return $First.message -ceq $Second.message
+    }
+
+    function Test-ReferencesInclude {
+        param([object[]] $RolledReferences, [object[]] $LeafReferences)
+
+        foreach ($leafReference in $LeafReferences) {
+            $matched = @($RolledReferences | Where-Object {
+                if ($_.path -cne $leafReference.path) {
+                    return $false
+                }
+                $rolledHasSha = Test-HasProperty $_ 'sha'
+                $leafHasSha = Test-HasProperty $leafReference 'sha'
+                return $rolledHasSha -eq $leafHasSha -and
+                    (-not $rolledHasSha -or $_.sha -ceq $leafReference.sha)
+            }).Count
+            if (-not $matched) {
                 return $false
             }
         }
+        return $true
+    }
 
-        $rolledReferences = @($RolledFinding.references)
+    function Test-RolledFindingRepresents {
+        param(
+            [object] $RolledFinding,
+            [object] $LeafFinding,
+            [string] $LeafProducerId,
+            [switch] $RequirePrimaryOwner
+        )
+
+        if (-not (Test-LocationsOverlap $RolledFinding $LeafFinding) -or
+            -not (Test-SameCorrection $RolledFinding $LeafFinding) -or
+            (Get-SeverityRank $RolledFinding.severity) -lt (Get-SeverityRank $LeafFinding.severity) -or
+            (Get-ConfidenceRank $RolledFinding.confidence) -lt (Get-ConfidenceRank $LeafFinding.confidence)) {
+            return $false
+        }
+
         $leafReferences = @($LeafFinding.references)
-        if ($rolledReferences.Count -ne $leafReferences.Count) {
+        if (-not $leafReferences.Count) {
+            return $RolledFinding.'from-sub-skill' -ceq $LeafProducerId -and
+                $RolledFinding.id -ceq "${LeafProducerId}:$($LeafFinding.id)" -and
+                -not @($RolledFinding.references).Count
+        }
+        if (-not (Test-ReferencesInclude @($RolledFinding.references) $leafReferences)) {
             return $false
         }
-        for ($index = 0; $index -lt $rolledReferences.Count; $index++) {
-            if ($rolledReferences[$index].path -cne $leafReferences[$index].path) {
-                return $false
-            }
-            $rolledHasSha = Test-HasProperty $rolledReferences[$index] 'sha'
-            $leafHasSha = Test-HasProperty $leafReferences[$index] 'sha'
-            if ($rolledHasSha -ne $leafHasSha -or
-                ($rolledHasSha -and $rolledReferences[$index].sha -cne $leafReferences[$index].sha)) {
-                return $false
-            }
+        if ($RequirePrimaryOwner) {
+            $rolledHasDomain = Test-HasProperty $RolledFinding 'domain'
+            $leafHasDomain = Test-HasProperty $LeafFinding 'domain'
+            return $RolledFinding.'from-sub-skill' -ceq $LeafProducerId -and
+                $RolledFinding.id -ceq $LeafFinding.id -and
+                @($RolledFinding.references)[0].path -ceq $leafReferences[0].path -and
+                $rolledHasDomain -eq $leafHasDomain -and
+                (-not $rolledHasDomain -or $RolledFinding.domain -ceq $LeafFinding.domain)
         }
         return $true
     }
@@ -293,22 +326,29 @@ function Get-SemanticErrors {
             }
 
             $failedProducerIds = @($subResults | Where-Object outcome -CEQ 'failed' | ForEach-Object { $_.skill.id })
-            $eligibleFindingsById = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+            $includedProducerIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            $eligibleFindings = [Collections.Generic.List[object]]::new()
             foreach ($subResult in $includedSubResults) {
+                $includedProducerIds.Add([string]$subResult.skill.id) | Out-Null
                 foreach ($finding in @($subResult.findings)) {
-                    $rolledId = Get-RolledFindingId $finding $subResult.skill.id
-                    if (-not $eligibleFindingsById.ContainsKey($rolledId)) {
-                        $eligibleFindingsById[$rolledId] = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-                    }
-                    $eligibleFindingsById[$rolledId].Add([string]$subResult.skill.id) | Out-Null
+                    $eligibleFindings.Add([pscustomobject]@{
+                        ProducerId = [string]$subResult.skill.id
+                        Finding = $finding
+                    }) | Out-Null
                 }
             }
 
-            $validRolledIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
             for ($index = 0; $index -lt $findings.Count; $index++) {
                 $finding = $findings[$index]
                 $producerId = [string]$finding.'from-sub-skill'
                 if ($producerId -ceq 'agent') {
+                    if (@($finding.references).Count -or
+                        $finding.id -cnotmatch '^agent:[a-z0-9]+(?:-[a-z0-9]+)*$' -or
+                        -not (Test-HasProperty $finding 'domain') -or
+                        $finding.domain -cne 'Agent') {
+                        Add-Error 'SUPER_AGENT_FINDING_INVALID' "$ReportPathPrefix.findings[$index]" `
+                            'A super-skill agent finding must use an agent: id, Agent domain, and no references.'
+                    }
                     continue
                 }
                 if ($producerId -cin $failedProducerIds) {
@@ -316,30 +356,52 @@ function Get-SemanticErrors {
                         "Finding is attributed to failed sub-skill '$producerId'."
                     continue
                 }
-                if (-not $eligibleFindingsById.ContainsKey($finding.id) -or
-                    -not $eligibleFindingsById[$finding.id].Contains($producerId)) {
+                if (-not $includedProducerIds.Contains($producerId)) {
                     Add-Error 'SUPER_PRODUCER_INVALID' "$ReportPathPrefix.findings[$index].from-sub-skill" `
-                        "Sub-skill '$producerId' did not emit finding '$($finding.id)' in a non-failed result."
+                        "Sub-skill '$producerId' has no non-failed result."
                     continue
                 }
-                $producerLeafFindings = @(
-                    $includedSubResults |
-                        Where-Object { $_.skill.id -ceq $producerId } |
-                        ForEach-Object { $_.findings } |
-                        Where-Object { (Get-RolledFindingId $_ $producerId) -ceq $finding.id }
-                )
-                if (-not @($producerLeafFindings | Where-Object { Test-RolledFindingMatches $finding $_ $producerId }).Count) {
+                $ownedLeafFindings = @($eligibleFindings | Where-Object {
+                    $_.ProducerId -ceq $producerId -and
+                    (Test-RolledFindingRepresents $finding $_.Finding $_.ProducerId -RequirePrimaryOwner)
+                })
+                if (-not $ownedLeafFindings.Count) {
                     Add-Error 'SUPER_FINDING_MISMATCH' "$ReportPathPrefix.findings[$index]" `
-                        "Rolled-up finding '$($finding.id)' does not preserve the finding emitted by '$producerId'."
+                        "Rolled-up finding '$($finding.id)' is not owned by a matching finding from '$producerId'."
                     continue
                 }
-                $validRolledIds.Add([string]$finding.id) | Out-Null
+                $representedLeafFindings = @($eligibleFindings | Where-Object {
+                    Test-RolledFindingRepresents $finding $_.Finding $_.ProducerId
+                })
+                $expectedSeverityRank = ($representedLeafFindings | ForEach-Object { Get-SeverityRank $_.Finding.severity } | Measure-Object -Maximum).Maximum
+                $expectedConfidenceRank = ($representedLeafFindings | ForEach-Object { Get-ConfidenceRank $_.Finding.confidence } | Measure-Object -Maximum).Maximum
+                if ((Get-SeverityRank $finding.severity) -ne $expectedSeverityRank -or
+                    (Get-ConfidenceRank $finding.confidence) -ne $expectedConfidenceRank) {
+                    Add-Error 'SUPER_FINDING_MISMATCH' "$ReportPathPrefix.findings[$index]" `
+                        "Rolled-up finding '$($finding.id)' must retain the highest severity and confidence justified by its represented leaf findings."
+                }
             }
 
-            foreach ($rolledId in $eligibleFindingsById.Keys) {
-                if (-not $validRolledIds.Contains($rolledId)) {
+            for ($firstIndex = 0; $firstIndex -lt $findings.Count; $firstIndex++) {
+                for ($secondIndex = $firstIndex + 1; $secondIndex -lt $findings.Count; $secondIndex++) {
+                    if ((Test-HasProperty $findings[$firstIndex] 'location') -and
+                        (Test-HasProperty $findings[$secondIndex] 'location') -and
+                        (Test-LocationsOverlap $findings[$firstIndex] $findings[$secondIndex]) -and
+                        (Test-SameCorrection $findings[$firstIndex] $findings[$secondIndex])) {
+                        Add-Error 'SUPER_DUPLICATE_FINDINGS' "$ReportPathPrefix.findings[$secondIndex]" `
+                            "Top-level findings $firstIndex and $secondIndex overlap and prescribe the same correction; they must be merged."
+                    }
+                }
+            }
+
+            foreach ($eligibleFinding in $eligibleFindings) {
+                $represented = @($findings | Where-Object {
+                    $_.'from-sub-skill' -cne 'agent' -and
+                    (Test-RolledFindingRepresents $_ $eligibleFinding.Finding $eligibleFinding.ProducerId)
+                }).Count
+                if (-not $represented) {
                     Add-Error 'SUPER_FINDING_MISSING' "$ReportPathPrefix.findings" `
-                        "No valid rolled-up finding represents non-failed leaf finding '$rolledId'."
+                        "No valid rolled-up finding represents a finding from '$($eligibleFinding.ProducerId)' at its source location."
                 }
             }
         }

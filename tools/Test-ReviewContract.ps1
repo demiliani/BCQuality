@@ -195,6 +195,7 @@ try {
     New-Item -ItemType Directory -Path (Split-Path -Parent $sourceFile) -Force | Out-Null
     Set-Content -LiteralPath $sourceFile -Value @('line one', 'line two', 'line three') -Encoding utf8NoBOM
     $articlePath = 'microsoft/knowledge/style/caption-required-on-page-fields.md'
+    $supportingArticlePath = 'microsoft/knowledge/style/tooltip-required-on-page-fields.md'
     $reportPath = Join-Path $tmp 'report.json'
 
     $validReport = [ordered]@{
@@ -297,6 +298,56 @@ try {
         -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
     Assert-True (-not $acceptedDeduplicatedSuper.normalized) 'one top-level finding may deduplicate the same citation from two leaves'
 
+    $twoOccurrenceLeaf = $styleFindingLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $secondOccurrence = $twoOccurrenceLeaf.findings[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $secondOccurrence.location.line = 1
+    $secondOccurrence.location.range.'start-line' = 1
+    $secondOccurrence.location.range.'end-line' = 1
+    $twoOccurrenceLeaf.findings = @($twoOccurrenceLeaf.findings[0], $secondOccurrence)
+    $twoOccurrenceLeaf.summary.counts.minor = 2
+    $emptySecurityLeaf = $completedLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $emptySecurityLeaf.skill.id = 'al-security-review'
+    $sameIdOccurrenceOmitted = $deduplicatedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $sameIdOccurrenceOmitted.'sub-results' = @($twoOccurrenceLeaf, $emptySecurityLeaf)
+    Set-Content -LiteralPath $reportPath -Value ($sameIdOccurrenceOmitted | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_FINDING_MISSING*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+            -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+
+    $mergeOwnerLeaf = $styleFindingLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $mergeOwnerLeaf.findings[0] | Add-Member -NotePropertyName 'suggested-code' -NotePropertyValue 'Caption = ''Customer name'';'
+    $supportingFindingLeaf = $securityFindingLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $supportingFindingLeaf.findings[0].id = $supportingArticlePath
+    $supportingFindingLeaf.findings[0].references[0].path = $supportingArticlePath
+    $supportingFindingLeaf.findings[0].confidence = 'medium'
+    $supportingFindingLeaf.findings[0].message = 'The field needs the same mechanical correction for a supporting rule.'
+    $supportingFindingLeaf.findings[0] | Add-Member -NotePropertyName 'suggested-code' -NotePropertyValue 'Caption = ''Customer name'';'
+    $mergedFinding = $rolledFinding | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $mergedFinding | Add-Member -NotePropertyName 'suggested-code' -NotePropertyValue 'Caption = ''Customer name'';'
+    $mergedFinding.references = @(
+        [pscustomobject]@{ path = $articlePath }
+        [pscustomobject]@{ path = $supportingArticlePath }
+    )
+    $mergedSuperReport = $deduplicatedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $mergedSuperReport.findings = @($mergedFinding)
+    $mergedSuperReport.'sub-results' = @($mergeOwnerLeaf, $supportingFindingLeaf)
+    Set-Content -LiteralPath $reportPath -Value ($mergedSuperReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $acceptedMergedSuper = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+        -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath, $supportingArticlePath
+    Assert-True (-not $acceptedMergedSuper.normalized) 'overlapping A and B findings may merge into A with B as a supporting reference'
+
+    $unmergedSupportingFinding = $supportingFindingLeaf.findings[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $unmergedSupportingFinding | Add-Member -NotePropertyName 'from-sub-skill' -NotePropertyValue 'al-security-review'
+    $unmergedDuplicates = $mergedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $unmergedDuplicates.summary.counts.minor = 2
+    $unmergedDuplicates.findings = @($mergedFinding, $unmergedSupportingFinding)
+    Set-Content -LiteralPath $reportPath -Value ($unmergedDuplicates | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_DUPLICATE_FINDINGS*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+            -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath, $supportingArticlePath
+    }
+
     $omittedLeafFinding = $deduplicatedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $omittedLeafFinding.summary.counts.minor = 0
     $omittedLeafFinding.findings = @()
@@ -343,6 +394,17 @@ try {
     $failedLeafLeakage.findings[0].'from-sub-skill' = 'al-security-review'
     Set-Content -LiteralPath $reportPath -Value ($failedLeafLeakage | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     Assert-ThrowsLike -Pattern '*SUPER_FAILED_FINDING_LEAKAGE*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+            -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+
+    $failedLeafRelabeledAsAgent = $partialSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $failedLeafRelabeledAsAgent.summary.counts.minor = 1
+    $failedLeafRelabeledAsAgent.findings = @($rolledFinding | ConvertTo-Json -Depth 20 | ConvertFrom-Json)
+    $failedLeafRelabeledAsAgent.findings[0].'from-sub-skill' = 'agent'
+    $failedLeafRelabeledAsAgent.findings[0].domain = 'Agent'
+    Set-Content -LiteralPath $reportPath -Value ($failedLeafRelabeledAsAgent | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_AGENT_FINDING_INVALID*' -Action {
         & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
             -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
     }
