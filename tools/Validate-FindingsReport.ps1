@@ -409,6 +409,17 @@ function Get-SemanticErrors {
                 $representedLeafFindings = @($eligibleFindings | Where-Object {
                     Test-RolledFindingRepresents $finding $_.Finding $_.ProducerId
                 })
+                $representedCorrections = @(
+                    $representedLeafFindings |
+                        Where-Object { Test-HasProperty $_.Finding 'suggested-code' } |
+                        ForEach-Object { $_.Finding.'suggested-code' } |
+                        Sort-Object -CaseSensitive -Unique
+                )
+                if ($representedCorrections.Count -gt 1) {
+                    Add-Error 'SUPER_FINDING_MISMATCH' "$ReportPathPrefix.findings[$index]" `
+                        "Rolled-up finding '$($finding.id)' represents leaf findings with conflicting suggested-code replacements."
+                    continue
+                }
                 $expectedSeverityRank = ($representedLeafFindings | ForEach-Object { Get-SeverityRank $_.Finding.severity } | Measure-Object -Maximum).Maximum
                 $expectedConfidenceRank = ($representedLeafFindings | ForEach-Object { Get-ConfidenceRank $_.Finding.confidence } | Measure-Object -Maximum).Maximum
                 if ((Get-SeverityRank $finding.severity) -ne $expectedSeverityRank -or

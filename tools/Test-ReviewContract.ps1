@@ -361,6 +361,14 @@ try {
             -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath, $supportingArticlePath
     }
 
+    $omittedConflictingCorrectionMerge = $conflictingCorrectionMerge | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $omittedConflictingCorrectionMerge.findings[0].PSObject.Properties.Remove('suggested-code')
+    Set-Content -LiteralPath $reportPath -Value ($omittedConflictingCorrectionMerge | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_FINDING_MISMATCH*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+            -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath, $supportingArticlePath
+    }
+
     $unmergedSupportingFinding = $supportingFindingLeaf.findings[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $unmergedSupportingFinding | Add-Member -NotePropertyName 'from-sub-skill' -NotePropertyValue 'al-security-review'
     $unmergedDuplicates = $mergedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
