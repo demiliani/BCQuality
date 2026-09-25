@@ -122,7 +122,7 @@ function Get-SemanticErrors {
             return $false
         }
         if (-not $firstHasLocation) {
-            return $true
+            return $false
         }
         if ($First.location.file -cne $Second.location.file) {
             return $false
@@ -171,20 +171,52 @@ function Get-SemanticErrors {
             [switch] $RequirePrimaryOwner
         )
 
+        $rolledHasLocation = Test-HasProperty $RolledFinding 'location'
+        $leafHasLocation = Test-HasProperty $LeafFinding 'location'
+        $leafReferences = @($LeafFinding.references)
+        $rolledReferences = @($RolledFinding.references)
+        if (-not $rolledHasLocation -and -not $leafHasLocation) {
+            $expectedId = if ($leafReferences.Count) { $LeafFinding.id } else { "${LeafProducerId}:$($LeafFinding.id)" }
+            if ($RolledFinding.'from-sub-skill' -cne $LeafProducerId -or
+                $RolledFinding.id -cne $expectedId -or
+                $RolledFinding.severity -cne $LeafFinding.severity -or
+                $RolledFinding.confidence -cne $LeafFinding.confidence -or
+                $RolledFinding.message -cne $LeafFinding.message -or
+                $rolledReferences.Count -ne $leafReferences.Count -or
+                -not (Test-ReferencesInclude $rolledReferences $leafReferences)) {
+                return $false
+            }
+            foreach ($name in 'domain', 'suggested-code', 'suggested-code-omission-reason') {
+                $rolledHasProperty = Test-HasProperty $RolledFinding $name
+                $leafHasProperty = Test-HasProperty $LeafFinding $name
+                if ($rolledHasProperty -ne $leafHasProperty -or
+                    ($rolledHasProperty -and $RolledFinding.$name -cne $LeafFinding.$name)) {
+                    return $false
+                }
+            }
+            return $true
+        }
+
         if (-not (Test-LocationsOverlap $RolledFinding $LeafFinding) -or
-            -not (Test-SameCorrection $RolledFinding $LeafFinding) -or
             (Get-SeverityRank $RolledFinding.severity) -lt (Get-SeverityRank $LeafFinding.severity) -or
             (Get-ConfidenceRank $RolledFinding.confidence) -lt (Get-ConfidenceRank $LeafFinding.confidence)) {
             return $false
         }
 
-        $leafReferences = @($LeafFinding.references)
+        $sameCorrection = Test-SameCorrection $RolledFinding $LeafFinding
+        $explicitCrossRuleMerge = $leafReferences.Count -and
+            $rolledReferences.Count -gt $leafReferences.Count -and
+            (Test-ReferencesInclude $rolledReferences $leafReferences)
+        if (-not $sameCorrection -and -not $explicitCrossRuleMerge) {
+            return $false
+        }
+
         if (-not $leafReferences.Count) {
             return $RolledFinding.'from-sub-skill' -ceq $LeafProducerId -and
                 $RolledFinding.id -ceq "${LeafProducerId}:$($LeafFinding.id)" -and
-                -not @($RolledFinding.references).Count
+                -not $rolledReferences.Count
         }
-        if (-not (Test-ReferencesInclude @($RolledFinding.references) $leafReferences)) {
+        if (-not (Test-ReferencesInclude $rolledReferences $leafReferences)) {
             return $false
         }
         if ($RequirePrimaryOwner) {
@@ -394,7 +426,35 @@ function Get-SemanticErrors {
                 }
             }
 
-            foreach ($eligibleFinding in $eligibleFindings) {
+            $usedLocationlessFindings = [Collections.Generic.HashSet[int]]::new()
+            foreach ($eligibleFinding in @($eligibleFindings | Where-Object { -not (Test-HasProperty $_.Finding 'location') })) {
+                $matchingIndex = -1
+                for ($index = 0; $index -lt $findings.Count; $index++) {
+                    if (-not $usedLocationlessFindings.Contains($index) -and
+                        -not (Test-HasProperty $findings[$index] 'location') -and
+                        (Test-RolledFindingRepresents $findings[$index] $eligibleFinding.Finding $eligibleFinding.ProducerId)) {
+                        $matchingIndex = $index
+                        break
+                    }
+                }
+                if ($matchingIndex -lt 0) {
+                    Add-Error 'SUPER_FINDING_MISSING' "$ReportPathPrefix.findings" `
+                        "No distinct rolled-up finding represents a locationless finding from '$($eligibleFinding.ProducerId)'."
+                }
+                else {
+                    $usedLocationlessFindings.Add($matchingIndex) | Out-Null
+                }
+            }
+            for ($index = 0; $index -lt $findings.Count; $index++) {
+                if ($findings[$index].'from-sub-skill' -cne 'agent' -and
+                    -not (Test-HasProperty $findings[$index] 'location') -and
+                    -not $usedLocationlessFindings.Contains($index)) {
+                    Add-Error 'SUPER_FINDING_MISMATCH' "$ReportPathPrefix.findings[$index]" `
+                        'No distinct locationless leaf finding corresponds to this rolled-up finding.'
+                }
+            }
+
+            foreach ($eligibleFinding in @($eligibleFindings | Where-Object { Test-HasProperty $_.Finding 'location' })) {
                 $represented = @($findings | Where-Object {
                     $_.'from-sub-skill' -cne 'agent' -and
                     (Test-RolledFindingRepresents $_ $eligibleFinding.Finding $eligibleFinding.ProducerId)

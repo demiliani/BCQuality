@@ -337,6 +337,20 @@ try {
         -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath, $supportingArticlePath
     Assert-True (-not $acceptedMergedSuper.normalized) 'overlapping A and B findings may merge into A with B as a supporting reference'
 
+    $textOnlyOwnerLeaf = $mergeOwnerLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $textOnlyOwnerLeaf.findings[0].PSObject.Properties.Remove('suggested-code')
+    $textOnlySupportingLeaf = $supportingFindingLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $textOnlySupportingLeaf.findings[0].PSObject.Properties.Remove('suggested-code')
+    $textOnlyMergedFinding = $mergedFinding | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $textOnlyMergedFinding.PSObject.Properties.Remove('suggested-code')
+    $textOnlyMergedSuper = $mergedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $textOnlyMergedSuper.findings = @($textOnlyMergedFinding)
+    $textOnlyMergedSuper.'sub-results' = @($textOnlyOwnerLeaf, $textOnlySupportingLeaf)
+    Set-Content -LiteralPath $reportPath -Value ($textOnlyMergedSuper | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $acceptedTextOnlyMerge = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+        -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath, $supportingArticlePath
+    Assert-True (-not $acceptedTextOnlyMerge.normalized) 'supporting references permit an overlapping A and B merge with different messages and no suggested code'
+
     $unmergedSupportingFinding = $supportingFindingLeaf.findings[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $unmergedSupportingFinding | Add-Member -NotePropertyName 'from-sub-skill' -NotePropertyValue 'al-security-review'
     $unmergedDuplicates = $mergedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
@@ -356,6 +370,33 @@ try {
         & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
             -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
     }
+
+    $locationlessLeaf = $styleFindingLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $locationlessLeaf.findings[0].PSObject.Properties.Remove('location')
+    $secondLocationlessFinding = $locationlessLeaf.findings[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $locationlessLeaf.findings = @($locationlessLeaf.findings[0], $secondLocationlessFinding)
+    $locationlessLeaf.summary.counts.minor = 2
+    $locationlessRolledFinding = $rolledFinding | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $locationlessRolledFinding.PSObject.Properties.Remove('location')
+    $locationlessOmission = $deduplicatedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $locationlessOmission.findings = @($locationlessRolledFinding)
+    $locationlessOmission.'sub-results' = @($locationlessLeaf, $emptySecurityLeaf)
+    Set-Content -LiteralPath $reportPath -Value ($locationlessOmission | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-ThrowsLike -Pattern '*SUPER_FINDING_MISSING*' -Action {
+        & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+            -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    }
+
+    $completeLocationlessRollup = $locationlessOmission | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $completeLocationlessRollup.summary.counts.minor = 2
+    $completeLocationlessRollup.findings = @(
+        $locationlessRolledFinding
+        ($locationlessRolledFinding | ConvertTo-Json -Depth 20 | ConvertFrom-Json)
+    )
+    Set-Content -LiteralPath $reportPath -Value ($completeLocationlessRollup | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $acceptedLocationlessRollup = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+        -SourceRoot $tmp -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+    Assert-True (-not $acceptedLocationlessRollup.normalized) 'two locationless leaf occurrences require and accept two distinct rolled findings'
 
     $nonexistentProducer = $deduplicatedSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $nonexistentProducer.findings[0].'from-sub-skill' = 'al-missing-review'
