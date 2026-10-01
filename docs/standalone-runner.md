@@ -88,7 +88,8 @@ For example, if style is selected and security was disabled:
 {
   "superSkill": { "id": "al-code-review", "version": 1 },
   "subSkills": [{ "id": "al-style-review", "version": 1 }],
-  "skipped": [{ "id": "al-security-review", "version": 1, "reason": "configuration" }]
+  "skipped": [{ "id": "al-security-review", "version": 1, "reason": "configuration" }],
+  "acceptedResults": []
 }
 ```
 
@@ -101,10 +102,28 @@ Keep paths, layers, and other resolver metadata if useful for private audit.
 Do not add the artifact to the findings-report or overwrite it to hide an
 unfinished invocation. Preserve it with the run's raw payloads.
 
+Initialize `acceptedResults` before dispatch. After accepting a leaf, save its
+exact accepted copy (including any permitted normalization) in an immutable
+host-owned file outside worker/composer write access. Append only its capture
+to `acceptedResults`, for example:
+
+```json
+{"id": "al-style-review", "version": 1, "reportPath": "accepted/style.json"}
+```
+
+`reportPath` may be absolute or relative to the composition artifact's directory.
+Capture a host-created failed validation report the same way. Never construct
+these captures from the composed `sub-results` or permit the composing model
+to supply or alter them. Keep the original selection and exclusions unchanged.
+
 The gate rejects repeated or unexpected leaf IDs, wrong selected versions,
-reordered results, and fabricated or missing exclusions. If selected leaves
-remain unfinished, the report must be `partial` with a non-failed returned
-report, otherwise `failed`; identify unfinished leaf IDs in `outcome-reason`.
+reordered results, fabricated or missing exclusions, and uncaptured or altered
+leaf content. JSON property order is immaterial; array order, field presence,
+types, and values must match. Every captured leaf must appear in `sub-results`.
+If selected leaves remain unfinished, the report must be `partial` with a non-failed returned
+report, otherwise `failed`; name every unfinished leaf ID exactly in
+`outcome-reason`. Top-level `from-sub-skill: "agent"` findings are rejected
+while selected leaf results are missing.
 Do not fabricate leaf reports or use configuration skips for budget exhaustion.
 Wait for started invocations to finish; omit the self-review if the selected
 composition remains incomplete. Coverage still sums the non-failed leaf
@@ -112,6 +131,7 @@ knowledge worklists, not the number of selected leaf slots.
 
 Calls without the expected artifact remain supported for structural/semantic
 validation, but cannot certify that a composed review covered its selection.
+They also cannot bind nested leaves to the host's accepted outputs.
 They still reject duplicate leaf IDs and returned-and-skipped conflicts.
 
 ## Runner-owned choices

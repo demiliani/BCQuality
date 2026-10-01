@@ -78,6 +78,14 @@ skill's version, and record any input-incompatible exclusions with
 `reason: "not-applicable"`. Do not derive this artifact from leaf reports or
 change it merely because execution later runs out of budget. Pass its path as
 `-ExpectedCompositionPath` for final super-skill validation.
+Initialize `acceptedResults` to `[]`. After each leaf's acceptance gate, the
+host saves its exact accepted copy (or host-created failed validation result)
+in an immutable private file and appends its `id`, `version`, and `reportPath`
+to that array. The host alone owns these captures; neither workers nor the
+composing model may write them. Never derive them from composed `sub-results`.
+Keep the pre-dispatch selection and exclusions unchanged. Final validation
+requires every nested leaf to match its captured JSON content exactly and
+every captured result to be included. Property order is immaterial.
 
 ## Action
 

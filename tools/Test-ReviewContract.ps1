@@ -294,6 +294,18 @@ try {
     }
 
     $compositionPath = Join-Path $tmp 'composition.json'
+    function Save-AcceptedLeafReports {
+        param([object[]] $LeafReports)
+
+        foreach ($leafReport in $LeafReports) {
+            $leafPath = Join-Path $tmp "$([guid]::NewGuid()).json"
+            Set-Content -LiteralPath $leafPath -Value ($leafReport | ConvertTo-Json -Depth 100) -Encoding utf8NoBOM
+            $accepted = & $validator -ReportPath $leafPath -BCQualityRoot $Root
+            Assert-True (-not $accepted.normalized) 'host captures a validated leaf report'
+            @{ id = $leafReport.skill.id; version = $leafReport.skill.version; reportPath = $leafPath }
+        }
+    }
+
     $expectedComposition = [ordered]@{
         superSkill = @{ id = 'al-code-review'; version = 1 }
         subSkills = @(
@@ -301,6 +313,7 @@ try {
             @{ id = 'al-security-review'; version = 1 }
         )
         skipped = @()
+        acceptedResults = @(Save-AcceptedLeafReports @($completedLeaf, $completedSecurityLeaf))
     }
     Set-Content -LiteralPath $compositionPath -Value ($expectedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     Set-Content -LiteralPath $reportPath -Value ($validSuperReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
@@ -308,6 +321,9 @@ try {
         -ExpectedCompositionPath $compositionPath
     Assert-True (-not $acceptedBoundSuper.normalized) 'complete composition matches the expected worklist'
 
+    $incompleteComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $incompleteComposition.acceptedResults = @($incompleteComposition.acceptedResults[0])
+    Set-Content -LiteralPath $compositionPath -Value ($incompleteComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     $missingLeafReport = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $missingLeafReport.'sub-results' = @($completedLeaf)
     $missingLeafReport.summary.coverage.'worklist-size' = 1
@@ -340,6 +356,103 @@ try {
         }
     }
 
+    $genericMissingReason = $missingLeafReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $genericMissingReason.'outcome-reason' = 'Budget expired.'
+    Assert-CompositionReport $genericMissingReason '*SUPER_MISSING_LEAF_REASON*'
+    $genericMissingReason.'outcome-reason' = 'prefix-al-security-review-suffix was not evaluated.'
+    Assert-CompositionReport $genericMissingReason '*SUPER_MISSING_LEAF_REASON*'
+
+    foreach ($fabricatedOutcome in 'completed', 'not-applicable', 'no-knowledge') {
+        $fabricatedLeafReport = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $fabricatedLeafReport.'sub-results'[1].outcome = $fabricatedOutcome
+        if ($fabricatedOutcome -cne 'completed') {
+            $fabricatedLeafReport.'sub-results'[1].summary.coverage.'worklist-size' = 0
+            $fabricatedLeafReport.'sub-results'[1].summary.coverage.'items-evaluated' = 0
+            $fabricatedLeafReport.summary.coverage.'worklist-size' = 1
+            $fabricatedLeafReport.summary.coverage.'items-evaluated' = 1
+        }
+        Assert-CompositionReport $fabricatedLeafReport '*SUPER_LEAF_NOT_ACCEPTED*'
+    }
+    Set-Content -LiteralPath $compositionPath -Value ($expectedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-CompositionReport $missingLeafReport '*SUPER_ACCEPTED_LEAF_MISSING*'
+    $alteredLeafReport = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $alteredLeafReport.'sub-results'[1].summary.coverage.'worklist-size' = 2
+    $alteredLeafReport.'sub-results'[1].summary.coverage.'items-evaluated' = 2
+    $alteredLeafReport.summary.coverage.'worklist-size' = 3
+    $alteredLeafReport.summary.coverage.'items-evaluated' = 3
+    Assert-CompositionReport $alteredLeafReport '*SUPER_LEAF_CONTENT_MISMATCH*'
+    $reorderedProperties = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $reorderedProperties.'sub-results'[0].skill = [pscustomobject]@{ version = 1; id = 'al-style-review' }
+    Assert-CompositionReport $reorderedProperties
+    foreach ($alteredOutcome in 'not-applicable', 'no-knowledge') {
+        $alteredOutcomeReport = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $alteredOutcomeReport.'sub-results'[1].outcome = $alteredOutcome
+        $alteredOutcomeReport.'sub-results'[1].summary.coverage.'worklist-size' = 0
+        $alteredOutcomeReport.'sub-results'[1].summary.coverage.'items-evaluated' = 0
+        $alteredOutcomeReport.summary.coverage.'worklist-size' = 1
+        $alteredOutcomeReport.summary.coverage.'items-evaluated' = 1
+        Assert-CompositionReport $alteredOutcomeReport '*SUPER_LEAF_CONTENT_MISMATCH*'
+    }
+    $relativeCaptureComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    foreach ($capture in $relativeCaptureComposition.acceptedResults) {
+        $capture.reportPath = Split-Path -Leaf $capture.reportPath
+    }
+    Set-Content -LiteralPath $compositionPath -Value ($relativeCaptureComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-CompositionReport $validSuperReport
+    $uncapturedComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $uncapturedComposition.PSObject.Properties.Remove('acceptedResults')
+    Set-Content -LiteralPath $compositionPath -Value ($uncapturedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-CompositionReport $validSuperReport '*Invalid expected composition*'
+    $duplicateCaptureComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $duplicateCaptureComposition.acceptedResults = @($duplicateCaptureComposition.acceptedResults[0], $duplicateCaptureComposition.acceptedResults[0])
+    Set-Content -LiteralPath $compositionPath -Value ($duplicateCaptureComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    Assert-CompositionReport $validSuperReport '*Invalid expected composition*'
+
+    $capturedFindingLeaf = $completedLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $capturedFindingLeaf.findings = @(@{
+        id = 'agent:leaf-issue'
+        severity = 'minor'
+        confidence = 'medium'
+        message = 'Preserve this accepted leaf finding.'
+        references = @()
+    })
+    $secondCapturedFinding = $capturedFindingLeaf.findings[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $secondCapturedFinding.id = 'agent:second-leaf-issue'
+    $capturedFindingLeaf.findings = @($capturedFindingLeaf.findings[0], $secondCapturedFinding)
+    $capturedFindingLeaf.summary.counts.minor = 2
+    $findingComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $findingComposition.acceptedResults = @(Save-AcceptedLeafReports @($capturedFindingLeaf, $completedSecurityLeaf))
+    Set-Content -LiteralPath $compositionPath -Value ($findingComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $capturedFindingReport = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $capturedFindingReport.'sub-results'[0] = $capturedFindingLeaf
+    $capturedFindingReport.findings = @($capturedFindingLeaf.findings | ConvertTo-Json -Depth 20 | ConvertFrom-Json)
+    foreach ($finding in $capturedFindingReport.findings) {
+        $finding.id = "al-style-review:$($finding.id)"
+        $finding | Add-Member -NotePropertyName 'from-sub-skill' -NotePropertyValue 'al-style-review'
+    }
+    $capturedFindingReport.summary.counts.minor = 2
+    Assert-CompositionReport $capturedFindingReport
+    $reorderedFindingReport = $capturedFindingReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $reorderedFindingReport.'sub-results'[0].findings = @(
+        $reorderedFindingReport.'sub-results'[0].findings[1]
+        $reorderedFindingReport.'sub-results'[0].findings[0]
+    )
+    Assert-CompositionReport $reorderedFindingReport '*SUPER_LEAF_CONTENT_MISMATCH*'
+    $addedLeafFieldReport = $capturedFindingReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $addedLeafFieldReport.'sub-results'[0] | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'A composer-added field.'
+    Assert-CompositionReport $addedLeafFieldReport '*SUPER_LEAF_CONTENT_MISMATCH*'
+    $alteredFindingReport = $capturedFindingReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $alteredFindingReport.'sub-results'[0].findings[0].message = 'A fabricated replacement message.'
+    $alteredFindingReport.findings[0].message = 'A fabricated replacement message.'
+    Assert-CompositionReport $alteredFindingReport '*SUPER_LEAF_CONTENT_MISMATCH*'
+    $removedFindingReport = $capturedFindingReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $removedFindingReport.'sub-results'[0].findings = @()
+    $removedFindingReport.'sub-results'[0].summary.counts.minor = 0
+    $removedFindingReport.findings = @()
+    $removedFindingReport.summary.counts.minor = 0
+    Assert-CompositionReport $removedFindingReport '*SUPER_LEAF_CONTENT_MISMATCH*'
+    Set-Content -LiteralPath $compositionPath -Value ($expectedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+
     foreach ($case in @(
         @{ Pattern = '*SUPER_IDENTITY_MISMATCH*'; Change = { param($candidate) $candidate.skill.id = 'al-other-review' } }
         @{ Pattern = '*SUPER_IDENTITY_MISMATCH*'; Change = { param($candidate) $candidate.skill.version = 2 } }
@@ -359,6 +472,9 @@ try {
     )
     Assert-CompositionReport $fabricatedSkip '*SUPER_UNEXPECTED_SKIP*'
 
+    $emptyAcceptedComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $emptyAcceptedComposition.acceptedResults = @()
+    Set-Content -LiteralPath $compositionPath -Value ($emptyAcceptedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     $noResults = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $noResults.'sub-results' = @()
     $noResults.summary.coverage.'worklist-size' = 0
@@ -366,8 +482,36 @@ try {
     $noResults.outcome = 'not-applicable'
     Assert-CompositionReport $noResults '*SUPER_OUTCOME_MISMATCH*'
     $noResults.outcome = 'failed'
-    $noResults | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'No selected leaf could be evaluated.'
+    $noResults | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'al-style-review and al-security-review could not be evaluated.'
     Assert-CompositionReport $noResults
+
+    $oneMissingId = $noResults | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $oneMissingId.'outcome-reason' = 'al-security-review could not be evaluated.'
+    Assert-CompositionReport $oneMissingId '*SUPER_MISSING_LEAF_REASON*'
+    foreach ($baseReport in @($missingLeafReport, $noResults, $validSuperReport)) {
+        $capturedComposition = if ($baseReport.outcome -ceq 'completed') { $expectedComposition } else { $incompleteComposition }
+        Set-Content -LiteralPath $compositionPath -Value ($capturedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+        $selfReviewReport = $baseReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $selfReviewReport.findings = @(@{
+            id = 'agent:cross-domain-gap'
+            domain = 'Agent'
+            severity = 'minor'
+            confidence = 'medium'
+            message = 'A cross-domain issue needs attention.'
+            references = @()
+            'from-sub-skill' = 'agent'
+        })
+        $selfReviewReport.summary.counts.minor = 1
+        if ($baseReport.outcome -ceq 'completed') {
+            Assert-CompositionReport $selfReviewReport
+        }
+        elseif ($baseReport.outcome -ceq 'failed') {
+            Assert-CompositionReport $selfReviewReport '*Invalid findings-report JSON or schema*'
+        }
+        else {
+            Assert-CompositionReport $selfReviewReport '*SUPER_AGENT_REVIEW_INCOMPLETE*'
+        }
+    }
 
     $allFailed = $noResults | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $allFailed.'sub-results' = @($completedLeaf, $completedSecurityLeaf) | ConvertTo-Json -Depth 20 | ConvertFrom-Json
@@ -376,11 +520,15 @@ try {
         $leaf.summary.coverage.'items-evaluated' = 0
         $leaf | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'Invocation failed.'
     }
+    $failedComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $failedComposition.acceptedResults = @(Save-AcceptedLeafReports $allFailed.'sub-results')
+    Set-Content -LiteralPath $compositionPath -Value ($failedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     Assert-CompositionReport $allFailed
 
     $skipComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $skipComposition.subSkills = @($skipComposition.subSkills[0])
     $skipComposition.skipped = @(@{ id = 'al-security-review'; version = 1; reason = 'not-applicable' })
+    $skipComposition.acceptedResults = @($skipComposition.acceptedResults[0])
     Set-Content -LiteralPath $compositionPath -Value ($skipComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     $validSkippedReport = $fabricatedSkip | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $validSkippedReport.outcome = 'completed'
@@ -406,6 +554,7 @@ try {
         @{ id = $_.id; version = $_.version; reason = 'configuration' }
     })
     $allSkippedComposition.subSkills = @()
+    $allSkippedComposition.acceptedResults = @()
     Set-Content -LiteralPath $compositionPath -Value ($allSkippedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     $allSkippedReport = $noResults | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $allSkippedReport.outcome = 'not-applicable'
@@ -464,7 +613,6 @@ try {
             $declaredSkill = @($fixtureIndex.skills | Where-Object path -CEQ $declaredPath)[0]
             @{ id = $_.id; version = $declaredSkill.version; reason = $_.reason; declaredPath = $declaredPath }
         })
-        Set-Content -LiteralPath $compositionPath -Value ($resolved | ConvertTo-Json -Depth 30) -Encoding utf8NoBOM
         $resolvedReport = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
         $resolvedReport.'sub-results' = @($resolved.subSkills | ForEach-Object {
             $leafReport = $completedLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
@@ -477,6 +625,8 @@ try {
         $resolvedReport | Add-Member -NotePropertyName 'skipped-sub-skills' -NotePropertyValue @(
             $resolved.skipped | ForEach-Object { @{ skill = @{ id = $_.id; version = $_.version }; reason = $_.reason } }
         )
+        $resolved | Add-Member -NotePropertyName 'acceptedResults' -NotePropertyValue @(Save-AcceptedLeafReports $resolvedReport.'sub-results')
+        Set-Content -LiteralPath $compositionPath -Value ($resolved | ConvertTo-Json -Depth 30) -Encoding utf8NoBOM
         Assert-CompositionReport $resolvedReport
     }
     Set-Content -LiteralPath $compositionPath -Value ($expectedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
@@ -643,6 +793,9 @@ try {
     Set-Content -LiteralPath $reportPath -Value ($partialSuperReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     $acceptedPartialSuper = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super
     Assert-True (-not $acceptedPartialSuper.normalized) 'partial super-skill excludes failed coverage from its rollup'
+    $partialComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $partialComposition.acceptedResults = @(Save-AcceptedLeafReports @($completedLeaf, $failedLeaf))
+    Set-Content -LiteralPath $compositionPath -Value ($partialComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
     Assert-CompositionReport $partialSuperReport
 
     $failedLeafLeakage = $partialSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json

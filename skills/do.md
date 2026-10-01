@@ -228,16 +228,31 @@ scope and the leaf's recorded set of fully retrieved article paths. Pass
 a super-skill's rolled-up report. Prepare that private artifact before leaf
 dispatch, after layer resolution and input compatibility checks. It contains
 `superSkill` (`id`, `version`), ordered selected `subSkills` (each with `id`,
-`version`), and `skipped` (each with `id`, `version`, `reason`). Reasons are
-`configuration` or `not-applicable`; budget exhaustion is not a skip reason.
+`version`), `skipped` (each with `id`, `version`, `reason`), and an initially
+empty `acceptedResults` array. Reasons are `configuration` or `not-applicable`;
+budget exhaustion is not a skip reason.
 Additional resolver metadata may be retained in the artifact, not the report.
+After each leaf passes its acceptance gate, the host saves the exact accepted
+copy in a private immutable file and appends an `acceptedResults` entry with
+`id`, `version`, and `reportPath`. Capture host-created failed validation
+results the same way. Paths may be absolute or relative to the composition
+artifact's directory. Capture the normalized accepted copy when normalization
+was permitted, not the invalid raw return. Do not expose these files or write
+access to the artifact to leaf workers or the composing model. Only the host
+may append captures; the pre-dispatch selection and exclusions remain fixed.
 The validator binds the super-skill and leaf identities and versions, checks
-selected order, and requires exact agreement on exclusions. Every returned
-leaf must be unique; a selected leaf cannot be reclassified as skipped by the
-report. Without the artifact, validation remains structural and semantic but
+selected order, and requires exact agreement on exclusions. Each nested leaf
+must exactly match its host-captured accepted JSON content, ignoring object
+property order but preserving array order, types, values, and field presence.
+Every captured leaf must be included; uncaptured or altered leaves are invalid.
+Every returned leaf must be unique; a selected leaf cannot be reclassified as skipped by the
+report. When selected leaves are missing, `outcome-reason` must name every
+missing ID exactly and top-level `from-sub-skill: "agent"` findings are forbidden.
+Without the artifact, validation remains structural and semantic but
 cannot prove composition completeness, selected versions, order, or legitimate
-exclusions. Duplicate or both returned-and-skipped leaf IDs are invalid even
-without the artifact. Never derive the expected composition from model output.
+exclusions, nor bind leaves to accepted host outputs. Duplicate or both
+returned-and-skipped leaf IDs are invalid even without the artifact. Never
+derive the expected composition from model output.
 Pass
 `-AllowBoundedNormalization` only when the host preserves the immutable raw
 payload and records `removedRanges` in private telemetry as required above.
