@@ -58,6 +58,7 @@
     "performance": {
       "articles": [
         "use-isempty-for-existence-check",
+        "use-get-instead-of-findfirst-on-full-primary-key",
         "job-queue-category-code-serializes-conflicting-jobs",
         "job-queue-external-effects-must-be-idempotent",
         "job-queue-handlers-must-not-require-ui",
