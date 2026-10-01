@@ -53,7 +53,9 @@ only result.
   with `tools/Resolve-SkillWorklist.ps1`, passing the enabled layers and
   disabled skill paths from the task context. Execute every resolved leaf as
   a discrete invocation. Leaves are independent and may be scheduled serially
-  or concurrently.
+  or concurrently. Before dispatch, preserve the final ordered selection and
+  legitimate configuration/input-compatibility exclusions as a private expected
+  composition artifact; see [composition acceptance](#composition-acceptance).
 5. Capture the exact Task return as the immutable raw audit payload and primary
    transport. Preserve it unchanged in private artifacts or host logs. Before
    the full DO acceptance gate, create a normalized candidate only for DO's
@@ -61,7 +63,7 @@ only result.
    telemetry, and accept the candidate only if the entire copy passes the
   unchanged strict gate. Use `tools/Validate-FindingsReport.ps1`, passing the
   exact source paths and fully retrieved article paths; pass `-SkillKind super`
-  for the final rolled-up report. The accepted report contains no undeclared
+  and `-ExpectedCompositionPath` for the final rolled-up report. The accepted report contains no undeclared
   telemetry fields.
 6. Collect each accepted findings-report into `sub-results` in the declared
    `sub-skills` order, not completion order. Run the super-skill self-review
@@ -73,6 +75,44 @@ only result.
 The runner must never inspect the diff to skip a review domain. A leaf decides
 its own task-level applicability and reports `not-applicable` or
 `no-knowledge`.
+
+## Composition acceptance
+
+A report can be internally consistent while omitting a selected review. Bind
+the final acceptance gate to the host's selection, not just the returned
+reports. The private JSON input to `-ExpectedCompositionPath` follows the
+[DO consumer acceptance contract](../skills/do.md#consumer-acceptance-gate).
+For example, if style is selected and security was disabled:
+
+```json
+{
+  "superSkill": { "id": "al-code-review", "version": 1 },
+  "subSkills": [{ "id": "al-style-review", "version": 1 }],
+  "skipped": [{ "id": "al-security-review", "version": 1, "reason": "configuration" }]
+}
+```
+
+Build this artifact from `Resolve-SkillWorklist.ps1` and the input-compatibility
+decision before dispatch. Resolver `skipped` entries have no version: enrich
+them from the declared skill's indexed version. Move an input-incompatible
+selected slot to `skipped` with its selected version and `not-applicable`
+reason; never use source content or later model output to make that decision.
+Keep paths, layers, and other resolver metadata if useful for private audit.
+Do not add the artifact to the findings-report or overwrite it to hide an
+unfinished invocation. Preserve it with the run's raw payloads.
+
+The gate rejects repeated or unexpected leaf IDs, wrong selected versions,
+reordered results, and fabricated or missing exclusions. If selected leaves
+remain unfinished, the report must be `partial` with a non-failed returned
+report, otherwise `failed`; identify unfinished leaf IDs in `outcome-reason`.
+Do not fabricate leaf reports or use configuration skips for budget exhaustion.
+Wait for started invocations to finish; omit the self-review if the selected
+composition remains incomplete. Coverage still sums the non-failed leaf
+knowledge worklists, not the number of selected leaf slots.
+
+Calls without the expected artifact remain supported for structural/semantic
+validation, but cannot certify that a composed review covered its selection.
+They still reject duplicate leaf IDs and returned-and-skipped conflicts.
 
 ## Runner-owned choices
 
@@ -113,6 +153,8 @@ A compatible runner:
   only part of the review is reliable;
 - orders `sub-results` by the declared worklist and orders rendered findings
   deterministically;
+- validates composition against the host-owned selection, and reports selected
+  leaves left unfinished as incomplete rather than clean or configured away;
 - calculates top-level severity counts from deduplicated top-level findings,
   not by summing leaf counts;
 - preserves knowledge paths verbatim and verifies references before publishing;

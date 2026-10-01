@@ -71,6 +71,14 @@ Sub-skills that fail either check are not invoked and are recorded in `skipped-s
 
 The worklist is the list of sub-skills judged relevant by the previous step. Every sub-skill in the worklist will be invoked in the Action step.
 
+Before dispatch, preserve that selection in a private host-owned expected
+composition artifact using DO's input contract. Start from the resolver's
+ordered selection; enrich configuration skips with the declared indexed
+skill's version, and record any input-incompatible exclusions with
+`reason: "not-applicable"`. Do not derive this artifact from leaf reports or
+change it merely because execution later runs out of budget. Pass its path as
+`-ExpectedCompositionPath` for final super-skill validation.
+
 ## Action
 
 ### Execution discipline (mandatory)
@@ -85,7 +93,7 @@ The Action step consists of **discrete leaf invocations**, not one combined gene
 - Do not collapse multiple sub-skills into one shared reasoning step. Each sub-skill has a distinct knowledge subset and a distinct evaluation procedure; sharing one rolled-up scan dilutes per-skill attention and causes leaves to silently underreport (this has been observed in production: leaf skills returned empty `findings[]` while their standalone runs against the same diff produced multiple matches).
 - The agent self-review pass is its own final iteration. Begin it only after every sub-skill in the worklist has completed and its sub-result is recorded.
 - Sub-skills are independent: re-walking the diff once per sub-skill is correct and expected. The output schema accommodates this — `sub-results` carries one entry per sub-skill, each a complete findings-report, in the frontmatter `sub-skills` order regardless of completion order.
-- When isolated calls are unavailable and the current model cannot finish every leaf within its budget, return `partial` with completed `sub-results` and name the first unevaluated sub-skill in `outcome-reason`. Never silently mark the remaining leaves clean.
+- When the execution budget prevents invoking every selected leaf, wait for started invocations to finish and preserve their accepted `sub-results`. Return `partial` if any returned report is non-`failed`, otherwise `failed`, and name the unfinished leaf IDs in `outcome-reason`. Do not run the self-review on incomplete composition, invent sub-results, or record budget exhaustion as a configured/input-incompatible skip. Never silently mark the remaining leaves clean.
 
 ### Roll up sub-skill findings
 
@@ -138,7 +146,9 @@ Calculate `summary.counts` from the final top-level `findings[]`, after failed s
 Derive `outcome` using the DO rollup rules. `outcome-reason` is populated for `partial` and `failed` and SHOULD summarize per-sub-skill state, for example: *"al-security-review failed (tool timeout); al-performance-review completed."*
 
 Before emitting the rollup, apply DO's consumer acceptance gate to every nested
-and top-level finding. A leaf's nested report is its accepted exact return or
+and top-level finding, and validate the final report with
+`-SkillKind super -ExpectedCompositionPath <host-owned-json>` against the
+selection preserved before dispatch. A leaf's nested report is its accepted exact return or
 its accepted normalized candidate copy; its exact Task return remains the
 separate immutable raw audit payload. Treat an invalid sub-result as failed and
 exclude all of its findings from the top-level rollup. Never reconstruct it

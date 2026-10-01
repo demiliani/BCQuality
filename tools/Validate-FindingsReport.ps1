@@ -12,6 +12,7 @@ param(
     [string[]] $RetrievedArticlePaths = @(),
     [ValidateSet('leaf', 'super')]
     [string] $SkillKind = 'leaf',
+    [string] $ExpectedCompositionPath,
     [switch] $AllowBoundedNormalization
 )
 
@@ -32,6 +33,61 @@ try {
 }
 catch {
     throw "Invalid findings-report JSON or schema: $($_.Exception.Message)"
+}
+
+$expectedComposition = $null
+$expectedLeaves = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+$expectedSkips = [Collections.Generic.Dictionary[string, object]]::new([StringComparer]::Ordinal)
+if ($ExpectedCompositionPath) {
+    if ($SkillKind -cne 'super') {
+        throw 'Expected composition is supported only for super-skill reports.'
+    }
+    $contractSchema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json -AsHashtable
+    $identitySchema = @{
+        type = 'object'
+        required = @('id', 'version')
+        properties = $contractSchema.definitions.skillReference.properties
+    }
+    $skipProperties = @{
+        id = $identitySchema.properties.id
+        version = $identitySchema.properties.version
+        reason = @{ enum = @('configuration', 'not-applicable') }
+    }
+    $compositionSchema = @{
+        type = 'object'
+        required = @('superSkill', 'subSkills', 'skipped')
+        properties = @{
+            superSkill = $identitySchema
+            subSkills = @{ type = 'array'; items = $identitySchema }
+            skipped = @{
+                type = 'array'
+                items = @{ type = 'object'; required = @('id', 'version', 'reason'); properties = $skipProperties }
+            }
+        }
+    } | ConvertTo-Json -Depth 20
+    try {
+        $compositionRaw = Get-Content -LiteralPath $ExpectedCompositionPath -Raw
+        if (-not ($compositionRaw | Test-Json -Schema $compositionSchema -ErrorAction Stop)) {
+            throw 'Expected composition does not satisfy its input contract.'
+        }
+        $expectedComposition = $compositionRaw | ConvertFrom-Json -Depth 100
+        $expectedIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        foreach ($leaf in @($expectedComposition.subSkills)) {
+            if (-not $expectedIds.Add([string]$leaf.id)) {
+                throw "Duplicate expected skill id '$($leaf.id)'."
+            }
+            $expectedLeaves.Add([string]$leaf.id, $leaf)
+        }
+        foreach ($skip in @($expectedComposition.skipped)) {
+            if (-not $expectedIds.Add([string]$skip.id)) {
+                throw "Duplicate or selected-and-skipped expected skill id '$($skip.id)'."
+            }
+            $expectedSkips.Add([string]$skip.id, $skip)
+        }
+    }
+    catch {
+        throw "Invalid expected composition: $($_.Exception.Message)"
+    }
 }
 
 $retrieved = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -79,8 +135,14 @@ function Get-SemanticErrors {
     }
 
     function Get-DerivedSuperOutcome {
-        param([object[]] $SubResults)
+        param([object[]] $SubResults, [int] $MissingResults = 0)
 
+        if ($MissingResults -gt 0) {
+            if (@($SubResults | Where-Object outcome -CNE 'failed').Count) {
+                return 'partial'
+            }
+            return 'failed'
+        }
         if (-not $SubResults.Count) {
             return 'not-applicable'
         }
@@ -342,20 +404,87 @@ function Get-SemanticErrors {
 
         if ($CurrentSkillKind -ceq 'super' -and $hasSubResults) {
             $subResults = @($Current.'sub-results')
+            $producerIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
             for ($index = 0; $index -lt $subResults.Count; $index++) {
+                if (-not $producerIds.Add([string]$subResults[$index].skill.id)) {
+                    Add-Error 'SUPER_DUPLICATE_SUB_RESULT' "$ReportPathPrefix.sub-results[$index].skill.id" `
+                        'A leaf may appear only once in sub-results.'
+                }
                 Test-Report $subResults[$index] "$ReportPathPrefix.sub-results[$index]" 'leaf'
             }
 
-            $expectedOutcome = Get-DerivedSuperOutcome $subResults
+            $skippedIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            $skips = if ($hasSkippedSubSkills) { @($Current.'skipped-sub-skills') } else { @() }
+            foreach ($skip in $skips) {
+                if (-not $skippedIds.Add([string]$skip.skill.id) -or $producerIds.Contains([string]$skip.skill.id)) {
+                    Add-Error 'SUPER_SKIP_CONFLICT' "$ReportPathPrefix.skipped-sub-skills" `
+                        "Skill '$($skip.skill.id)' is duplicated or both returned and skipped."
+                }
+            }
+
+            $missingResults = 0
+            if ($null -ne $expectedComposition) {
+                if ($Current.skill.id -cne $expectedComposition.superSkill.id -or
+                    $Current.skill.version -ne $expectedComposition.superSkill.version) {
+                    Add-Error 'SUPER_IDENTITY_MISMATCH' "$ReportPathPrefix.skill" 'Super-skill identity differs from expected composition.'
+                }
+                $previousSlot = -1
+                $orderedIds = @($expectedComposition.subSkills | ForEach-Object { $_.id })
+                for ($index = 0; $index -lt $subResults.Count; $index++) {
+                    $identity = $subResults[$index].skill
+                    if (-not $expectedLeaves.ContainsKey([string]$identity.id)) {
+                        Add-Error 'SUPER_UNEXPECTED_SUB_RESULT' "$ReportPathPrefix.sub-results[$index].skill" `
+                            "Skill '$($identity.id)' was not selected."
+                        continue
+                    }
+                    if ($identity.version -ne $expectedLeaves[$identity.id].version) {
+                        Add-Error 'SUPER_LEAF_VERSION_MISMATCH' "$ReportPathPrefix.sub-results[$index].skill.version" `
+                            "Unexpected version for '$($identity.id)'."
+                    }
+                    $slot = [Array]::IndexOf($orderedIds, $identity.id)
+                    if ($slot -le $previousSlot) {
+                        Add-Error 'SUPER_SUB_RESULT_ORDER' "$ReportPathPrefix.sub-results[$index].skill" `
+                            'Sub-results must preserve the selected worklist order.'
+                    }
+                    $previousSlot = $slot
+                }
+                foreach ($leaf in @($expectedComposition.subSkills)) {
+                    if (-not $producerIds.Contains([string]$leaf.id)) {
+                        $missingResults++
+                    }
+                }
+                foreach ($skip in $skips) {
+                    if (-not $expectedSkips.ContainsKey([string]$skip.skill.id)) {
+                        Add-Error 'SUPER_UNEXPECTED_SKIP' "$ReportPathPrefix.skipped-sub-skills" `
+                            "Skill '$($skip.skill.id)' was not excluded by the coordinator."
+                        continue
+                    }
+                    $expectedSkip = $expectedSkips[$skip.skill.id]
+                    if ($skip.skill.version -ne $expectedSkip.version -or $skip.reason -cne $expectedSkip.reason) {
+                        Add-Error 'SUPER_SKIP_MISMATCH' "$ReportPathPrefix.skipped-sub-skills" `
+                            "Skip identity or reason differs for '$($skip.skill.id)'."
+                    }
+                }
+                foreach ($skip in @($expectedComposition.skipped)) {
+                    if (-not $skippedIds.Contains([string]$skip.id)) {
+                        Add-Error 'SUPER_SKIP_MISSING' "$ReportPathPrefix.skipped-sub-skills" `
+                            "Expected exclusion '$($skip.id)' is missing."
+                    }
+                }
+            }
+
+            $expectedOutcome = Get-DerivedSuperOutcome $subResults $missingResults
             if ($Current.outcome -cne $expectedOutcome) {
                 Add-Error 'SUPER_OUTCOME_MISMATCH' "$ReportPathPrefix.outcome" "Expected '$expectedOutcome' from sub-results."
             }
 
             $includedSubResults = @($subResults | Where-Object outcome -CNE 'failed')
-            $expectedWorklistSize = ($includedSubResults | Measure-Object -Property { $_.summary.coverage.'worklist-size' } -Sum).Sum
-            $expectedItemsEvaluated = ($includedSubResults | Measure-Object -Property { $_.summary.coverage.'items-evaluated' } -Sum).Sum
-            if ($null -eq $expectedWorklistSize) { $expectedWorklistSize = 0 }
-            if ($null -eq $expectedItemsEvaluated) { $expectedItemsEvaluated = 0 }
+            $expectedWorklistSize = 0
+            $expectedItemsEvaluated = 0
+            foreach ($subResult in $includedSubResults) {
+                $expectedWorklistSize += $subResult.summary.coverage.'worklist-size'
+                $expectedItemsEvaluated += $subResult.summary.coverage.'items-evaluated'
+            }
             if ($worklistSize -ne $expectedWorklistSize -or $itemsEvaluated -ne $expectedItemsEvaluated) {
                 Add-Error 'SUPER_COVERAGE_MISMATCH' "$ReportPathPrefix.summary.coverage" `
                     "Expected worklist-size $expectedWorklistSize and items-evaluated $expectedItemsEvaluated from non-failed sub-results."
