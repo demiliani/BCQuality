@@ -451,6 +451,59 @@ try {
     $removedFindingReport.findings = @()
     $removedFindingReport.summary.counts.minor = 0
     Assert-CompositionReport $removedFindingReport '*SUPER_LEAF_CONTENT_MISMATCH*'
+
+    $capturedCorrectionLeaf = $capturedFindingLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $capturedCorrectionLeaf.findings[0] | Add-Member -NotePropertyName 'suggested-code' -NotePropertyValue 'exit(1);'
+    $correctionComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $correctionComposition.acceptedResults = @(Save-AcceptedLeafReports @($capturedCorrectionLeaf, $completedSecurityLeaf))
+    Set-Content -LiteralPath $compositionPath -Value ($correctionComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $capturedCorrectionReport = $capturedFindingReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $capturedCorrectionReport.'sub-results'[0] = $capturedCorrectionLeaf
+    $capturedCorrectionReport.findings[0] | Add-Member -NotePropertyName 'suggested-code' -NotePropertyValue 'exit(1);'
+    Assert-CompositionReport $capturedCorrectionReport
+    $correctionCapturePath = $correctionComposition.acceptedResults[0].reportPath
+    $immutableCorrectionCapture = [IO.File]::ReadAllText($correctionCapturePath)
+    foreach ($codePoint in @(0x0000, 0x00AD, 0x200B, 0xFEFF)) {
+        $alteredCorrectionReport = $capturedCorrectionReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $alteredCorrection = 'ex' + [char]$codePoint + 'it(1);'
+        $alteredCorrectionReport.'sub-results'[0].findings[0].'suggested-code' = $alteredCorrection
+        $alteredCorrectionReport.findings[0].'suggested-code' = $alteredCorrection
+        Assert-CompositionReport $alteredCorrectionReport '*SUPER_LEAF_CONTENT_MISMATCH*'
+        $rolledOnlyCorrectionReport = $capturedCorrectionReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $rolledOnlyCorrectionReport.findings[0].'suggested-code' = $alteredCorrection
+        Assert-CompositionReport $rolledOnlyCorrectionReport '*SUPER_FINDING_MISMATCH*'
+        Assert-True ([string]::Equals([IO.File]::ReadAllText($correctionCapturePath), $immutableCorrectionCapture, [StringComparison]::Ordinal)) `
+            'rejecting altered corrections leaves the immutable host capture unchanged'
+    }
+    $timestampReason = '2026-10-02T09:00:00Z'
+    $timestampLeaf = $completedLeaf | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $timestampLeaf | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue $timestampReason
+    $timestampComposition = $expectedComposition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $timestampComposition.acceptedResults = @(Save-AcceptedLeafReports @($timestampLeaf, $completedSecurityLeaf))
+    Set-Content -LiteralPath $compositionPath -Value ($timestampComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $timestampReport = $validSuperReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $timestampReport.'sub-results'[0] = $timestampLeaf
+    foreach ($alteredTimestamp in @('2026-10-02T09:00:00.000Z', '2026-10-02T09:00:00+00:00')) {
+        $timestampLeaf.'outcome-reason' = $alteredTimestamp
+        Assert-CompositionReport $timestampReport '*SUPER_LEAF_CONTENT_MISMATCH*'
+    }
+    $timestampLeaf.'outcome-reason' = $timestampReason
+    Set-Content -LiteralPath $reportPath -Value ($timestampReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $acceptedTimestampReport = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SkillKind super `
+        -ExpectedCompositionPath $compositionPath
+    $acceptedReason = $acceptedTimestampReport.report.'sub-results'[0].'outcome-reason'
+    Assert-True ($acceptedReason -is [string] -and [string]::Equals($acceptedReason, $timestampReason, [StringComparison]::Ordinal)) `
+        'accepted timestamp-shaped JSON text remains the original literal string'
+    $normalizedTimestampReport = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $normalizedTimestampReport | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue '2026-10-02T09:00:00.000Z'
+    $normalizedTimestampReport.findings[0].location.range.'start-line' = 1
+    Set-Content -LiteralPath $reportPath -Value ($normalizedTimestampReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $acceptedNormalizedTimestamp = & $validator -ReportPath $reportPath -BCQualityRoot $Root -SourceRoot $tmp `
+        -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath -AllowBoundedNormalization
+    Assert-True $acceptedNormalizedTimestamp.normalized 'bounded normalization still applies to an eligible range'
+    Assert-True ($acceptedNormalizedTimestamp.report.'outcome-reason' -is [string] -and
+        [string]::Equals($acceptedNormalizedTimestamp.report.'outcome-reason', $normalizedTimestampReport.'outcome-reason', [StringComparison]::Ordinal)) `
+        'bounded normalization preserves unrelated timestamp-shaped text exactly'
     Set-Content -LiteralPath $compositionPath -Value ($expectedComposition | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
 
     foreach ($case in @(

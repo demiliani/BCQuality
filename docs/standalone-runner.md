@@ -78,6 +78,9 @@ its own task-level applicability and reports `not-applicable` or
 
 ## Composition acceptance
 
+The findings-report validator requires PowerShell 7.5 or later to preserve
+literal JSON strings with `ConvertFrom-Json -DateKind String`.
+
 A report can be internally consistent while omitting a selected review. Bind
 the final acceptance gate to the host's selection, not just the returned
 reports. The private JSON input to `-ExpectedCompositionPath` follows the

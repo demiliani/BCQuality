@@ -154,7 +154,8 @@ not a deployable or compiled application.
 ## Before opening a PR
 
 From your BCQuality checkout, use the existing validators. The Python
-validator needs Python and PyYAML; the fixture harness needs PowerShell 7.
+validator needs Python and PyYAML; the fixture harness needs PowerShell 7.5 or later
+so findings-report parsing preserves timestamp-shaped JSON strings verbatim.
 If PyYAML is not installed in your development environment, install it with
 `python -m pip install pyyaml`.
 

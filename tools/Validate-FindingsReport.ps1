@@ -1,3 +1,4 @@
+#Requires -Version 7.5
 <#
 .SYNOPSIS
     Validates a BCQuality findings-report against its structural and semantic contract.
@@ -29,7 +30,7 @@ try {
     if (-not ($raw | Test-Json -SchemaFile $schemaPath -ErrorAction Stop)) {
         throw 'Report does not satisfy schemas/findings-report.schema.json.'
     }
-    $report = $raw | ConvertFrom-Json -Depth 100
+    $report = $raw | ConvertFrom-Json -Depth 100 -DateKind String
 }
 catch {
     throw "Invalid findings-report JSON or schema: $($_.Exception.Message)"
@@ -83,7 +84,7 @@ if ($ExpectedCompositionPath) {
         if (-not ($compositionRaw | Test-Json -Schema $compositionSchema -ErrorAction Stop)) {
             throw 'Expected composition does not satisfy its input contract.'
         }
-        $expectedComposition = $compositionRaw | ConvertFrom-Json -Depth 100
+        $expectedComposition = $compositionRaw | ConvertFrom-Json -Depth 100 -DateKind String
         $expectedIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         foreach ($leaf in @($expectedComposition.subSkills)) {
             if (-not $expectedIds.Add([string]$leaf.id)) {
@@ -114,7 +115,7 @@ if ($ExpectedCompositionPath) {
             if (-not ($acceptedRaw | Test-Json -SchemaFile $schemaPath -ErrorAction Stop)) {
                 throw "Accepted result '$($accepted.id)' does not satisfy the report schema."
             }
-            $acceptedReport = $acceptedRaw | ConvertFrom-Json -Depth 100
+            $acceptedReport = $acceptedRaw | ConvertFrom-Json -Depth 100 -DateKind String
             if ($acceptedReport.skill.id -cne $accepted.id -or $acceptedReport.skill.version -ne $accepted.version -or
                 $acceptedReport.PSObject.Properties.Name -ccontains 'sub-results' -or
                 $acceptedReport.PSObject.Properties.Name -ccontains 'skipped-sub-skills') {
@@ -172,6 +173,10 @@ function Test-JsonContentEqual {
             }
         }
         return $true
+    }
+    if ($First -is [string] -or $Second -is [string]) {
+        return $First -is [string] -and $Second -is [string] -and
+            [string]::Equals($First, $Second, [StringComparison]::Ordinal)
     }
     return $First.GetType() -eq $Second.GetType() -and $First -ceq $Second
 }
@@ -271,9 +276,10 @@ function Get-SemanticErrors {
         $firstHasCode = Test-HasProperty $First 'suggested-code'
         $secondHasCode = Test-HasProperty $Second 'suggested-code'
         if ($firstHasCode -or $secondHasCode) {
-            return $firstHasCode -and $secondHasCode -and $First.'suggested-code' -ceq $Second.'suggested-code'
+            return $firstHasCode -and $secondHasCode -and
+                [string]::Equals($First.'suggested-code', $Second.'suggested-code', [StringComparison]::Ordinal)
         }
-        return $First.message -ceq $Second.message
+        return [string]::Equals($First.message, $Second.message, [StringComparison]::Ordinal)
     }
 
     function Test-ReferencesInclude {
@@ -314,7 +320,7 @@ function Get-SemanticErrors {
                 $RolledFinding.id -cne $expectedId -or
                 $RolledFinding.severity -cne $LeafFinding.severity -or
                 $RolledFinding.confidence -cne $LeafFinding.confidence -or
-                $RolledFinding.message -cne $LeafFinding.message -or
+                -not [string]::Equals($RolledFinding.message, $LeafFinding.message, [StringComparison]::Ordinal) -or
                 $rolledReferences.Count -ne $leafReferences.Count -or
                 -not (Test-ReferencesInclude $rolledReferences $leafReferences)) {
                 return $false
@@ -323,7 +329,7 @@ function Get-SemanticErrors {
                 $rolledHasProperty = Test-HasProperty $RolledFinding $name
                 $leafHasProperty = Test-HasProperty $LeafFinding $name
                 if ($rolledHasProperty -ne $leafHasProperty -or
-                    ($rolledHasProperty -and $RolledFinding.$name -cne $LeafFinding.$name)) {
+                    ($rolledHasProperty -and -not [string]::Equals($RolledFinding.$name, $LeafFinding.$name, [StringComparison]::Ordinal))) {
                     return $false
                 }
             }
@@ -339,7 +345,7 @@ function Get-SemanticErrors {
         $sameCorrection = Test-SameCorrection $RolledFinding $LeafFinding
         $correctionsConflict = (Test-HasProperty $RolledFinding 'suggested-code') -and
             (Test-HasProperty $LeafFinding 'suggested-code') -and
-            $RolledFinding.'suggested-code' -cne $LeafFinding.'suggested-code'
+            -not [string]::Equals($RolledFinding.'suggested-code', $LeafFinding.'suggested-code', [StringComparison]::Ordinal)
         $explicitCrossRuleMerge = $leafReferences.Count -and
             $rolledReferences.Count -gt $leafReferences.Count -and
             -not $correctionsConflict -and
@@ -718,7 +724,7 @@ if ($errors.Count -and $AllowBoundedNormalization) {
     $otherErrors = @($errors | Where-Object Code -CNE 'RANGE_START_MISMATCH')
     $rangeErrors = @($errors | Where-Object Code -CEQ 'RANGE_START_MISMATCH')
     if (-not $otherErrors.Count -and $rangeErrors.Count) {
-        $candidate = $report | ConvertTo-Json -Depth 100 | ConvertFrom-Json -Depth 100
+        $candidate = $report | ConvertTo-Json -Depth 100 | ConvertFrom-Json -Depth 100 -DateKind String
         $eligible = $true
         foreach ($finding in @($candidate.findings)) {
             if (-not (Test-HasProperty $finding 'location') -or
