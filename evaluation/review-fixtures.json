@@ -3,7 +3,16 @@
   "selection": "first-paired-al-article",
   "minimumExpectedRecall": 1.0,
   "minimumCleanRate": 1.0,
-  "coverageWaivers": [],
+  "coverageWaivers": [
+    {
+      "path": "microsoft/knowledge/reporting/do-not-rename-or-remove-shipped-report-dataset-columns.md",
+      "reason": "The defect is a change relative to a released version; a single neutralized sample cannot show which column names shipped before."
+    },
+    {
+      "path": "microsoft/knowledge/reporting/reportextension-layouts-are-not-selected-automatically.md",
+      "reason": "The defect is the expectation that the layout becomes the default; the code alone is identical to a legitimate optional layout once comments are removed."
+    }
+  ],
   "overrides": {
     "agents": {
       "article": "wire-all-three-agent-interfaces"
@@ -104,6 +113,8 @@
     "query": {
       "articles": [
         "dataitemtablefilter-cannot-be-overwritten-at-runtime",
+        "every-non-aggregated-query-column-is-a-group-key",
+        "query-dataitems-default-to-left-outer-join",
         "reopening-query-resets-cursor-but-keeps-filters",
         "set-query-filters-before-open",
         "setfilter-overwrites-query-columnfilter"
@@ -115,6 +126,7 @@
         "currreport-break-ends-the-current-trigger",
         "currreport-quit-rolls-back-and-skips-onpostreport",
         "currreport-skip-does-not-stop-trigger-code",
+        "declare-report-layouts-in-the-rendering-section",
         "report-output-in-a-loop-needs-one-client-download",
         "reportextension-dataitem-trigger-order-is-explicit",
         "reportextension-report-triggers-run-after-base-triggers",

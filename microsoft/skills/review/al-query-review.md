@@ -28,7 +28,7 @@ Return `not-applicable` when the input contains no Query object declaration and 
 
 ## Worklist
 
-Match relevant entries against changed `query` objects, variables typed as `Query`, and the tokens `QueryType`, `dataitem`, `column`, `DataItemLink`, `SqlJoinType`, `SetFilter`, `SetRange`, `Open`, `Read`, `Close`, and `Clear`.
+Match relevant entries against changed `query` objects, variables typed as `Query`, and the tokens `QueryType`, `dataitem`, `column`, `DataItemLink`, `SqlJoinType`, `InnerJoin`, `LeftOuterJoin`, `Method`, `Sum`, `Count`, `Average`, `Min`, `Max`, `SetFilter`, `SetRange`, `Open`, `Read`, `Close`, and `Clear`.
 
 The following targeted checks cover every current `query` article:
 
@@ -36,6 +36,8 @@ The following targeted checks cover every current `query` article:
 - `SetFilter` or `SetRange` occurs after `Open()` without a new `Open()` before the next `Read()` — `set-query-filters-before-open`.
 - A runtime `SetFilter` or `SetRange` replaces a `ColumnFilter` on the same column or filter row, while later code relies on the declarative restriction remaining effective — `setfilter-overwrites-query-columnfilter`.
 - An already-open query is opened again as if that advanced the cursor, or a query variable is reused for an independent operation without `Clear` even though old filters must not carry over — `reopening-query-resets-cursor-but-keeps-filters`.
+- A lower `dataitem` declares `DataItemLink` without `SqlJoinType`, and the query's name or consuming code assumes only matching rows, or reads lower columns without handling the blank values of unmatched upper rows — `query-dataitems-default-to-left-outer-join`. Do not match an explicit `LeftOuterJoin`, or an implicit one whose consumer visibly expects unmatched rows.
+- A query with an aggregate `Method` (`Sum`, `Count`, `Average`, `Min`, `Max`) also declares a non-aggregated `column` whose value varies within the intended group (document, line, or entry number; a date without a date method), while the name or consuming code expects one row per group — `every-non-aggregated-query-column-is-a-group-key`.
 
 Resolve layer conflicts per READ. When no query knowledge exists, emit `no-knowledge`; when knowledge exists but no article matches the changed Query usage, emit `completed` with no findings.
 
