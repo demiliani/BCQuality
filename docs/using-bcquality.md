@@ -87,6 +87,7 @@ branch names with ones in your project.
 | Focused review | Use the installed al-code-review skill to review performance in the app in this folder, without changing files. Return the complete performance findings report. |
 | Supply chain code | Use the installed al-code-review skill to review SCM posting, inventory, reservations, item tracking, and warehouse workflows in this app folder, without changing files. Return the complete Supply Chain Management findings report. |
 | Agent SDK code | Use the installed al-code-review skill to review Agent SDK implementation and usage in this app folder, without changing files. Return the complete Agents findings report. |
+| Copilot features | Use the installed al-code-review skill to review the Copilot features (AI module calls, Copilot capabilities, PromptDialog pages) in this app folder, without changing files. Return the complete Copilot findings report. |
 
 For Git comparisons, the named base ref must exist locally. If it is missing,
 fetch the intended branch first. A PR review also requires the host to have
@@ -185,9 +186,9 @@ using your normal compilation, analyzer, test, and human-review workflow.
 ## Coverage and limits
 
 The Microsoft broad review composes the Microsoft domains listed below.
-The Community Agents review is a separate skill selected by the request, not
+The Community Agents and Copilot reviews are separate skills selected by the request, not
 a nested part of that coordinator. All current review leaves accept app
-folders, files, and diffs; request an Agent SDK review explicitly when that
+folders, files, and diffs; request an Agent SDK or Copilot review explicitly when that
 coverage matters and look for its separate report.
 
 Available knowledge is **not** a promise that every rule will run. Selection
@@ -235,6 +236,7 @@ Each article describes one concern. Where samples exist, use its linked
 | Domain | Browse knowledge |
 | --- | --- |
 | Agent SDK | [Agents (Community)](../community/knowledge/agents/) |
+| Copilot features (System.AI) | [Copilot (Community)](../community/knowledge/copilot/) |
 | AppSource | [AppSource](../microsoft/knowledge/appsource/) |
 | Compatibility | [Breaking changes](../microsoft/knowledge/breaking-changes/) |
 | Data modeling | [Data modeling](../microsoft/knowledge/data-modeling/) |
