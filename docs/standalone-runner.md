@@ -186,3 +186,26 @@ A compatible runner:
 A CI integration, custom agent, or small host-native plugin can implement this
 runner contract. These remain optional consumers: BCQuality's knowledge and
 skills stay independent of their orchestration choices.
+
+## Publish findings as SARIF
+
+To show findings as annotations in GitHub code scanning, Azure DevOps, or
+another SARIF 2.1.0 viewer, convert the **accepted** report after the
+acceptance gate:
+
+```powershell
+pwsh ./tools/ConvertTo-Sarif.ps1 -ReportPath ./accepted-report.json `
+    -OutputPath ./bcquality.sarif -SourcePathPrefix 'apps/MyApp'
+```
+
+`-SourcePathPrefix` is the reviewed app folder relative to the repository root,
+needed when the app is not the repository root. The converter maps
+`blocker`/`major` to `error`, `minor` to `warning`, and `info` to `note`, links
+each knowledge-backed rule to its article, and converts only top-level findings
+so a super-skill's copied leaf findings are not duplicated. A `partial` or
+`failed` outcome sets `executionSuccessful` to `false` with a notification,
+so an incomplete review is never published as a clean one. Confidence, domain,
+references, and code suggestions are kept in each result's `properties`.
+
+The converter validates the report schema but is not an acceptance gate; run
+`tools/Validate-FindingsReport.ps1` first.

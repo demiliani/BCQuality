@@ -240,6 +240,33 @@ try {
         -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
     Assert-True (-not $accepted.normalized) 'valid report is accepted without normalization'
 
+    $sarifConverter = Join-Path $Root 'tools/ConvertTo-Sarif.ps1'
+    Assert-True (Test-Path -LiteralPath $sarifConverter -PathType Leaf) 'SARIF converter exists'
+    $sarif = (& $sarifConverter -ReportPath $reportPath -BCQualityRoot $Root -SourcePathPrefix 'apps/demo') | ConvertFrom-Json -Depth 30
+    $sarifRun = $sarif.runs[0]
+    $sarifResult = $sarifRun.results[0]
+    Assert-True ($sarif.version -ceq '2.1.0') 'SARIF log declares version 2.1.0'
+    Assert-True ($sarifRun.invocations[0].executionSuccessful) 'completed report converts to a successful invocation'
+    Assert-True ($sarifResult.ruleId -ceq $articlePath) 'SARIF ruleId is the knowledge article path'
+    Assert-True ($sarifResult.level -ceq 'warning') 'minor severity maps to SARIF warning'
+    Assert-True ($sarifRun.tool.driver.rules[0].helpUri.EndsWith($articlePath)) 'knowledge rule links to its article'
+    $sarifLocation = $sarifResult.locations[0].physicalLocation
+    Assert-True ($sarifLocation.artifactLocation.uri -ceq "apps/demo/$sourcePath") 'SARIF location applies the source path prefix'
+    Assert-True ($sarifLocation.region.startLine -eq 2 -and $sarifLocation.region.endLine -eq 3) 'SARIF region uses the finding range'
+    Assert-True ($sarifResult.properties.confidence -ceq 'high') 'SARIF result keeps the finding confidence'
+
+    $failedReport = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $failedReport.outcome = 'failed'
+    $failedReport | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'Index unavailable.'
+    $failedReport.findings = @()
+    $failedReport.summary.counts.minor = 0
+    $failedReportPath = Join-Path $tmp 'failed-report.json'
+    Set-Content -LiteralPath $failedReportPath -Value ($failedReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $failedSarif = (& $sarifConverter -ReportPath $failedReportPath -BCQualityRoot $Root) | ConvertFrom-Json -Depth 30
+    $failedInvocation = $failedSarif.runs[0].invocations[0]
+    Assert-True (-not $failedInvocation.executionSuccessful) 'failed report never converts to a successful invocation'
+    Assert-True ($failedInvocation.toolExecutionNotifications[0].level -ceq 'error') 'failed outcome is reported as an error notification'
+
     $invalidCounts = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $invalidCounts.summary.counts.minor = 0
     Set-Content -LiteralPath $reportPath -Value ($invalidCounts | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
