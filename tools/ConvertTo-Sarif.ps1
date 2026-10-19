@@ -134,6 +134,7 @@ foreach ($finding in @($report.findings)) {
         if ($prefix) {
             $file = "$prefix/$file"
         }
+        $fileUri = (($file.Split('/') | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/')
         $region = [ordered]@{ startLine = [int]$location.line }
         $range = Get-OptionalValue $location 'range'
         if ($null -ne $range) {
@@ -143,7 +144,7 @@ foreach ($finding in @($report.findings)) {
         $result.locations = @(
             [ordered]@{
                 physicalLocation = [ordered]@{
-                    artifactLocation = [ordered]@{ uri = $file; uriBaseId = 'SRCROOT' }
+                    artifactLocation = [ordered]@{ uri = $fileUri; uriBaseId = 'SRCROOT' }
                     region = $region
                 }
             }

@@ -255,6 +255,42 @@ try {
     Assert-True ($sarifLocation.region.startLine -eq 2 -and $sarifLocation.region.endLine -eq 3) 'SARIF region uses the finding range'
     Assert-True ($sarifResult.properties.confidence -ceq 'high') 'SARIF result keeps the finding confidence'
 
+    $uriSourcePaths = @(
+        'src/Price list.al'
+        'src/Price #1.al'
+        'src/Price %23 %25.al'
+        "src/$([char]0x00E8) prezzo $([char]0x65E5).al"
+    )
+    if (-not $IsWindows) {
+        $uriSourcePaths += 'src/Price?1.al'
+    }
+    foreach ($uriSourcePath in $uriSourcePaths) {
+        $uriSourceFile = Join-Path $tmp $uriSourcePath
+        Set-Content -LiteralPath $uriSourceFile -Value @('line one', 'line two', 'line three') -Encoding utf8NoBOM
+        $uriReport = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+        $uriReport.findings[0].location.file = $uriSourcePath
+        $uriReportPath = Join-Path $tmp 'uri-report.json'
+        $uriReportJson = $uriReport | ConvertTo-Json -Depth 20
+        Set-Content -LiteralPath $uriReportPath -Value $uriReportJson -Encoding utf8NoBOM
+        $acceptedUriReport = & $validator -ReportPath $uriReportPath -BCQualityRoot $Root -SourceRoot $tmp `
+            -SourcePaths $uriSourcePath -RetrievedArticlePaths $articlePath
+        Assert-True (-not $acceptedUriReport.normalized) "source path is accepted unchanged: $uriSourcePath"
+
+        foreach ($uriPrefix in @('', "apps/My App #1 %23 $([char]0x00E8)")) {
+            $uriSarif = (& $sarifConverter -ReportPath $uriReportPath -BCQualityRoot $Root -SourcePathPrefix $uriPrefix) |
+                ConvertFrom-Json -Depth 30
+            $artifactUri = $uriSarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri
+            $expectedPath = if ($uriPrefix) { "$uriPrefix/$uriSourcePath" } else { $uriSourcePath }
+            $resolvedUri = [uri]::new([uri]'https://example.invalid/repository/', $artifactUri)
+            Assert-True ($resolvedUri.Fragment -ceq '') "source URI has no fragment: $expectedPath"
+            Assert-True ($resolvedUri.Query -ceq '') "source URI has no query: $expectedPath"
+            Assert-True ([uri]::UnescapeDataString($artifactUri) -ceq $expectedPath) "source URI decodes losslessly: $expectedPath"
+            Assert-True ([uri]::UnescapeDataString($resolvedUri.AbsolutePath) -ceq "/repository/$expectedPath") "source URI resolves to the original filename: $expectedPath"
+            Assert-True (-not $artifactUri.Contains(' ')) "source URI encodes spaces: $expectedPath"
+        }
+        Assert-True ((Get-Content -LiteralPath $uriReportPath -Raw).TrimEnd() -ceq $uriReportJson.TrimEnd()) 'SARIF conversion leaves the raw report unchanged'
+    }
+
     $failedReport = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $failedReport.outcome = 'failed'
     $failedReport | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'Index unavailable.'

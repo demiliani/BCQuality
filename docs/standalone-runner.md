@@ -199,7 +199,11 @@ pwsh ./tools/ConvertTo-Sarif.ps1 -ReportPath ./accepted-report.json `
 ```
 
 `-SourcePathPrefix` is the reviewed app folder relative to the repository root,
-needed when the app is not the repository root. The converter maps
+needed when the app is not the repository root. Source paths and the prefix
+are filesystem paths, not pre-encoded URIs. The converter URI-encodes each
+combined path segment while preserving `/` separators, so spaces, `#`, literal
+`%` characters, and non-ASCII filenames retain their file binding. The report's
+raw source paths are not modified. The converter maps
 `blocker`/`major` to `error`, `minor` to `warning`, and `info` to `note`, links
 each knowledge-backed rule to its article, and converts only top-level findings
 so a super-skill's copied leaf findings are not duplicated. A `partial` or
