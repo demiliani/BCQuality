@@ -7,14 +7,13 @@ codeunit 50209 "Email Draft Generator Good"
     var
         GenerationFailedErr: Label 'Copilot could not draft the reminder right now. Try again in a moment.';
 
-    procedure DraftReminder(var ReminderDraft: Record "Reminder Draft Demo"; CustomerName: Text)
+    procedure DraftReminder(var ReminderDraft: Record "Reminder Draft Demo"; CustomerName: Text; Endpoint: Text; Deployment: Text; ApiKey: SecretText)
     var
         AzureOpenAI: Codeunit "Azure OpenAI";
-        AOAIDeployments: Codeunit "AOAI Deployments";
         AOAIChatMessages: Codeunit "AOAI Chat Messages";
         AOAIOperationResponse: Codeunit "AOAI Operation Response";
     begin
-        AzureOpenAI.SetManagedResourceAuthorization(Enum::"AOAI Model Type"::"Chat Completions", AOAIDeployments.GetGPT41Latest());
+        AzureOpenAI.SetAuthorization(Enum::"AOAI Model Type"::"Chat Completions", Endpoint, Deployment, ApiKey);
         AzureOpenAI.SetCopilotCapability(Enum::"Copilot Capability"::"Draft Payment Reminder");
         AOAIChatMessages.SetPrimarySystemMessage('Write a polite payment reminder email.');
         AOAIChatMessages.AddUserMessage(CustomerName);

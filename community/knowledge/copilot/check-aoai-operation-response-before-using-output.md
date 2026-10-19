@@ -19,6 +19,8 @@ Agents familiar with SDKs that throw on failure usually omit this check, because
 
 Immediately after each generate call, test `AOAIOperationResponse.IsSuccess()`. On failure, stop and give the user a clear, actionable message. Use `GetError()` and `GetStatusCode()` for telemetry or to distinguish retryable conditions, without exposing raw service text as the only explanation. Read `GetLastMessage()` or the function-call results only on the success path.
 
+Both samples use the BC23+ own-resource `SetAuthorization(ModelType, Endpoint, Deployment, ApiKey)` overload, with configuration supplied by the caller and the key passed as `SecretText`. Response checking is independent of the authorization mode. If using Business Central AI resources, choose an overload supported by the target version; the two-argument `SetManagedResourceAuthorization` requires BC28+. See [version-qualified authorization guidance](call-azure-openai-through-the-ai-module.md).
+
 See sample: [`check-aoai-operation-response-before-using-output.good.al`](check-aoai-operation-response-before-using-output.good.al).
 
 ## Anti Pattern

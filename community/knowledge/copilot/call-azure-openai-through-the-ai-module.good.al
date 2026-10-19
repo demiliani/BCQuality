@@ -1,14 +1,13 @@
 // Demonstration only. Shows the recommended pattern: the call goes through the System.AI module for a registered capability.
 
-codeunit 50207 "Item Description Generator Good"
+codeunit 50207 "Item Desc Generator Good"
 {
     Access = Internal;
 
-    procedure Generate(ItemNo: Code[20]): Text
+    procedure Generate(ItemNo: Code[20]; Endpoint: Text; Deployment: Text; ApiKey: SecretText): Text
     var
         Item: Record Item;
         AzureOpenAI: Codeunit "Azure OpenAI";
-        AOAIDeployments: Codeunit "AOAI Deployments";
         AOAIChatMessages: Codeunit "AOAI Chat Messages";
         AOAIChatCompletionParams: Codeunit "AOAI Chat Completion Params";
         AOAIOperationResponse: Codeunit "AOAI Operation Response";
@@ -19,7 +18,7 @@ codeunit 50207 "Item Description Generator Good"
             Error(NotAvailableErr);
 
         Item.Get(ItemNo);
-        AzureOpenAI.SetManagedResourceAuthorization(Enum::"AOAI Model Type"::"Chat Completions", AOAIDeployments.GetGPT41Latest());
+        AzureOpenAI.SetAuthorization(Enum::"AOAI Model Type"::"Chat Completions", Endpoint, Deployment, ApiKey);
         AzureOpenAI.SetCopilotCapability(Enum::"Copilot Capability"::"Draft Item Description");
         AOAIChatCompletionParams.SetTemperature(0);
 

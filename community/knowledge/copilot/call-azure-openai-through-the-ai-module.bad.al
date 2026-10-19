@@ -1,6 +1,6 @@
 // Demonstration only. Shows the wrong pattern: a Copilot feature that posts directly to the Azure OpenAI REST endpoint.
 
-codeunit 50206 "Item Description Generator Bad"
+codeunit 50206 "Item Desc Generator Bad"
 {
     Access = Internal;
 
