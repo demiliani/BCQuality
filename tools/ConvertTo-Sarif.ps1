@@ -25,6 +25,10 @@
         repository that the SARIF consumer analyzes.
       - severity, confidence, domain, references, from-sub-skill, and the code
         suggestion fields are kept in result.properties.
+      - Findings without a location become tool execution notifications, not
+        results, so GitHub code scanning can accept every emitted result.
+        Notifications retain the finding ID, message, severity, and properties;
+        run.properties.locationlessFindingCount records their count.
       - A partial or failed outcome sets executionSuccessful = false and is
         reported as a tool execution notification, so the log is never mistaken
         for a clean result.
@@ -100,6 +104,8 @@ $knowledgePattern = '^(microsoft|community|custom)/knowledge/[^/]+/[^/]+\.md$'
 $rules = [Collections.Generic.List[object]]::new()
 $ruleIndex = [Collections.Generic.Dictionary[string, int]]::new([StringComparer]::Ordinal)
 $results = [Collections.Generic.List[object]]::new()
+$notifications = [Collections.Generic.List[object]]::new()
+$locationlessFindingCount = 0
 
 foreach ($finding in @($report.findings)) {
     $ruleId = [string]$finding.id
@@ -162,11 +168,21 @@ foreach ($finding in @($report.findings)) {
             $properties[$name] = [string]$value
         }
     }
-    $result.properties = $properties
-    $results.Add($result) | Out-Null
+    if ($null -eq $location) {
+        $notifications.Add([ordered]@{
+            level = $result.level
+            message = [ordered]@{ text = "${ruleId}: $($finding.message)" }
+            associatedRule = [ordered]@{ id = $ruleId; index = $ruleIndex[$ruleId] }
+            properties = $properties
+        }) | Out-Null
+        $locationlessFindingCount++
+    }
+    else {
+        $result.properties = $properties
+        $results.Add($result) | Out-Null
+    }
 }
 
-$notifications = [Collections.Generic.List[object]]::new()
 function Add-OutcomeNotifications {
     param([object] $SkillReport)
     $outcome = [string]$SkillReport.outcome
@@ -212,6 +228,7 @@ $sarif = [ordered]@{
             properties = [ordered]@{
                 skill = [ordered]@{ id = [string]$report.skill.id; version = [int]$report.skill.version }
                 outcome = [string]$report.outcome
+                locationlessFindingCount = $locationlessFindingCount
                 suppressed = @(@($report.suppressed) | ForEach-Object {
                     [ordered]@{ path = [string]$_.reference.path; reason = [string]$_.reason }
                 })

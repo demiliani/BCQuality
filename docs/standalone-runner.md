@@ -211,5 +211,17 @@ so a super-skill's copied leaf findings are not duplicated. A `partial` or
 so an incomplete review is never published as a clean one. Confidence, domain,
 references, and code suggestions are kept in each result's `properties`.
 
+GitHub code scanning requires a source location for every result. A top-level
+finding without a location is therefore emitted as a
+`invocations[].toolExecutionNotifications` entry instead of a `results` entry.
+The notification includes the finding ID and full message, links to its rule
+through `associatedRule`, uses the same severity mapping, and retains the
+finding metadata in `properties`. `run.properties.locationlessFindingCount`
+records how many findings were represented this way (zero when none).
+No fallback file is invented and no finding is silently discarded. A report
+containing only location-less findings has an empty `results` array but retains
+all those findings as notifications. This does not change `executionSuccessful`,
+which still reflects the report's outcome; these findings are not file annotations.
+
 The converter validates the report schema but is not an acceptance gate; run
 `tools/Validate-FindingsReport.ps1` first.

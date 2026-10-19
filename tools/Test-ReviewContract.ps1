@@ -254,6 +254,44 @@ try {
     Assert-True ($sarifLocation.artifactLocation.uri -ceq "apps/demo/$sourcePath") 'SARIF location applies the source path prefix'
     Assert-True ($sarifLocation.region.startLine -eq 2 -and $sarifLocation.region.endLine -eq 3) 'SARIF region uses the finding range'
     Assert-True ($sarifResult.properties.confidence -ceq 'high') 'SARIF result keeps the finding confidence'
+    Assert-True ($sarifRun.properties.locationlessFindingCount -eq 0) 'located-only report has zero location-less findings'
+
+    foreach ($severity in 'blocker', 'major', 'minor', 'info') {
+        foreach ($includeLocatedFinding in @($true, $false)) {
+            $unlocatedReport = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+            $unlocatedFinding = $unlocatedReport.findings[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+            $unlocatedFinding.PSObject.Properties.Remove('location')
+            $unlocatedFinding.severity = $severity
+            $unlocatedFinding.message = 'Repository-level finding without a source location.'
+            $unlocatedReport.findings = @(
+                if ($includeLocatedFinding) { $unlocatedReport.findings[0] }
+                $unlocatedFinding
+            )
+            foreach ($level in 'blocker', 'major', 'minor', 'info') {
+                $unlocatedReport.summary.counts.$level = @($unlocatedReport.findings | Where-Object severity -eq $level).Count
+            }
+            $unlocatedReportPath = Join-Path $tmp 'unlocated-report.json'
+            Set-Content -LiteralPath $unlocatedReportPath -Value ($unlocatedReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+            $acceptedUnlocated = & $validator -ReportPath $unlocatedReportPath -BCQualityRoot $Root -SourceRoot $tmp `
+                -SourcePaths $sourcePath -RetrievedArticlePaths $articlePath
+            Assert-True (-not $acceptedUnlocated.normalized) 'location-less finding is accepted'
+            $unlocatedSarif = (& $sarifConverter -ReportPath $unlocatedReportPath -BCQualityRoot $Root) | ConvertFrom-Json -Depth 30
+            $unlocatedRun = $unlocatedSarif.runs[0]
+            Assert-True (@($unlocatedRun.results).Count -eq [int]$includeLocatedFinding) 'only located findings are emitted as results'
+            foreach ($locatedResult in $unlocatedRun.results) {
+                Assert-True (@($locatedResult.locations).Count -gt 0) 'every emitted result has a location'
+                Assert-True (-not [string]::IsNullOrWhiteSpace($locatedResult.locations[0].physicalLocation.artifactLocation.uri)) 'every emitted result has a non-empty artifact URI'
+            }
+            $notification = $unlocatedRun.invocations[0].toolExecutionNotifications[0]
+            Assert-Contains $notification.message.text $articlePath 'location-less notification names the finding ID'
+            Assert-Contains $notification.message.text $unlocatedFinding.message 'location-less finding message remains visible'
+            $expectedLevel = switch ($severity) { 'blocker' { 'error' }; 'major' { 'error' }; 'minor' { 'warning' }; 'info' { 'note' } }
+            Assert-True ($notification.level -ceq $expectedLevel) 'location-less notification preserves severity mapping'
+            Assert-True ($notification.properties.confidence -ceq 'high') 'location-less notification retains finding properties'
+            Assert-True ($unlocatedRun.properties.locationlessFindingCount -eq 1) 'location-less finding count is explicit'
+            Assert-True ($unlocatedRun.invocations[0].executionSuccessful) 'location-less findings do not change a completed invocation outcome'
+        }
+    }
 
     $uriSourcePaths = @(
         'src/Price list.al'
@@ -302,6 +340,17 @@ try {
     $failedInvocation = $failedSarif.runs[0].invocations[0]
     Assert-True (-not $failedInvocation.executionSuccessful) 'failed report never converts to a successful invocation'
     Assert-True ($failedInvocation.toolExecutionNotifications[0].level -ceq 'error') 'failed outcome is reported as an error notification'
+
+    $partialUnlocatedReport = $unlocatedReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $partialUnlocatedReport.outcome = 'partial'
+    $partialUnlocatedReport.summary.coverage.'worklist-size' = 2
+    $partialUnlocatedReport | Add-Member -NotePropertyName 'outcome-reason' -NotePropertyValue 'Stopped early.'
+    Set-Content -LiteralPath $unlocatedReportPath -Value ($partialUnlocatedReport | ConvertTo-Json -Depth 20) -Encoding utf8NoBOM
+    $partialUnlocatedSarif = (& $sarifConverter -ReportPath $unlocatedReportPath -BCQualityRoot $Root) | ConvertFrom-Json -Depth 30
+    $partialUnlocatedRun = $partialUnlocatedSarif.runs[0]
+    Assert-True (-not $partialUnlocatedRun.invocations[0].executionSuccessful) 'location-less notification never masks an incomplete outcome'
+    Assert-True ($partialUnlocatedRun.invocations[0].toolExecutionNotifications.Count -eq 2) 'finding and partial-outcome notifications are both retained'
+    Assert-True ($partialUnlocatedRun.properties.locationlessFindingCount -eq 1) 'outcome notifications are not counted as location-less findings'
 
     $invalidCounts = $validReport | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $invalidCounts.summary.counts.minor = 0
