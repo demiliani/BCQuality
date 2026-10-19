@@ -1,6 +1,6 @@
-// Demonstration only. Shows the wrong pattern: a "customers with open orders" query relies on the default join.
+// Demonstration only. A sales-document count includes customers without any document.
 
-query 50227 "Customers With Open Orders Bad"
+query 50227 "Cust With Sales Docs Bad"
 {
     QueryType = Normal;
 
@@ -10,29 +10,27 @@ query 50227 "Customers With Open Orders Bad"
         {
             column(CustomerNo; "No.") { }
             column(CustomerName; Name) { }
-            // BAD: no SqlJoinType, so this is a LeftOuterJoin. Customers without open orders are
-            // returned too, with blank order columns.
+            // BAD: no child filter rejects nulls, so unmatched customers survive the default join.
             dataitem(SalesHeader; "Sales Header")
             {
                 DataItemLink = "Sell-to Customer No." = Customer."No.";
-                DataItemTableFilter = "Document Type" = const(Order), Status = const(Open);
                 column(OrderNo; "No.") { }
             }
         }
     }
 }
 
-codeunit 50228 "Open Order Reminder Bad"
+codeunit 50228 "Sales Doc Reminder Bad"
 {
-    procedure CountCustomersToRemind(): Integer
+    procedure CountSalesDocsToRemind(): Integer
     var
-        CustomersWithOpenOrders: Query "Customers With Open Orders Bad";
+        CustomersWithSalesDocs: Query "Cust With Sales Docs Bad";
         Total: Integer;
     begin
-        CustomersWithOpenOrders.Open();
-        while CustomersWithOpenOrders.Read() do
+        CustomersWithSalesDocs.Open();
+        while CustomersWithSalesDocs.Read() do
             Total += 1;
-        CustomersWithOpenOrders.Close();
+        CustomersWithSalesDocs.Close();
         exit(Total);
     end;
 }

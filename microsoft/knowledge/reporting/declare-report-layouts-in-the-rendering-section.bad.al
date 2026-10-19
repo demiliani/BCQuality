@@ -1,6 +1,6 @@
 // Demonstration only. Shows the wrong pattern: a new report declares its layouts with the legacy properties.
 
-report 50223 "Open Orders By Salesperson Bad"
+report 50223 "Orders By Salesperson Bad"
 {
     UsageCategory = ReportsAndAnalysis;
     ApplicationArea = All;

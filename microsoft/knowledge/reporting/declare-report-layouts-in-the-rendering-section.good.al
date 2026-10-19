@@ -1,6 +1,6 @@
 // Demonstration only. Shows the recommended pattern: named layouts in the rendering section and a default chosen by name.
 
-report 50224 "Open Orders By Salesperson Good"
+report 50224 "Orders By Salesperson Good"
 {
     UsageCategory = ReportsAndAnalysis;
     ApplicationArea = All;
