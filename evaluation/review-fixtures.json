@@ -14,6 +14,15 @@
     }
   ],
   "overrides": {
+    "copilot": {
+      "articles": [
+        "call-azure-openai-through-the-ai-module",
+        "check-aoai-operation-response-before-using-output",
+        "keep-user-input-out-of-the-system-message",
+        "register-copilot-capability-on-install-and-upgrade",
+        "save-promptdialog-proposals-only-when-the-user-keeps-them"
+      ]
+    },
     "agents": {
       "article": "wire-all-three-agent-interfaces"
     },
@@ -23,6 +32,7 @@
     "data-modeling": {
       "articles": [
         "activate-new-price-calculation-handler-via-onfindsupportedsetup",
+        "business-state-must-have-a-domain-owner",
         "calcfields-blob-before-reading-its-stream",
         "check-blocked-in-referencing-code-not-in-master",
         "code-must-not-change-workdate",
@@ -89,6 +99,7 @@
         "store-scheduled-task-id-to-avoid-duplicate-tasks",
         "design-covering-keys-from-read-pattern",
         "review-overlapping-keys-before-adding-an-index",
+        "justify-low-selectivity-fields-in-key-columns",
         "setcurrentkey-sets-sort-order-not-index-hint",
         "preserve-buffered-inserts-by-separating-target-reads",
         "aggregate-before-persisting-intermediate-results",

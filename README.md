@@ -1,4 +1,4 @@
-# BC Quality - Don’t teach one agent. Teach the ecosystem. 🤝
+# BCQuality — Don’t teach one agent. Teach the ecosystem. 🤝
 
 Quality skills and knowledge that help AI tools make better Business Central
 development decisions: catch BC-specific defects, avoid misleading advice,
@@ -8,70 +8,72 @@ BCQuality contains **knowledge and reusable skills**, not agents or a Business
 Central extension. Your host supplies the agent. You can install the content
 as a plugin, use it from another integration, or browse the knowledge directly.
 
+## Three ways to use BCQuality
+
+| Use | Status | Start here |
+| --- | --- | --- |
+| Review your AL code on demand with the Copilot CLI plugin | Available | [Quick start](#quick-start) |
+| Review pull requests automatically in AL-Go for GitHub repositories | In progress in [AL-Go for GitHub](https://github.com/microsoft/AL-Go/pull/2402) | AL-Go documentation once released |
+| Apply BCQuality guidance to a development plan before coding | Preview | [Plan guidance](#preview-guidance-before-implementation) |
+
 ## Quick start
 
-The walkthrough below uses **GitHub Copilot CLI in a terminal**, not the
-Copilot Chat panel in VS Code. First
-[install Copilot CLI and sign in](https://docs.github.com/en/copilot/get-started/cli-quickstart).
-Your account and organization policy must allow its use. You do not need to
-clone BCQuality, build a runner, or deploy an app to Business Central for this
-source-review example.
+Install the plugin and run your first review. You need
+[GitHub Copilot CLI, installed and signed in](https://docs.github.com/en/copilot/get-started/cli-quickstart),
+with an account and organization policy that allow its use. You do not need to
+clone BCQuality, build a runner, or deploy an app to Business Central.
 
-### Standalone plugin installation
+Copilot CLI runs in any terminal, including the **integrated terminal in VS
+Code**. A plugin installed in Copilot CLI is not automatically available in the
+Copilot Chat panel.
 
-Run these commands in your terminal:
+1. Install the plugin:
 
-```powershell
-copilot plugin install microsoft/BCQuality
-copilot plugin list
-```
+   ```powershell
+   copilot plugin install microsoft/BCQuality
+   copilot plugin list
+   ```
 
-The list should include `bcquality`. The plugin exposes the
-[`al-code-review`](skills/al-code-review/SKILL.md) skill. Installation and skill
-discovery are the general pattern; reviewing an app is one example of using it.
+   The list should include `bcquality`.
 
-The adapter is intentionally not a second implementation:
+2. Start a **new** Copilot CLI session in your app folder, replacing the
+   example path:
 
-```text
-standalone host skill: skills/al-code-review/SKILL.md
-  -> routing contract: skills/entry.md
-    -> review coordinator: microsoft/skills/review/al-code-review.md
-      -> domain review leaves
-```
+   ```powershell
+   cd "C:\Repos\MyBusinessCentralApp"
+   copilot
+   ```
 
-Only the files under `skills/*/SKILL.md` follow the host's packaging format.
-The remaining files are BCQuality's internal protocol and layered action
-skills. Entry remains the single owner of routing and index preparation. This
-separation keeps standalone installation available without duplicating policy
-in the adapter.
+3. Approve access only to a project you trust, then ask:
 
-### Example: Review a complete app folder
-
-Start a **new** CLI session in your own app folder, replacing the example path:
-
-```powershell
-cd "C:\Repos\MyBusinessCentralApp"
-copilot
-```
-
-Approve access only to a project you trust, then ask:
-
-> Use the installed al-code-review skill to review the complete Business Central
-> app in this folder without changing my source files. Return the complete
-> BCQuality findings report.
+   > Use the installed al-code-review skill to review the complete Business
+   > Central app in this folder without changing my source files. Return the
+   > complete BCQuality findings report.
 
 The folder should contain `app.json` and your AL source; it does **not** need
 to be a Git repository. On macOS or Linux, use your app's local path instead.
 
-The host adapter and internal action skill intentionally share a name: they
-expose the same operation in two different skill formats. Their paths make the
-boundary explicit.
+### What you get
 
-Expect a report for each selected review, with findings, source locations,
-severity, confidence, and references to the relevant guidance. Some hosts show
-the structured JSON directly. `completed` with no findings means nothing was
-flagged in that review's scope; `partial` or `failed` is **not** a clean result.
-See [reading your results](docs/using-bcquality.md#reading-your-results).
+Each selected review returns findings with a source location, severity,
+confidence, and the guidance behind them. For example, a performance finding
+might read:
+
+> **Major · high confidence** · `src\CustomerExport.Codeunit.al`, line 42
+>
+> The country filter is evaluated inside the customer loop, so rows that will
+> be discarded are still read from the database. Apply the filter with
+> `SetRange` before calling `FindSet`.
+>
+> Guidance: [Apply filters before iterating](microsoft/knowledge/performance/apply-filters-before-iterating.md)
+
+This example is illustrative; your host may show the same information as text,
+a table, or JSON. `completed` with no findings means nothing was flagged in
+that review's scope; `partial` or `failed` is **not** a clean result. See
+[reading your results](docs/using-bcquality.md#reading-your-results).
+
+Next, try a focused request, such as reviewing performance only or reviewing
+your uncommitted changes. See [common review requests](docs/using-bcquality.md#common-review-requests).
 
 [PowerShell 7](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell)
 (`pwsh`) is recommended for fast knowledge discovery. If it is unavailable,
@@ -93,8 +95,8 @@ the review can still discover knowledge by reading the folders.
 
 ## Scope
 
-Today's curated content covers **technical AL code review** and a focused
-**Supply Chain Management (SCM)** functional domain. It augments
+Today's curated content covers **technical AL code review** and focused
+**Supply Chain Management (SCM)** and **Finance** functional domains. It augments
 the agent's judgment; it is not an exhaustive BC manual or a substitute for
 compilation, analyzers, tests, or human review. See
 [coverage and limits](docs/using-bcquality.md#coverage-and-limits) for the
@@ -102,37 +104,26 @@ available domains and the difference between a folder review and a comparison.
 Mechanical issues already enforced by the AL compiler or standard analyzers are
 intentionally left to those deterministic tools rather than duplicated here.
 
-BCQuality defines a provisional internal, read-only `al-development-plan`
-action-skill contract that selects relevant constraints before a consumer
-implements its own existing plan. It is not registered as a standalone plugin
-skill and does not change the plugin version. Consumer-owner agreement and a
-runtime pilot are required before treating it as a stable public surface.
-
-Repository-specific orchestrators retain planning, implementation, approvals,
-tests, environment, propagation, and delivery ownership. The intended flow is
-consumer analysis and normalized plan -> read-only BCQuality guidance ->
-existing implementation phases -> independent final BCQuality review ->
-delivery. Consumer uptake and a real runtime pilot are follow-up work, not
-implemented integrations or demonstrated authoring improvements.
-
-`no-knowledge` means no additional applicable BCQuality constraints, with empty
-`knowledge`; it does not make a plan unsafe or prevent the consumer from using
-its ordinary gates. Retrieval failures and materially unresolved conditional
-guidance are distinct outcomes, not empty knowledge. Do not add generic advice
-just to avoid a `no-knowledge` result.
-
 The [SCM domain](microsoft/knowledge/scm/) covers selected inventory, costing,
-reservation, tracking, and warehouse/posting workflows, not exhaustive supply
-chain validation. Broader functional coverage such as Finance, Manufacturing,
-Jobs, and Service, and technologies such as PowerShell, pipelines, and Power
-Platform, remain valid future scope, **not current coverage claims**.
+reservation, tracking, and warehouse/posting workflows. The
+[Finance domain](microsoft/knowledge/finance/) covers selected journal posting,
+financial ledger, application, VAT, and posting-dimension workflows. Neither is
+exhaustive functional validation. Broader functional coverage such as
+Manufacturing, Jobs, and Service, and technologies such as PowerShell,
+pipelines, and Power Platform, remain valid future scope, **not current
+coverage claims**.
 
-## Plan-enrichment follow-up scope
+## Preview: guidance before implementation
 
-Consumer agreement, consumer-owned persistence and phase injection, a pinned
-baseline comparison, and a runtime pilot remain follow-up work. BCQuality does
-not claim improved repairs or authoring effectiveness from this provisional
-contract alone.
+BCQuality can also apply its knowledge **before code is written**. The
+read-only `al-development-plan` skill takes an existing AL development plan
+and returns the BCQuality constraints and validation considerations that apply
+to it. Your workflow keeps ownership of planning, implementation, tests,
+approvals, and delivery, and should still review the completed change.
+
+This capability is a preview for explicit integrations. It is not yet exposed
+by the standalone plugin, and its contract may change based on pilot feedback.
+To try it, follow the [plan guidance example](docs/agent-consumption.md#try-plan-guidance).
 
 ## What's in this repo
 
@@ -162,8 +153,10 @@ Update the installed plugin from your terminal, then start a new session:
 copilot plugin update bcquality
 ```
 
-Plugin versions and content-release tags are different. For reproducible runs
-and organization forks, see [updates and versions](docs/customizing-bcquality.md#updates-and-versions).
+`copilot plugin list` shows the installed version. Release `v1.8` carries
+plugin version `1.8.0`. Installing from the repository without a tag uses the
+current `main`, which can include changes after or before the matching release.
+For reproducible runs and organization forks, see [updates and versions](docs/customizing-bcquality.md#updates-and-versions).
 
 ## What belongs here
 

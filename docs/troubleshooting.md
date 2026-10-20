@@ -31,6 +31,7 @@ start with `/`.
 | JSON rather than a readable summary | JSON is the shared output format. Ask the host to summarize the existing reports, preserving outcomes, locations, severity, confidence, and references. |
 | A surprising finding | Open its guidance and samples, inspect surrounding code, and confirm version/localization assumptions. Ask the agent to explain the evidence; do not apply a suggestion solely because it has high confidence. |
 | The Agents domain is absent | Agents is a separate Community review, not a child of the Microsoft broad review. Explicitly request an Agent SDK review and confirm the Community layer is enabled. |
+| The Copilot domain is absent | Copilot is a separate Community review, not a child of the Microsoft broad review. Explicitly request a Copilot feature review and confirm the Community layer is enabled. |
 | A missing base branch or unavailable source definition | Supply the real baseline or dependency definition. Without it, do not accept claims that rely on invented history or assumed dependency behavior. |
 | Slow or expensive review | A broad review makes separate passes over multiple domains. Verify index generation succeeded, use a focused task when appropriate, and inspect usage in your host. BCQuality does not choose models, promise runtimes, or meter charges. |
 

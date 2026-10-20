@@ -14,6 +14,7 @@ and rendering; BCQuality does not install a BC extension or an agent.
 | Read the knowledge yourself | Browse [knowledge by domain](#knowledge-by-domain), or search the repository for an AL concept. Read the article and its samples. No installation required. |
 | Use a supplied skill | Follow the [plugin quick start](../README.md#quick-start). The currently exposed skill, `al-code-review`, performs reviews and returns findings. |
 | Use your own agent or workflow | Supply selected articles as context, as described below, or use the [integration bootstrap](agent-consumption.md#try-a-minimal-integration) to execute BCQuality action skills without the plugin. |
+| Get guidance before coding (preview) | Pass an existing development plan to the read-only plan guidance skill, then review the finished change. See [try plan guidance](agent-consumption.md#try-plan-guidance). |
 
 ### Read and reuse an article
 
@@ -87,6 +88,7 @@ branch names with ones in your project.
 | Focused review | Use the installed al-code-review skill to review performance in the app in this folder, without changing files. Return the complete performance findings report. |
 | Supply chain code | Use the installed al-code-review skill to review SCM posting, inventory, reservations, item tracking, and warehouse workflows in this app folder, without changing files. Return the complete Supply Chain Management findings report. |
 | Agent SDK code | Use the installed al-code-review skill to review Agent SDK implementation and usage in this app folder, without changing files. Return the complete Agents findings report. |
+| Copilot features | Use the installed al-code-review skill to review the Copilot features (AI module calls, Copilot capabilities, PromptDialog pages) in this app folder, without changing files. Return the complete Copilot findings report. |
 
 For Git comparisons, the named base ref must exist locally. If it is missing,
 fetch the intended branch first. A PR review also requires the host to have
@@ -185,9 +187,9 @@ using your normal compilation, analyzer, test, and human-review workflow.
 ## Coverage and limits
 
 The Microsoft broad review composes the Microsoft domains listed below.
-The Community Agents review is a separate skill selected by the request, not
+The Community Agents and Copilot reviews are separate skills selected by the request, not
 a nested part of that coordinator. All current review leaves accept app
-folders, files, and diffs; request an Agent SDK review explicitly when that
+folders, files, and diffs; request an Agent SDK or Copilot review explicitly when that
 coverage matters and look for its separate report.
 
 Available knowledge is **not** a promise that every rule will run. Selection
@@ -197,29 +199,15 @@ removal or another comparison-only regression requires an actual baseline.
 The corpus combines technical AL guidance with targeted functional-domain
 invariants, not exhaustive functional validation or AppSource certification.
 
-The SCM leaf owns selected inventory/value, application, reservation, tracking,
-and warehouse/posting invariants. It prunes unrelated AL using the actual
-tables, codeunits, fields, and operations in scope; an item caption or a broad
-`ApplicationArea` alone is not an SCM review signal. Missing workflow context
-must not be replaced with an assumed posting defect. Manufacturing, assembly,
-planning, and other supply-chain areas are covered only where an article
-explicitly names the shared interface or invariant.
-
-SCM owns Item/Value/Capacity/Warehouse and inventory-application posting
-records. Pure G/L, customer/vendor/detailed/VAT and financial-only posting
-mutations belong to Finance, even when that domain is not enabled. Equivalent
-findings for one inventory-originated posting bypass have one SCM primary
-owner; distinct independent financial defects remain separate.
-
-The Finance leaf reviews journal posting, financial ledger changes,
-applications, and posting-linked dimension handling. It prunes unrelated code
-at the leaf rather than changing broad-review orchestration. Finance articles
-use `application-area: [all]` so missing application-area context does not
-weaken applicable findings; resolved records and operations supply the
-narrowing. Finance owns financial ledgers, not Item, Value, Capacity, Warehouse,
-or inventory-application records owned by SCM. It also does not own generic
-custom-table or master Default Dimension wiring. Request a focused "Finance
-posting review" when only this domain is needed.
+The functional domains are deliberately focused. **Supply Chain Management**
+reviews selected inventory and costing, item application, reservation,
+tracking, and warehouse/posting workflows. **Finance** reviews selected
+journal posting, financial ledger, application, VAT, and posting-dimension
+workflows. Each runs only when the code in scope touches those records or
+operations; a module name or broad `ApplicationArea` alone is not enough.
+Manufacturing, assembly, planning, and other areas are covered only where an
+article explicitly names the shared interface. Request a focused review, such
+as "Finance posting review", when only one domain is needed.
 
 BCQuality intentionally does not duplicate mechanical diagnostics already
 enforced by the AL compiler or standard analyzers. Run the consuming app's
@@ -235,6 +223,7 @@ Each article describes one concern. Where samples exist, use its linked
 | Domain | Browse knowledge |
 | --- | --- |
 | Agent SDK | [Agents (Community)](../community/knowledge/agents/) |
+| Copilot features (System.AI) | [Copilot (Community)](../community/knowledge/copilot/) |
 | AppSource | [AppSource](../microsoft/knowledge/appsource/) |
 | Compatibility | [Breaking changes](../microsoft/knowledge/breaking-changes/) |
 | Data modeling | [Data modeling](../microsoft/knowledge/data-modeling/) |

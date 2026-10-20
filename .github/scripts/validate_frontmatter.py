@@ -743,6 +743,8 @@ def main(argv: list[str] | None = None) -> int:
     report = run(root)
 
     gha = os.environ.get("GITHUB_ACTIONS") == "true"
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     for d in report.diagnostics:
         line = d.format_gha(root) if gha else d.format_plain(root)
         print(line)
