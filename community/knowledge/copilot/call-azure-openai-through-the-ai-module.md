@@ -21,6 +21,8 @@ Build the request with the AI module: authorize with `SetAuthorization` (own res
 
 Authorization signatures depend on the target version. The sample uses the BC23+ own-resource setup: `SetAuthorization(ModelType, Endpoint, Deployment, ApiKey)`, with the endpoint, deployment, and `SecretText` key supplied by the caller from secure extension configuration. It does not require `AOAI Deployments` or a particular managed model. For Business Central AI resources, select an overload available in the target symbols: BC24 has no `SetManagedResourceAuthorization`; BC27 provides four/five-argument overloads requiring own-resource details; the two-argument `SetManagedResourceAuthorization(ModelType, ManagedResourceDeployment)` is available from BC28. Do not use that modern shorthand in an extension targeting older versions.
 
+The good companion declares its own `Draft Item Description` capability enum value so it can be prepared independently. Before running it, register that value using the [install/upgrade registration pattern](register-copilot-capability-on-install-and-upgrade.md) and activate the capability. The registration article's companion is a separate example: adapt its registration code to this sample's enumextension rather than adding a second declaration of the same value.
+
 See sample: [`call-azure-openai-through-the-ai-module.good.al`](call-azure-openai-through-the-ai-module.good.al).
 
 ## Anti Pattern

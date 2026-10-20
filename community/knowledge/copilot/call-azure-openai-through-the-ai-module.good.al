@@ -30,3 +30,11 @@ codeunit 50207 "Item Desc Generator Good"
         exit(AOAIChatMessages.GetLastMessage());
     end;
 }
+
+enumextension 50207 "Item Draft Capability" extends "Copilot Capability"
+{
+    value(50207; "Draft Item Description")
+    {
+        Caption = 'Draft item description';
+    }
+}

@@ -21,6 +21,8 @@ Immediately after each generate call, test `AOAIOperationResponse.IsSuccess()`. 
 
 Both samples use the BC23+ own-resource `SetAuthorization(ModelType, Endpoint, Deployment, ApiKey)` overload, with configuration supplied by the caller and the key passed as `SecretText`. Response checking is independent of the authorization mode. If using Business Central AI resources, choose an overload supported by the target version; the two-argument `SetManagedResourceAuthorization` requires BC28+. See [version-qualified authorization guidance](call-azure-openai-through-the-ai-module.md).
 
+Each companion independently declares the `Reminder Draft Demo` table, its `Body Text` field, and the `Draft Payment Reminder` capability enum value. Before running either sample, register and activate that capability using the [install/upgrade registration pattern](register-copilot-capability-on-install-and-upgrade.md), adapted to this enum value, and pass an existing reminder draft record. The enumextension supplies the AL symbol; it does not register the capability at runtime.
+
 See sample: [`check-aoai-operation-response-before-using-output.good.al`](check-aoai-operation-response-before-using-output.good.al).
 
 ## Anti Pattern

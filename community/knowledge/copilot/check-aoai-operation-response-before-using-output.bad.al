@@ -21,3 +21,27 @@ codeunit 50208 "Email Draft Generator Bad"
         ReminderDraft.Modify(true);
     end;
 }
+
+table 50208 "Reminder Draft Demo"
+{
+    DataClassification = CustomerContent;
+
+    fields
+    {
+        field(1; "No."; Code[20]) { }
+        field(2; "Body Text"; Text[2048]) { }
+    }
+
+    keys
+    {
+        key(PK; "No.") { Clustered = true; }
+    }
+}
+
+enumextension 50208 "Reminder Draft Capability" extends "Copilot Capability"
+{
+    value(50208; "Draft Payment Reminder")
+    {
+        Caption = 'Draft payment reminder';
+    }
+}
