@@ -1,0 +1,510 @@
+{
+  "skill": { "id": "al-feature-design", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "request": "Add an Activity Code that consultants pick on each time sheet line and that is carried, when approved hours are suggested into the project journal and posted, to the project journal line, the project ledger entries and the resource ledger entries, and kept when time sheets are moved to the archive.",
+    "business-process": "Project time sheets: Suggest Lines from Time Sheets into the project journal, project journal posting (Job Jnl.-Post Line and Res. Jnl.-Post Line), and Move Time Sheets to Archive",
+    "candidates": 15,
+    "selected": 14
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": ["al"],
+    "countries": [],
+    "application-area": [],
+    "unknown": ["bc-version", "countries", "application-area"]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "ts-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Time Sheet Line",
+        "purpose": "Holds the Activity Code the consultant picks on each time sheet line. It is the source of the value for every later stage, and its field number and type define the archive mirror.",
+        "fields": [
+          { "name": "Activity Code", "type": "Code[20]", "note": "Field number from the app's ID range, reused unchanged on Time Sheet Line Archive. Type and length are provisional until the source of valid codes is settled; if a TableRelation is added, the type and length must exactly match the related key field. DataClassification = CustomerContent, set on the field because a tableextension has no table-level value." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-time-sheet-fields-to-job-journal-through-suggest-lines.md",
+          "microsoft/knowledge/projects/time-sheet-archive-copies-fields-by-field-number.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "ts-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Time Sheet Line Archive",
+        "purpose": "Keeps the Activity Code when time sheets are archived. MoveTimeSheetToArchive copies Time Sheet Line to Time Sheet Line Archive with TransferFields and then deletes the original, so the field must have the same number, type and length as on Time Sheet Line. No code is needed.",
+        "fields": [
+          { "name": "Activity Code", "type": "Code[20]", "note": "Same field number, type and length as the Time Sheet Line field. Editable = false. DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-archive-copies-fields-by-field-number.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "job-jnl-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Job Journal Line",
+        "purpose": "Carries the Activity Code on the suggested project journal line, where users review it before posting. From here it is copied to both the project ledger and the resource journal line. Other sources of project journal lines (purchase lines, planning lines, general journal lines) are left out because the request covers only time sheets; see the open question.",
+        "fields": [
+          { "name": "Activity Code", "type": "Code[20]", "note": "Same type and length as the Time Sheet Line field. The value is copied by event, so the field number does not need to match. DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-time-sheet-fields-to-job-journal-through-suggest-lines.md",
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "job-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Job Ledger Entry",
+        "purpose": "Stores the Activity Code on project ledger entries. It is a stored field rather than a related table because the value is on every time entry, which the request requires. The related-table guidance (from BC23) applies to optional or sparse attributes.",
+        "fields": [
+          { "name": "Activity Code", "type": "Code[20]", "note": "Editable = false. DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "res-jnl-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Res. Journal Line",
+        "purpose": "Intermediate carrier needed to reach the resource ledger. Job Jnl.-Post Line.PostResource builds the resource journal line field by field with CopyFromJobJnlLine, so without this field the value is lost before Res. Jnl.-Post Line.",
+        "fields": [
+          { "name": "Activity Code", "type": "Code[20]", "note": "DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "res-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Res. Ledger Entry",
+        "purpose": "Stores the Activity Code on resource ledger entries. It is stored for the same reason as on Job Ledger Entry.",
+        "fields": [
+          { "name": "Activity Code", "type": "Code[20]", "note": "Editable = false. DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "activity-code-flow",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Activity Code Time Sheet Flow",
+        "purpose": "Event subscriber codeunit that holds the four copy subscribers: time sheet to project journal, project journal to project ledger, project journal to resource journal, and resource journal to resource ledger. It assigns the value only and never calls Modify.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-time-sheet-fields-to-job-journal-through-suggest-lines.md",
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md"
+        ]
+      },
+      {
+        "id": "time-sheet-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Time Sheet (line part used by consultants to enter hours; confirm the exact page in symbols)",
+        "purpose": "Lets the consultant pick the Activity Code on each time sheet line.",
+        "knowledge": []
+      },
+      {
+        "id": "job-journal-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Job Journal",
+        "purpose": "Shows the Activity Code on suggested project journal lines so users can review it before posting.",
+        "knowledge": []
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Consultant",
+        "to": "Time Sheet Line.Activity Code",
+        "mechanism": "user-entry",
+        "note": "Picked on each time sheet line before submission and approval.",
+        "knowledge": []
+      },
+      {
+        "from": "Time Sheet Line.Activity Code (temporary buffer in report Suggest Job Jnl. Lines)",
+        "to": "Job Journal Line.Activity Code",
+        "mechanism": "event-copy",
+        "note": "Report 952 creates one project journal line per Time Sheet Detail (one day) of an Approved, unposted line. A line-level value is copied from the temporary time sheet line, which holds every field of the real line. Each journal line from the same time sheet line gets the same code.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-time-sheet-fields-to-job-journal-through-suggest-lines.md",
+          "microsoft/knowledge/projects/time-sheet-hours-post-per-day-only-when-approved.md"
+        ]
+      },
+      {
+        "from": "Job Journal Line.Activity Code",
+        "to": "Job Ledger Entry.Activity Code",
+        "mechanism": "event-copy",
+        "note": "Job Jnl.-Post Line.CreateJobLedgEntry calls Job Transfer Line.FromJnlLineToLedgEntry, which copies fields one by one and then raises OnAfterFromJnlLineToLedgEntry.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+        ]
+      },
+      {
+        "from": "Job Journal Line.Activity Code",
+        "to": "Res. Journal Line.Activity Code",
+        "mechanism": "event-copy",
+        "note": "Job Jnl.-Post Line.PostResource calls Res. Journal Line.CopyFromJobJnlLine, which raises OnAfterCopyResJnlLineFromJobJnlLine. The time sheet fields stay on the line, so Res. Jnl.-Post Line still marks the detail as posted.",
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md"
+        ]
+      },
+      {
+        "from": "Res. Journal Line.Activity Code",
+        "to": "Res. Ledger Entry.Activity Code",
+        "mechanism": "event-copy",
+        "note": "Res. Ledger Entry.CopyFromResJnlLine raises OnAfterCopyFromResJnlLine.",
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md"
+        ]
+      },
+      {
+        "from": "Time Sheet Line.Activity Code",
+        "to": "Time Sheet Line Archive.Activity Code",
+        "mechanism": "transferfields",
+        "note": "Report 953 Move Time Sheets to Archive calls Time Sheet Management.MoveTimeSheetToArchive, which uses TransferFields and then deletes the original. Only time sheets whose lines are all Approved and Posted can be archived.",
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-archive-copies-fields-by-field-number.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Report \"Suggest Job Jnl. Lines\"",
+        "event": "OnAfterTransferTimeSheetDetailToJobJnlLine",
+        "purpose": "Copy Activity Code from the temporary time sheet line to the project journal line before it is inserted.",
+        "guards": [
+          "Assign the field without calling Modify; the journal line is not inserted yet.",
+          "Read the line-level value from the temporary Time Sheet Line parameter, not from Time Sheet Detail and not by re-reading the database."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-time-sheet-fields-to-job-journal-through-suggest-lines.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Job Transfer Line\"",
+        "event": "OnAfterFromJnlLineToLedgEntry",
+        "purpose": "Copy Activity Code from the project journal line to the project ledger entry while the entry is built.",
+        "guards": [
+          "Do not use OnAfterJobLedgEntryInsert with Modify on the inserted entry."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Res. Journal Line\"",
+        "event": "OnAfterCopyResJnlLineFromJobJnlLine",
+        "purpose": "Copy Activity Code from the project journal line to the resource journal line built during project journal posting.",
+        "guards": [
+          "Do not touch the Time Sheet No., Time Sheet Line No. or Time Sheet Date fields, and do not update Time Sheet Detail or insert Time Sheet Posting Entry yourself."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Res. Ledger Entry\"",
+        "event": "OnAfterCopyFromResJnlLine",
+        "purpose": "Copy Activity Code from the resource journal line to the resource ledger entry.",
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification on every Activity Code field in the six table extensions. A tableextension has no table-level value to inherit. Use CustomerContent unless the codes identify a person, and leave no field at ToBeClassified at release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "suggest-copies-activity-code-to-job-journal",
+        "given": "A resource that uses time sheets, a project with a task, and an approved time sheet line of type Job with Activity Code set and hours on two days, all created with the test Library codeunits",
+        "when": "Suggest Lines from Time Sheets runs (report Suggest Job Jnl. Lines) for a project journal batch",
+        "then": "Two project journal lines are created, one per day, and each has the time sheet line's Activity Code",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-time-sheet-fields-to-job-journal-through-suggest-lines.md",
+          "microsoft/knowledge/projects/time-sheet-hours-post-per-day-only-when-approved.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md"
+        ]
+      },
+      {
+        "id": "posting-copies-activity-code-to-job-ledger",
+        "given": "Project journal lines suggested from an approved time sheet line with Activity Code set, with the posting setup the project journal posting path reads",
+        "when": "The project journal is posted",
+        "then": "Each new Job Ledger Entry for the time sheet has the Activity Code",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "posting-copies-activity-code-to-res-ledger",
+        "given": "Project journal lines suggested from an approved time sheet line with Activity Code set, with the full posting setup",
+        "when": "The project journal is posted",
+        "then": "Each new Res. Ledger Entry for the time sheet has the Activity Code, and the time sheet line is marked Posted",
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "partly-posted-day-keeps-activity-code",
+        "given": "An approved time sheet line with Activity Code where part of a day's quantity has already been posted",
+        "when": "Suggest Lines from Time Sheets runs again and the resulting journal line is posted",
+        "then": "The new journal line has the open quantity only, and the new Job Ledger Entry and Res. Ledger Entry both have the Activity Code",
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-hours-post-per-day-only-when-approved.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "rejected-line-is-not-suggested",
+        "given": "A time sheet with one approved line and one rejected line, each with a different Activity Code",
+        "when": "Suggest Lines from Time Sheets runs",
+        "then": "Only journal lines for the approved line are created, carrying its Activity Code; no line carries the rejected line's code",
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-hours-post-per-day-only-when-approved.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md"
+        ]
+      },
+      {
+        "id": "archive-keeps-activity-code",
+        "given": "A time sheet whose lines are all approved and posted, with Activity Code set on each line",
+        "when": "Move Time Sheets to Archive runs for that time sheet",
+        "then": "Each Time Sheet Line Archive record has the Activity Code of its original line, and the original lines are deleted",
+        "knowledge": [
+          "microsoft/knowledge/projects/time-sheet-archive-copies-fields-by-field-number.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "archive-keeps-maximum-length-activity-code",
+        "given": "A posted time sheet line whose Activity Code uses the full declared field length",
+        "when": "Move Time Sheets to Archive runs for that time sheet",
+        "then": "The archived line holds the complete Activity Code without a length error",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/projects/carry-time-sheet-fields-to-job-journal-through-suggest-lines.md",
+      "used-for": "Time sheet to project journal hop, its subscriber, and the Job Journal Line and Job Ledger Entry fields",
+      "constraints": [
+        "Suggest Job Jnl. Lines fills named fields one by one; a custom time sheet field is not copied, and matching field numbers do not help.",
+        "Subscribe to OnAfterTransferTimeSheetDetailToJobJnlLine on report Suggest Job Jnl. Lines; copy a line-level value from the temporary time sheet line and a per-day value from Time Sheet Detail.",
+        "Assign without Modify because the line is not inserted yet.",
+        "Job Transfer Line events for purchase and planning lines are not raised on this path.",
+        "Do not subscribe to OnAfterJobLedgEntryInsert, re-read the time sheet line and Modify the ledger entry."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/carry-time-sheet-fields-to-job-journal-through-suggest-lines.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+      "used-for": "Project journal to project ledger hop and its subscriber",
+      "constraints": [
+        "Job Transfer Line.FromJnlLineToLedgEntry copies field by field; matching field numbers do nothing.",
+        "Subscribe to OnAfterFromJnlLineToLedgEntry on codeunit Job Transfer Line to copy the value while the entry is built; OnBeforeJobLedgEntryInsert is an alternative only for computed values.",
+        "Do not subscribe to OnAfterJobLedgEntryInsert and Modify the inserted entry."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md",
+      "used-for": "Resource ledger path: Res. Journal Line and Res. Ledger Entry fields and their two subscribers",
+      "constraints": [
+        "Extending only Job Journal Line and Res. Ledger Entry leaves the field empty; the resource journal line in between is built field by field.",
+        "Add the field to Res. Journal Line and Res. Ledger Entry, copy it with the event of each source path the design needs (OnAfterCopyResJnlLineFromJobJnlLine for the project journal), then to the ledger with OnAfterCopyFromResJnlLine.",
+        "Do not write code that updates Time Sheet Detail or inserts Time Sheet Posting Entry; keep the three time sheet fields on the line."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.good.al",
+        "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/time-sheet-archive-copies-fields-by-field-number.md",
+      "used-for": "Archive stage: Time Sheet Line Archive field mirrored by number and type",
+      "constraints": [
+        "MoveTimeSheetToArchive uses TransferFields and then deletes the originals.",
+        "Give the archive table the same field, with the same number and type, as the live table; use the OnBefore...ArchiveInsert events only for computed values or values with no matching field.",
+        "Only time sheets whose lines are all Approved and Posted can be archived.",
+        "A different field number or type on the archive leaves the archived value empty, and it cannot be recovered."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/time-sheet-archive-copies-fields-by-field-number.good.al",
+        "microsoft/knowledge/projects/time-sheet-archive-copies-fields-by-field-number.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/time-sheet-hours-post-per-day-only-when-approved.md",
+      "used-for": "Per-day granularity of the suggested lines and the partly posted and rejected test scenarios",
+      "constraints": [
+        "Suggest creates one journal line per Time Sheet Detail, only for Approved and unposted lines, with quantity GetMaxQtyToPost.",
+        "Expect several journal lines, and several ledger entries, for one time sheet line.",
+        "Tests should cover a partly posted day and a rejected line."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/time-sheet-hours-post-per-day-only-when-approved.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+      "used-for": "Scoping which project journal line sources carry the Activity Code",
+      "constraints": [
+        "Job Transfer Line builds project journal lines from purchase lines, planning lines, planning sales lines and general journal lines, field by field, each with its own OnAfterFrom...ToJnlLine event.",
+        "Decide in the design which sources must carry the value, and subscribe to the matching Job Transfer Line events for each."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Time Sheet Line to Time Sheet Line Archive mirror and the maximum-length archive test",
+      "constraints": [
+        "A field mirrored across a TransferFields cascade must have the same field number, data type and length on every table in the cascade, from the start.",
+        "A shorter length on one side compiles and fails only when a real value exceeds it."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing the Activity Code field if it is related to a table of valid codes",
+      "constraints": [
+        "With an unconditional TableRelation, the field must have the same type and exact length as the related field.",
+        "Read the related field's declared type and length from its table definition; do not assume Code[10] or Code[20]."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choosing stored tableextension fields on Job Ledger Entry and Res. Ledger Entry (applies from BC23)",
+      "constraints": [
+        "Put optional, sparse or integration attributes on hot ledgers in a related table keyed by the entry number.",
+        "Use a stored tableextension field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "DataClassification on every Activity Code field",
+      "constraints": [
+        "A tableextension has no table-level classification to inherit; every Normal field it adds must set its own DataClassification.",
+        "Choose the classification that matches the stored data when the field is defined; do not use SystemMetadata for customer data."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release check on the new fields",
+      "constraints": [
+        "No field may ship with DataClassification = ToBeClassified."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for resources, projects and time sheets in the tests",
+      "constraints": [
+        "Create prerequisite records with the test Library codeunits, parents first, and Validate foreign keys; do not hand-roll Init/Insert."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+      "used-for": "Preconditions for the suggest and posting tests",
+      "constraints": [
+        "A posting test's GIVEN must set up every posting setup and date the path reads, not just the primary record.",
+        "A test that claims filtering logic must include a record that should be excluded."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-one-when-per-test.md",
+      "used-for": "Splitting the posting assertions into separate tests",
+      "constraints": [
+        "Each test has exactly one WHEN; preconditions such as suggesting the journal belong in GIVEN."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "activity-code-source",
+      "question": "Where do valid Activity Codes come from: an existing table (which one), a new Activity Code master table that this feature must also create (with its pages, permissions and setup), or free text? This sets the field's type, length and TableRelation.",
+      "affects": ["ts-line-ext", "ts-line-archive-ext", "job-jnl-line-ext", "job-ledger-entry-ext", "res-jnl-line-ext", "res-ledger-entry-ext", "time-sheet-page-ext"]
+    },
+    {
+      "id": "activity-code-mandatory",
+      "question": "Is an Activity Code mandatory on a time sheet line of type Job, and if so, when must it be checked: at submit, at approval, or at posting?",
+      "affects": ["ts-line-ext", "time-sheet-page-ext"]
+    },
+    {
+      "id": "other-time-sheet-line-types",
+      "question": "Should the Activity Code also be available on time sheet lines of type Resource or Service, which are posted through the resource journal or service documents rather than the project journal?",
+      "affects": ["ts-line-ext", "res-jnl-line-ext", "activity-code-flow"]
+    },
+    {
+      "id": "other-project-journal-sources",
+      "question": "Must project usage that does not come from time sheets carry an Activity Code: lines typed manually in the project journal, purchase lines posted to a project, project planning lines, or general journal lines with a project? Each requires its own Job Transfer Line subscriber.",
+      "affects": ["job-jnl-line-ext", "activity-code-flow", "job-journal-page-ext"]
+    },
+    {
+      "id": "journal-line-editable",
+      "question": "May users change the Activity Code on a suggested project journal line before posting, or must it always equal the time sheet value?",
+      "affects": ["job-jnl-line-ext", "job-journal-page-ext"]
+    },
+    {
+      "id": "ledger-list-visibility",
+      "question": "Must the Activity Code appear as a column and filter on the Project Ledger Entries and Resource Ledger Entries pages and on the time sheet archive pages? A stored field is justified when it is shown as a native list column.",
+      "affects": ["job-ledger-entry-ext", "res-ledger-entry-ext", "ts-line-archive-ext"]
+    },
+    {
+      "id": "target-version-and-id-range",
+      "question": "Which Business Central version does the app target, and which object and field ID range should be used?",
+      "affects": ["ts-line-ext", "ts-line-archive-ext", "job-jnl-line-ext", "job-ledger-entry-ext", "res-jnl-line-ext", "res-ledger-entry-ext", "activity-code-flow"]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown; prefer-related-table-over-extension-on-hot-ledgers applies only from BC23.",
+    "Page extensions time-sheet-page-ext and job-journal-page-ext and the user-entry hop are not covered by BCQuality knowledge; they rest on the agent's judgment, and the exact time sheet page must be confirmed in symbols.",
+    "Permission sets: the design adds no new tables or pages, and no opened article states whether a permission set is needed for the subscriber codeunit and table extensions; this rests on the agent's judgment."
+  ]
+}

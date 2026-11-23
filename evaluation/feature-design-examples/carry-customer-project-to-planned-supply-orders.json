@@ -1,0 +1,708 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Sales order lines carry a customer project code. Planners run Calculate Plan in the planning worksheet and sometimes use Order Planning, then carry out the suggestions. The purchase order lines and production order lines created for that demand must show the customer project code so buyers and the shop floor know which project they serve.",
+    "business-process": "Carry a customer project code from sales order lines through supply planning (Calculate Plan in the planning worksheet and Order Planning) and carry-out to the purchase order lines and production order lines it creates, in the base application's inventory planning and manufacturing processes.",
+    "candidates": 12,
+    "selected": 10
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "sales-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Source of the value. The request says sales order lines already carry the customer project code; reuse that field if it exists in an app and add this extension only if it does not.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Source field. DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "inventory-profile-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Inventory Profile",
+        "purpose": "Holds the value on the demand profile that Calculate Plan builds from the sales line, so it can reach the planning line.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as the Sales Line field; type and length are an open question (cust-project-field-definition). DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "requisition-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Requisition Line",
+        "purpose": "Holds the value on planning worksheet and Order Planning lines; carry-out reads only the requisition line.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as the Sales Line field; type and length are an open question (cust-project-field-definition). DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purchase-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line",
+        "purpose": "Shows buyers which project the planned purchase line serves; filled before insert by carry-out.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as the Sales Line field; type and length are an open question (cust-project-field-definition). DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purch-rcpt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Line",
+        "purpose": "Mirror of the Purchase Line field so InitFromPurchLine TransferFields carries it to posted receipts. Non-editable.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as the Sales Line field; type and length are an open question (cust-project-field-definition). DataClassification = CustomerContent. Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purch-inv-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Line",
+        "purpose": "Mirror of the Purchase Line field on posted invoices. Non-editable.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as the Sales Line field; type and length are an open question (cust-project-field-definition). DataClassification = CustomerContent. Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purch-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Line",
+        "purpose": "Mirror of the Purchase Line field on posted credit memos, unless the requester excludes this document type. Non-editable.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as the Sales Line field; type and length are an open question (cust-project-field-definition). DataClassification = CustomerContent. Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Line",
+        "purpose": "Mirror of the Purchase Line field on posted return shipments, unless the requester excludes this document type. Non-editable.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as the Sales Line field; type and length are an open question (cust-project-field-definition). DataClassification = CustomerContent. Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purchase-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line Archive",
+        "purpose": "Mirror of the Purchase Line field so archived purchase orders keep it. Non-editable.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as the Sales Line field; type and length are an open question (cust-project-field-definition). DataClassification = CustomerContent. Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "prod-order-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Prod. Order Line",
+        "purpose": "Shows the shop floor which project the production order line serves; filled before insert by carry-out. The status change from Planned/Firm Planned to Released and Finished copies it by record assignment, so no mirror table and no copy subscriber are needed.",
+        "fields": [
+          {
+            "name": "Customer Project",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as the Sales Line field; type and length are an open question (cust-project-field-definition). DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "cust-project-planning",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Cust. Project Planning",
+        "purpose": "Event subscribers that copy the value at every planning and carry-out hop, each before the insert so no Modify is needed.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/scm/carry-out-requisition-actions-through-the-standard-workflow.md"
+        ]
+      },
+      {
+        "id": "purchase-order-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purchase Order Subform",
+        "purpose": "Shows the field to buyers on purchase order lines, read-only. The page field binds to the table field and inherits its ToolTip when the target runtime supports it.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "prod-order-line-pages-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Released Prod. Order Lines",
+        "purpose": "Shows the field to the shop floor on released production order lines, read-only. The same extension is needed on Firm Planned Prod. Order Lines and Planned Prod. Order Lines if planners must see it there (open question). The page field inherits the table field's ToolTip when the target runtime supports it.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Sales Line",
+        "to": "Inventory Profile",
+        "mechanism": "event-copy",
+        "note": "Calculate Plan: OnAfterTransferInventoryProfileFromSalesLine on Sales Line Invt. Profile.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md"
+        ]
+      },
+      {
+        "from": "Inventory Profile",
+        "to": "Requisition Line",
+        "mechanism": "event-copy",
+        "note": "Calculate Plan: OnMaintainPlanningLineOnBeforeReqLineInsert on Inventory Profile Offsetting, from DemandInvtProfile, only when its Source Type is Sales Line. Planning-engine lines have no Demand Order No., so the value cannot be looked up later.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Requisition Line",
+        "mechanism": "event-copy",
+        "note": "Order Planning: OnAfterTransferFromUnplannedDemand on Requisition Line; when Demand Type is Sales, get the sales line from the demand keys and copy the value.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md"
+        ]
+      },
+      {
+        "from": "Requisition Line",
+        "to": "Purchase Line",
+        "mechanism": "event-copy",
+        "note": "Carry-out to purchase (planning worksheet and Order Planning share Req. Wksh.-Make Order): OnAfterInitPurchOrderLine, before the insert. Carry-out stays in the standard workflow.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/scm/carry-out-requisition-actions-through-the-standard-workflow.md"
+        ]
+      },
+      {
+        "from": "Requisition Line",
+        "to": "Prod. Order Line",
+        "mechanism": "event-copy",
+        "note": "Carry-out to production: OnInsertProdOrderLineWithReqLine on Mfg. Carry Out Action, before the Prod. Order Line insert.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md"
+        ]
+      },
+      {
+        "from": "Prod. Order Line (Planned / Firm Planned)",
+        "to": "Prod. Order Line (Released / Finished)",
+        "mechanism": "other",
+        "note": "Prod. Order Status Management copies the whole record by assignment; no code needed.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Rcpt. Line, Purch. Inv. Line, Purch. Cr. Memo Line, Return Shipment Line",
+        "mechanism": "transferfields",
+        "note": "InitFromPurchLine TransferFields by field number during purchase posting.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purchase Line Archive",
+        "mechanism": "transferfields",
+        "note": "Archiving copies lines with TransferFields by field number.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Sales Line Invt. Profile",
+        "event": "OnAfterTransferInventoryProfileFromSalesLine",
+        "purpose": "Copy the customer project from the sales line to the demand inventory profile during Calculate Plan.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md"
+        ]
+      },
+      {
+        "publisher": "Inventory Profile Offsetting",
+        "event": "OnMaintainPlanningLineOnBeforeReqLineInsert",
+        "purpose": "Copy the customer project from DemandInvtProfile to the new planning line before insert.",
+        "guards": [
+          "Exit unless DemandInvtProfile.\"Source Type\" = Database::\"Sales Line\"; some call sites pass a supply profile in that parameter.",
+          "Assign without Modify; the event runs before the insert."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md"
+        ]
+      },
+      {
+        "publisher": "Requisition Line",
+        "event": "OnAfterTransferFromUnplannedDemand",
+        "purpose": "Order Planning: read the sales line identified by the unplanned demand keys and copy the customer project.",
+        "guards": [
+          "Exit unless UnplannedDemand.\"Demand Type\" is Sales.",
+          "Get the sales line with SetLoadFields on the project field only; skip if not found."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md"
+        ]
+      },
+      {
+        "publisher": "Req. Wksh.-Make Order",
+        "event": "OnAfterInitPurchOrderLine",
+        "purpose": "Copy the customer project from the requisition line to the purchase line before insert.",
+        "guards": [
+          "Assign without Modify; the event runs before the insert.",
+          "Do not look up the sales line from Demand Order No.; copy from the requisition line only."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/scm/carry-out-requisition-actions-through-the-standard-workflow.md"
+        ]
+      },
+      {
+        "publisher": "Mfg. Carry Out Action",
+        "event": "OnInsertProdOrderLineWithReqLine",
+        "purpose": "Copy the customer project from the requisition line to the production order line before insert.",
+        "guards": [
+          "Assign without Modify; the event runs before the insert."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on every table extension field; a tableextension has no table-level value to inherit, so each field sets its own.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "No InitValue and no upgrade code: existing requisition lines, purchase lines, production order lines and posted lines stay blank, which is a valid state for an informational field. Back-filling open orders is an open question.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Put the Caption and ToolTip on the table fields so bound page fields inherit the ToolTip on runtime 13.0 (BC24) or later; on earlier runtimes add the ToolTip on each page field.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "No new tables are created, so no new permission set is designed; the extension fields follow the permissions of their base tables. Rests on judgment.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "calc-plan-sales-to-planning-line",
+        "given": "An item with Reordering Policy Order and Replenishment System Purchase, and a sales order line with a customer project code, created with LibraryInventory and LibrarySales",
+        "when": "Calculate Plan runs in the planning worksheet for the item",
+        "then": "The planning line for that sales demand has the same customer project code",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "order-planning-sales-to-req-line",
+        "given": "An Order item and a sales order line with a customer project code, created with library codeunits",
+        "when": "Order Planning calculates the plan",
+        "then": "The requisition line for the sales demand has the customer project code",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "carry-out-to-purchase-line",
+        "given": "An accepted New/Purchase planning line with a customer project code, created by Calculate Plan from a sales line",
+        "when": "The action message is carried out through the standard Carry Out Action Msg. - Plan. workflow",
+        "then": "The created purchase line has the customer project code",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/scm/carry-out-requisition-actions-through-the-standard-workflow.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "carry-out-order-planning-to-purchase-line",
+        "given": "An accepted Order Planning line for sales demand with a customer project code",
+        "when": "Make Orders carries it out to a purchase order",
+        "then": "The created purchase line has the customer project code",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/scm/carry-out-requisition-actions-through-the-standard-workflow.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "carry-out-to-prod-order-line",
+        "given": "An item with Replenishment System Prod. Order and Reordering Policy Order, a sales order line with a customer project code, and an accepted planning line from Calculate Plan",
+        "when": "The action message is carried out to a firm planned production order",
+        "then": "The created production order line has the customer project code",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/scm/carry-out-requisition-actions-through-the-standard-workflow.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "status-change-keeps-project",
+        "given": "A firm planned production order line with a customer project code",
+        "when": "The production order is changed to Released",
+        "then": "The released production order line has the same customer project code",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "guard-non-sales-demand",
+        "given": "A manufactured parent item whose component demand creates a planning line for a component item, with no sales demand for the component",
+        "when": "Calculate Plan runs",
+        "then": "The component's planning line has a blank customer project code and no error occurs",
+        "knowledge": [
+          "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "purchase-receipt-mirror",
+        "given": "A purchase line created by carry-out with a customer project code",
+        "when": "The purchase order is posted as received",
+        "then": "The posted Purch. Rcpt. Line has the same customer project code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "purchase-invoice-mirror",
+        "given": "A purchase line created by carry-out with a customer project code",
+        "when": "The purchase order is posted as received and invoiced",
+        "then": "The posted Purch. Inv. Line has the same customer project code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "purchase-archive-mirror",
+        "given": "A purchase order line created by carry-out with a customer project code",
+        "when": "The purchase order is archived",
+        "then": "The Purchase Line Archive row has the same customer project code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Map of field paths: selected the Inventory planning-to-supply-orders row, the Production status-change row and the cross-cutting rows (mirrored definitions, privacy, upgrade back-fill, tests).",
+      "constraints": [
+        "Plan one row group per process the request touches and open every linked article for the chosen stages.",
+        "Whether the field should reach a stage the request does not name, such as archives or posted documents, is a question for the requester; raise one question per group of stages.",
+        "Do not plan only the source and one named target and patch other records with subscribers after posting."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+      "used-for": "Core design of every planning and carry-out hop, the objects, the subscriptions and their guards.",
+      "constraints": [
+        "Add the field to Sales Line, Inventory Profile, Requisition Line and each target table.",
+        "Subscribe once per hop: OnAfterTransferInventoryProfileFromSalesLine, OnMaintainPlanningLineOnBeforeReqLineInsert, OnAfterTransferFromUnplannedDemand, OnAfterInitPurchOrderLine, OnInsertProdOrderLineWithReqLine.",
+        "In OnMaintainPlanningLineOnBeforeReqLineInsert, check DemandInvtProfile.\"Source Type\" is Database::\"Sales Line\" first.",
+        "In OnAfterTransferFromUnplannedDemand, act only when Demand Type is Sales.",
+        "OnAfterInitPurchOrderLine and OnInsertProdOrderLineWithReqLine run before the insert; assign without Modify.",
+        "A planning line maps to one demand only with Reordering Policy Order; with Lot-for-Lot, Fixed Reorder Qty. or Maximum Qty. one line can cover several demands and only the first demand is seen. State which demand wins or limit the feature to Order items.",
+        "A header field that must split purchase orders needs CheckInsert in OnBeforeCheckInsertFinalizePurchaseOrderHeader.",
+        "Never look up the sales line from Demand Order No. at carry-out; Calculate Plan lines have none, and Copy to Req. Wksh clears the demand fields.",
+        "Never patch the purchase line in OnAfterPurchOrderLineInsert with Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.good.al",
+        "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/scm/carry-out-requisition-actions-through-the-standard-workflow.md",
+      "used-for": "Keeps carry-out in the standard workflow, both in the feature and in its tests.",
+      "constraints": [
+        "Carry out through Req. Wksh.-Make Order (Set, then CarryOutBatchAction) or the standard Carry Out Action dispatch, never by creating supply from a requisition line and deleting it.",
+        "Each action's supply change and reservation transfer precede proposal finalization; not every action creates a new order."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/scm/carry-out-requisition-actions-through-the-standard-workflow.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.md",
+      "used-for": "Decides that no copy code is needed when the production order changes status.",
+      "constraints": [
+        "Add the field once on the production order table that owns it and rely on the status change to carry it.",
+        "Use the OnCopyFrom... events of Prod. Order Status Management only to change the value on the way.",
+        "Do not copy the field again in OnAfterTransProdOrder with Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+      "used-for": "Mirrors the Purchase Line field on posted purchase lines and the purchase line archive.",
+      "constraints": [
+        "Give the field the same number, name, type and length on Purchase Line and every target the plan needs: all four posted line tables and the archive, unless the plan states a document type never needs it.",
+        "No subscriber is needed for these stages; keep the mirrored fields non-editable on the posted tables."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definitions of the mirrored purchase fields.",
+      "constraints": [
+        "Define a mirrored field with the exact same field number, data type and length on every table in the TransferFields cascade, at creation time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Classification of every new table extension field.",
+      "constraints": [
+        "Every Normal field a tableextension adds must set its own DataClassification matching the data stored; ToBeClassified or SystemMetadata for customer data is a privacy bug."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Where the ToolTip lives for the page fields; applies from BC24 (runtime 13.0).",
+      "constraints": [
+        "On runtime 13.0 or later a bound page field inherits the source table field's ToolTip; do not add a duplicate page-level ToolTip.",
+        "On earlier runtimes the inheritance is not available."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for all tests.",
+      "constraints": [
+        "Build items, customers and sales documents with the Library codeunits, parents first, validating foreign keys, not with hand-rolled Init/Insert."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+      "used-for": "Upgrade decision for rows that exist when the fields are added.",
+      "constraints": [
+        "Existing rows get the datatype default, not an InitValue; ship upgrade code only when existing rows must carry a value."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "cust-project-field-definition",
+      "question": "Does the customer project code already exist on Sales Line in one of your apps? If so, give its field number, type, length and table relation (for example to Job or a custom table) so every new field matches it.",
+      "affects": [
+        "sales-line-ext",
+        "inventory-profile-ext",
+        "requisition-line-ext",
+        "purchase-line-ext",
+        "prod-order-line-ext"
+      ]
+    },
+    {
+      "id": "reordering-policy-scope",
+      "question": "With Lot-for-Lot, Fixed Reorder Qty. or Maximum Qty. one planning line can cover demands from several sales lines with different projects, and only the first demand is carried. Should the feature be limited to items with Reordering Policy Order, or which demand's project should win (or should the field stay blank when demands differ)?",
+      "affects": [
+        "cust-project-planning",
+        "calc-plan-sales-to-planning-line"
+      ]
+    },
+    {
+      "id": "purchase-order-split",
+      "question": "The design puts the project on purchase lines only. Should one purchase order hold lines for several projects, or must carry-out split purchase orders by project (a header field and CheckInsert in OnBeforeCheckInsertFinalizePurchaseOrderHeader)?",
+      "affects": [
+        "purchase-line-ext",
+        "cust-project-planning"
+      ]
+    },
+    {
+      "id": "posted-and-archive-targets",
+      "question": "The design mirrors the field on Purch. Rcpt. Line, Purch. Inv. Line, Purch. Cr. Memo Line, Return Shipment Line and Purchase Line Archive. Which of these do you need, and can credit memos and return shipments be excluded?",
+      "affects": [
+        "purch-rcpt-line-ext",
+        "purch-inv-line-ext",
+        "purch-cr-memo-line-ext",
+        "return-shipment-line-ext",
+        "purchase-line-archive-ext"
+      ]
+    },
+    {
+      "id": "other-planning-entry-points",
+      "question": "Must the project also reach purchase lines created by Get Sales Orders for drop shipments and special orders, lines from the requisition worksheet, and lines carried out with Copy to Req. Wksh (which clears the demand fields)? Must it reach transfer or assembly orders carried out from planning?",
+      "affects": [
+        "cust-project-planning"
+      ]
+    },
+    {
+      "id": "production-order-header",
+      "question": "Is the project needed only on production order lines, or also on the Production Order header (one carried-out order can hold lines for several demands)?",
+      "affects": [
+        "prod-order-line-ext"
+      ]
+    },
+    {
+      "id": "visible-pages",
+      "question": "Besides the Purchase Order Subform and Released Prod. Order Lines, should the project be visible on the Planning Worksheet, Order Planning, Firm Planned and Planned Prod. Order Lines and the posted purchase pages?",
+      "affects": [
+        "purchase-order-subform-ext",
+        "prod-order-line-pages-ext"
+      ]
+    },
+    {
+      "id": "backfill-existing",
+      "question": "Should open purchase and production orders created before installation be back-filled with the project, or may they stay blank?",
+      "affects": [
+        "purchase-line-ext",
+        "prod-order-line-ext"
+      ]
+    },
+    {
+      "id": "editable-on-supply-lines",
+      "question": "May buyers or planners change the project on the purchase or production order line after carry-out, or should it be read-only?",
+      "affects": [
+        "purchase-line-ext",
+        "prod-order-line-ext",
+        "purchase-order-subform-ext",
+        "prod-order-line-pages-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown: no repository or app.json was supplied. The ToolTip inheritance applies from BC24 (runtime 13.0).",
+    "Page extensions on Purchase Order Subform and the production order line pages rest on the agent's judgment: no BCQuality article covers which pages show a planning-carried field; only the ToolTip placement is knowledge-backed.",
+    "The permissions decision (no new permission set for table extension fields) is not covered by BCQuality knowledge and rests on the agent's judgment.",
+    "Using the same field number on Inventory Profile, Requisition Line and Prod. Order Line as on Sales Line is a convention from the sample; these hops copy by event, not by TransferFields."
+  ]
+}

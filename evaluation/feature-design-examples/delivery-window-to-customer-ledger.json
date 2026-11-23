@@ -1,0 +1,744 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Add a Delivery Window code that the order taker selects on sales orders, carry it to posted shipments and posted invoices, and to customer ledger entries so collections can filter by it. Business process: sales order entry and sales posting (document to posted documents and customer ledger).",
+    "business-process": "sales posting",
+    "candidates": 84,
+    "selected": 13
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "delivery-window-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Delivery Window",
+        "purpose": "Supplemental table holding the Delivery Window codes the order taker chooses from.",
+        "fields": [
+          {
+            "name": "Code",
+            "type": "Code[10]",
+            "note": "Primary key, per the Supplemental table convention."
+          },
+          {
+            "name": "Description",
+            "type": "Text[100]",
+            "note": "Description length is a design choice not set by BCQuality knowledge."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "delivery-windows-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Delivery Windows",
+        "purpose": "List page (plural name) for maintaining Delivery Window codes; set as LookupPageID and DrillDownPageID of the Delivery Window table; UsageCategory = Lists and an object-level ApplicationArea so it is found in Tell Me.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "community/knowledge/appsource/set-usagecategory-on-searchable-entry-points.md"
+        ]
+      },
+      {
+        "id": "sales-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header",
+        "purpose": "Field the order taker fills on the sales order; TableRelation to Delivery Window.Code.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code[10]",
+            "note": "TableRelation = \"Delivery Window\".Code (unconditional), so the type and exact length match the related key Code[10]; DataClassification = CustomerContent; editable."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Header",
+        "purpose": "Receives the value from Sales Header through the standard TransferFields call when a shipment is posted.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code[10]",
+            "note": "Same field number (from the app's ID range), name, type and length as the Sales Header field; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Header",
+        "purpose": "Receives the value from Sales Header through the standard TransferFields call when an invoice is posted.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code[10]",
+            "note": "Same field number (from the app's ID range), name, type and length as the Sales Header field; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Header",
+        "purpose": "Mirror target required by the knowledge unless the request states credit memos never need the value (see open question).",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code[10]",
+            "note": "Same field number (from the app's ID range), name, type and length as the Sales Header field; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Header",
+        "purpose": "Mirror target required by the knowledge unless the request states return receipts never need the value (see open question).",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code[10]",
+            "note": "Same field number (from the app's ID range), name, type and length as the Sales Header field; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-header-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header Archive",
+        "purpose": "Mirror target so archived order versions keep the value.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code[10]",
+            "note": "Same field number (from the app's ID range), name, type and length as the Sales Header field; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Carrier field: sales posting builds the customer journal line field by field, so the value must be copied onto it before it can reach the customer ledger entry.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code[10]",
+            "note": "Same type and length as the Sales Header field; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "cust-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Cust. Ledger Entry",
+        "purpose": "Stored field on the customer ledger entry so the collections team can filter Customer Ledger Entries by Delivery Window.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code[10]",
+            "note": "Editable = false; DataClassification = CustomerContent; set during posting before insert, never by modifying posted entries."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "delivery-window-posting-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Delivery Window Posting",
+        "purpose": "Holds the two event subscribers that carry the value Sales Header -> Gen. Journal Line -> Cust. Ledger Entry during posting.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "sales-order-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order",
+        "purpose": "Shows the editable Delivery Window field to the order taker.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "posted-sales-shipment-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Sales Shipment",
+        "purpose": "Shows the non-editable Delivery Window on the posted shipment.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "posted-sales-invoice-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Sales Invoice",
+        "purpose": "Shows the non-editable Delivery Window on the posted invoice.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "customer-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Customer Ledger Entries",
+        "purpose": "Adds the Delivery Window column so collections can filter the list by it.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "delivery-window-objects-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Delivery Window - Objects",
+        "purpose": "Non-assignable building block granting tabledata Delivery Window = R (plus IMD for maintainers via a separate block if required) and execute on the new table, page and codeunit.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "delivery-window-role-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Delivery Window - User",
+        "purpose": "Assignable role set that includes the building block through IncludedPermissionSets, so order takers can use the feature without SUPER.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Order taker",
+        "to": "Sales Header.Delivery Window",
+        "mechanism": "user-entry",
+        "note": "Validated against the Delivery Window table through TableRelation.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Sales Shipment Header",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields(SalesHeader) in Sales-Post; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Sales Invoice Header",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields(SalesHeader) in Sales-Post; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Sales Cr.Memo Header",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Return Receipt Header",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Sales Header Archive",
+        "mechanism": "transferfields",
+        "note": "Archiving copies the header with TransferFields.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Gen. Journal Line",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyGenJnlLineFromSalesHeader, raised at the end of CopyFromSalesHeader in Sales Post Invoice.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line",
+        "to": "Cust. Ledger Entry",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyCustLedgerEntryFromGenJnlLine, while the entry is initialized and before insert.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Gen. Journal Line\"",
+        "event": "OnAfterCopyGenJnlLineFromSalesHeader",
+        "purpose": "Copy Sales Header.Delivery Window to the customer Gen. Journal Line.",
+        "guards": [
+          "Assign the field only; no Modify, no Commit, no external side effect."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Cust. Ledger Entry\"",
+        "event": "OnAfterCopyCustLedgerEntryFromGenJnlLine",
+        "purpose": "Copy Gen. Journal Line.Delivery Window to the Cust. Ledger Entry being initialized, before it is inserted.",
+        "guards": [
+          "Assign the field only; never find and Modify posted customer entries after posting (OnAfterPostSalesDoc runs after the commit)."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "Users maintain Delivery Window codes on the Delivery Windows list page before order takers can choose them; no setup table is needed.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "community/knowledge/appsource/set-usagecategory-on-searchable-entry-points.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on every Delivery Window field added by a table extension and on the new table's fields; never leave ToBeClassified.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship a non-assignable building block for the new table, page and codeunit and an assignable role set that includes it; verify order entry, posting and ledger filtering as a non-SUPER user.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "concern": "install",
+        "step": "No install or upgrade code is required for the new fields; documents and entries posted before installation keep a blank Delivery Window (see open question on backfill).",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "order-taker-selects-delivery-window",
+        "given": "A customer and item created with the Library codeunits, a Delivery Window code, and a sales order for that customer",
+        "when": "The order taker validates Delivery Window on the sales order",
+        "then": "The sales header stores the code; validating a code that does not exist in Delivery Window raises the table-relation error",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "id": "ship-carries-to-posted-shipment",
+        "given": "A released sales order with a Delivery Window code",
+        "when": "The order is posted as Ship",
+        "then": "The Sales Shipment Header for the order has the same Delivery Window",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "id": "invoice-carries-to-posted-invoice",
+        "given": "A sales order with a Delivery Window code",
+        "when": "The order is posted as Ship and Invoice",
+        "then": "The Sales Invoice Header has the same Delivery Window",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "id": "invoice-carries-to-customer-ledger",
+        "given": "A sales order with a Delivery Window code",
+        "when": "The order is posted as Ship and Invoice",
+        "then": "The Cust. Ledger Entry for the posted invoice has the same Delivery Window, and filtering Cust. Ledger Entry on that code returns it",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "id": "credit-memo-carries-to-posted-and-ledger",
+        "given": "A sales credit memo with a Delivery Window code",
+        "when": "The credit memo is posted",
+        "then": "The Sales Cr.Memo Header and its Cust. Ledger Entry have the same Delivery Window",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "id": "return-order-carries-to-return-receipt",
+        "given": "A sales return order with a Delivery Window code",
+        "when": "The return order is posted as Receive",
+        "then": "The Return Receipt Header has the same Delivery Window",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "id": "archive-carries-delivery-window",
+        "given": "A sales order with a Delivery Window code",
+        "when": "The order is archived",
+        "then": "The Sales Header Archive version has the same Delivery Window",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "id": "longest-code-survives-posting",
+        "given": "A Delivery Window code of the maximum field length assigned to a sales order",
+        "when": "The order is posted as Ship and Invoice",
+        "then": "Posting succeeds and every target shows the full code, proving mirrored type and length match",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "user-without-super-can-use-feature",
+        "given": "A user assigned only the Delivery Window role set and the standard sales roles",
+        "when": "The user sets a Delivery Window on an order, posts it and filters Customer Ledger Entries by it",
+        "then": "Every step succeeds without SUPER",
+        "knowledge": [
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Stage map for the feature: which mechanism carries a sales header field to each posted table and ledger, page extensions, permissions, posting tests, and the Copy Document flow-back decision.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage before writing code.",
+        "For each stage name the page extensions that show the field, the permission set entries for new objects, and a test that posts a document and reads the value back from every target.",
+        "Copy Document copies posted and archived headers back into Sales Header with TransferFields; decide whether that is wanted, and if not, clear the field in a Copy Document subscriber.",
+        "Do not plan only the tables the requester named, and do not plan to fill ledger entries after posting by finding and modifying them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Posted shipment, invoice, credit memo, return receipt and archive header extensions.",
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ],
+      "constraints": [
+        "Give the field the same number, name, type and length on Sales Header and every TransferFields target the plan needs: all four posted header tables and the archive, unless the plan states a document type never needs it.",
+        "No subscriber is needed for these stages; the standard TransferFields call does the copy.",
+        "Keep the mirrored fields non-editable on the posted tables.",
+        "Do not use a different field number on a posted table or patch posted headers with an OnAfter...Insert subscriber and Modify."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+      "used-for": "Carrying the value to Cust. Ledger Entry through Gen. Journal Line with two event subscribers.",
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.good.al",
+        "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.bad.al"
+      ],
+      "constraints": [
+        "Add the field to Gen. Journal Line and Cust. Ledger Entry and subscribe to OnAfterCopyGenJnlLineFromSalesHeader and OnAfterCopyCustLedgerEntryFromGenJnlLine.",
+        "Copy the value to the customer entry while it is initialized, before insert, so it is part of the posting with no extra write.",
+        "Do not subscribe to OnAfterPostSalesDoc to find and Modify the customer entry: it runs after the posting commit and edits a posted entry outside the posting engine."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length agreement across the mirrored TransferFields cascade.",
+      "constraints": [
+        "A deliberately mirrored field must have the exact same field number, data type and length on every table in the cascade, defined at creation time.",
+        "A shorter length on one side compiles and fails only at runtime when a longer value is posted."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing the Sales Header field that relates to the Delivery Window table.",
+      "constraints": [
+        "For an unconditional TableRelation, the field must have the same type and exact length as the related field.",
+        "Read the related field's declared type and length from its table definition; do not assume Code[10] or Code[20]."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Classifying the new Delivery Window table as a Supplemental table and shaping its key and page.",
+      "constraints": [
+        "Identify the table type before assigning a primary key or naming the table.",
+        "A Supplemental table has primary key Code[10] named Code and one List page with a plural name set as LookupPageID.",
+        "Ledger tables such as Cust. Ledger Entry are created by posting and are never user-editable."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Ruling out patching posted customer ledger entries and backfill by row surgery.",
+      "constraints": [
+        "Do not persist changes to posted financial content or delete posted rows outside the supported correction workflows.",
+        "Extension-only metadata updates are not financial row surgery, but a subscriber must be judged by the fields it actually changes."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "DataClassification on every new field.",
+      "constraints": [
+        "A tableextension has no table-level classification to inherit, so every Normal field it adds must set its own DataClassification.",
+        "Choose the classification that matches the stored data at field definition time; ToBeClassified is not a safe default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Permission set structure for the new objects.",
+      "constraints": [
+        "Break grants into focused building blocks marked Assignable = false.",
+        "Build role-shaped Assignable = true sets that reference the building blocks through IncludedPermissionSets instead of re-enumerating objects."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+      "used-for": "Completeness of permission grants for setup and usage.",
+      "constraints": [
+        "Permission sets must let assigned users complete setup and normal usage without SUPER, covering every page, codeunit and tabledata operation the app exposes.",
+        "Grant the minimum required operations; do not use wildcards.",
+        "Validate setup and representative workflows as a user assigned only those roles."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for orders, customers and items.",
+      "constraints": [
+        "Create fixtures with the Library codeunits (LibrarySales, LibraryInventory, LibraryRandom) rather than Init/Insert with invented values.",
+        "Create parents before dependents and Validate foreign-key fields so TableRelation runs as in production."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Structure of the test codeunit and scenarios.",
+      "constraints": [
+        "Put [FEATURE] before the codeunit's opening brace and [SCENARIO], [GIVEN], [WHEN], [THEN] inside each test procedure."
+      ]
+    },
+    {
+      "path": "community/knowledge/appsource/set-usagecategory-on-searchable-entry-points.md",
+      "used-for": "Making the Delivery Windows list page discoverable.",
+      "constraints": [
+        "A page users open directly must set UsageCategory, for example Lists, and an object-level ApplicationArea.",
+        "Do not infer entry-point intent from object type alone."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "delivery-window-source",
+      "question": "Is Delivery Window a new list of codes maintained in this app, or must it come from an existing table (for example a shipping-related setup)? Who maintains the codes and what attributes, besides code and description, does a delivery window carry?",
+      "affects": [
+        "delivery-window-table",
+        "delivery-windows-page",
+        "sales-header-ext"
+      ]
+    },
+    {
+      "id": "document-types",
+      "question": "Should the field be available only on sales orders, or also on quotes, blanket orders, invoices, credit memos and return orders entered directly?",
+      "affects": [
+        "sales-header-ext",
+        "sales-order-page-ext",
+        "credit-memo-carries-to-posted-and-ledger"
+      ]
+    },
+    {
+      "id": "credit-memo-and-return-receipt",
+      "question": "The request names posted shipments and invoices only. Knowledge requires mirroring on all four posted headers and the archive unless a document type never needs it: should credit memos, return receipts and archives carry and show the value, or should they be explicitly excluded?",
+      "affects": [
+        "sales-cr-memo-header-ext",
+        "return-receipt-header-ext",
+        "sales-header-archive-ext"
+      ]
+    },
+    {
+      "id": "mandatory-and-default",
+      "question": "Is Delivery Window mandatory before release or posting, and should it default from the customer or ship-to address?",
+      "affects": [
+        "sales-header-ext",
+        "order-taker-selects-delivery-window"
+      ]
+    },
+    {
+      "id": "editability-after-release",
+      "question": "May the order taker change the code after the order is released or partially shipped, and if so which posted documents should reflect the change?",
+      "affects": [
+        "sales-header-ext",
+        "sales-order-page-ext"
+      ]
+    },
+    {
+      "id": "copy-document-flow-back",
+      "question": "When a user copies a posted invoice or shipment into a new sales document, should the Delivery Window flow back into the new Sales Header?",
+      "affects": [
+        "sales-header-ext"
+      ]
+    },
+    {
+      "id": "ledger-entry-scope",
+      "question": "Should payments, refunds and other customer ledger entries posted from general journals carry a Delivery Window (they will be blank), and should the code also reach G/L entries?",
+      "affects": [
+        "gen-journal-line-ext",
+        "cust-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "backfill-history",
+      "question": "Must documents and customer ledger entries posted before installation be backfilled, or is a blank value acceptable for history?",
+      "affects": [
+        "cust-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "other-surfaces",
+      "question": "Should the value also appear on list pages (Sales Orders, Posted Sales Shipments, Posted Sales Invoices), printed documents, posted credit memo pages or APIs?",
+      "affects": [
+        "posted-sales-shipment-page-ext",
+        "posted-sales-invoice-page-ext"
+      ]
+    },
+    {
+      "id": "field-ids-and-app",
+      "question": "What object and field ID range does the target app use, and is it an AppSource app or a per-tenant extension? The mirrored field number must be identical on every table.",
+      "affects": [
+        "sales-header-ext",
+        "sales-shipment-header-ext",
+        "sales-invoice-header-ext",
+        "cust-ledger-entry-ext",
+        "delivery-window-objects-permissionset"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version is unknown: no repository or app.json was supplied. Articles restricted to a version range (for example the BC23+ guidance on related tables versus stored fields on hot ledgers, and BC24+ tooltip inheritance from table fields) were not applied; the stored Cust. Ledger Entry field follows the customer-ledger article.",
+    "countries and application-area are unknown; every cited article is w1 and [all], so the design does not depend on them.",
+    "Copy Document flow-back: if the answer to copy-document-flow-back is no, a Copy Document subscriber is needed, but no opened article names the event; confirm it in the repository's symbols before designing it.",
+    "Lifecycle step 'install' (no install or upgrade code) and the Description field length rest on the agent's judgment; no BCQuality article covers them."
+  ]
+}

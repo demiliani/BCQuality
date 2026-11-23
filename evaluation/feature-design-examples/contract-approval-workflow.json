@@ -1,0 +1,553 @@
+{
+  "skill": { "id": "al-feature-design", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "request": "Maintenance contracts must be approved by a service manager before they can be used. The person who creates a contract sends it for approval, the approver approves or rejects it, and a rejected or canceled request puts the contract back to open so it can be changed.",
+    "business-process": "Approval workflow (standard workflow engine and Approvals Mgmt.) for a custom Maintenance Contract record: Open -> Pending Approval -> Released, with reject and cancel returning the contract to Open.",
+    "candidates": 21,
+    "selected": 18
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": ["al"],
+    "countries": [],
+    "application-area": [],
+    "unknown": ["bc-version", "countries", "application-area"]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "contract-status-enum",
+        "action": "create",
+        "object-type": "enum",
+        "target": "Maint. Contract Status",
+        "purpose": "Named approval states of a maintenance contract: Open, Pending Approval, Released. A fixed set of named states, so an enum rather than an integer.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/style/fixed-choice-set-must-use-enum-not-integer.md"
+        ]
+      },
+      {
+        "id": "maintenance-contract-table",
+        "action": "extend",
+        "object-type": "table",
+        "target": "Maintenance Contract (assumed to be the app's own custom table; see open question q-contract-table)",
+        "purpose": "Add the Status field and the status logic both the page actions and the workflow responses call: procedures to set Pending Approval, Released and Open, a TestStatusOpen check called from the OnValidate of each business field that must not change outside Open, and a TestStatusReleased check for the points of use. OnRename raises Approvals Mgmt. OnRenameRecordInApprovalRequest and OnDelete raises OnDeleteRecordInApprovalRequest so approval entries follow a renamed contract and go away with a deleted one. Status changes are not blocked in OnModify, because the workflow responses modify the record.",
+        "fields": [
+          {
+            "name": "Status",
+            "type": "Enum \"Maint. Contract Status\"",
+            "note": "Not editable by the user; changed only through the status procedures. Classified explicitly unless the table-level DataClassification describes it; never ToBeClassified. Existing rows get ordinal 0 (Open); see q-existing-status."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/error-handling/fielderror-vs-testfield.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "workflow-events-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Maint. Contract Wf. Events",
+        "purpose": "Defines the event codes for 'approval of a maintenance contract is requested' and 'approval request for a maintenance contract is canceled', registers them, their predecessors, the response predecessors and the table relation through the workflow library events, and exposes Send and Cancel procedures that check Workflow Management.CanExecuteWorkflow and then call HandleEvent. Page actions call these procedures; the page holds no workflow logic.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md"
+        ]
+      },
+      {
+        "id": "approval-responses-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Maint. Contract Appr. Resp.",
+        "purpose": "Handles the three status responses for the Maintenance Contract table only: OnSetStatusToPendingApproval, OnReleaseDocument and OnOpenDocument, each calling the table's status procedure, modifying the record and setting the handled flag.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      },
+      {
+        "id": "maintenance-contract-card",
+        "action": "extend",
+        "object-type": "page",
+        "target": "Maintenance Contract (card page of the table)",
+        "purpose": "Show Status; make the business fields editable only while Status is Open; add a 'Request Approval' promoted group with Send Approval Request and Cancel Approval Request, enabled from Approvals Mgmt. HasOpenApprovalEntries and CanCancelApprovalForRecord, and an Approvals action that opens the contract's approval entries. Actions call the workflow-events codeunit.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/ui/promoted-action-groups.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md"
+        ]
+      },
+      {
+        "id": "approval-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "MAINT CONTR APPROVAL",
+        "purpose": "Non-assignable building block granting execute on the two new codeunits, listed explicitly without wildcards, included through IncludedPermissionSets in the app's existing role-shaped maintenance-contract sets for requesters and approvers.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "id": "status-upgrade-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Maint. Contract Status Upgrade",
+        "purpose": "Only if existing contracts must keep being usable after the upgrade (q-existing-status): Subtype = Upgrade codeunit that sets Status to Released on existing rows with DataTransfer, guarded by its own registered upgrade tag. Not needed if existing contracts should start Open or the table is new.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Maintenance Contract (Send Approval Request action)",
+        "to": "Workflow engine (Workflow Management.HandleEvent with the send event code)",
+        "mechanism": "user-entry",
+        "note": "Raised only after CanExecuteWorkflow confirms an enabled workflow for the contract.",
+        "knowledge": ["microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"]
+      },
+      {
+        "from": "Workflow response SetStatusToPendingApproval",
+        "to": "Maintenance Contract.Status = Pending Approval",
+        "mechanism": "validate",
+        "note": "Through the OnSetStatusToPendingApproval subscriber.",
+        "knowledge": ["microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"]
+      },
+      {
+        "from": "Maintenance Contract",
+        "to": "Approval Entry (Record ID to Approve)",
+        "mechanism": "other",
+        "note": "Created by the standard CreateApprovalRequests and SendApprovalRequestForApproval responses; the table relation registered through OnAddWorkflowTableRelationsToLibrary lets the engine follow the record.",
+        "knowledge": ["microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"]
+      },
+      {
+        "from": "Approval Entry approved (last approver)",
+        "to": "Maintenance Contract.Status = Released",
+        "mechanism": "validate",
+        "note": "Standard ReleaseDocument response, handled by the OnReleaseDocument subscriber.",
+        "knowledge": ["microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"]
+      },
+      {
+        "from": "Approval Entry rejected, or approval request canceled",
+        "to": "Maintenance Contract.Status = Open",
+        "mechanism": "validate",
+        "note": "Standard OpenDocument response (after CancelAllApprovalRequests on cancel), handled by the OnOpenDocument subscriber. Linking reject to OpenDocument is done in the workflow definition; see q-template.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "from": "Maintenance Contract (rename or delete)",
+        "to": "Approval Entry",
+        "mechanism": "other",
+        "note": "OnRename raises OnRenameRecordInApprovalRequest; OnDelete raises OnDeleteRecordInApprovalRequest. Code that deletes contracts uses Delete(true) so OnDelete runs.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/data-modeling/delete-master-data-with-trigger.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Workflow Event Handling (codeunit 1520)",
+        "event": "OnAddWorkflowEventsToLibrary",
+        "purpose": "Register the send and cancel events for maintenance contracts with AddEventToLibrary.",
+        "knowledge": ["microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"]
+      },
+      {
+        "publisher": "Workflow Event Handling (codeunit 1520)",
+        "event": "OnAddWorkflowEventPredecessorsToLibrary",
+        "purpose": "Order the contract events with AddEventPredecessor so the cancel event follows the send event.",
+        "knowledge": ["microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"]
+      },
+      {
+        "publisher": "Workflow Response Handling (codeunit 1521)",
+        "event": "OnAddWorkflowResponsePredecessorsToLibrary",
+        "purpose": "Link SetStatusToPendingApprovalCode, CreateApprovalRequestsCode and SendApprovalRequestForApprovalCode after the send event, and CancelAllApprovalRequestsCode and OpenDocumentCode after the cancel event, with AddResponsePredecessor.",
+        "knowledge": ["microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"]
+      },
+      {
+        "publisher": "Workflow Event Handling (codeunit 1520); confirm in symbols",
+        "event": "OnAddWorkflowTableRelationsToLibrary",
+        "purpose": "Relate Maintenance Contract to Approval Entry with Workflow Setup.InsertTableRelation.",
+        "knowledge": ["microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"]
+      },
+      {
+        "publisher": "Approvals Mgmt. (codeunit 1535)",
+        "event": "OnSetStatusToPendingApproval",
+        "purpose": "Set the contract to Pending Approval, modify it, return it in Variant and set IsHandled.",
+        "guards": [
+          "Exit unless RecRef.Number = Database::\"Maintenance Contract\", before any database call",
+          "Set IsHandled only for the own table"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      },
+      {
+        "publisher": "Workflow Response Handling (codeunit 1521)",
+        "event": "OnReleaseDocument",
+        "purpose": "Set the contract to Released after final approval, modify it and set Handled.",
+        "guards": [
+          "Exit unless RecRef.Number = Database::\"Maintenance Contract\", before any database call",
+          "Set Handled only for the own table"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      },
+      {
+        "publisher": "Workflow Response Handling (codeunit 1521)",
+        "event": "OnOpenDocument",
+        "purpose": "Set the contract back to Open on rejection or cancellation, modify it and set Handled.",
+        "guards": [
+          "Exit unless RecRef.Number = Database::\"Maintenance Contract\", before any database call",
+          "Set Handled only for the own table"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "install",
+        "step": "Register workflow events, responses and the table relation only through the library events; insert nothing into the workflow event, response or table relation tables from install code, because the libraries are rebuilt on upgrade.",
+        "knowledge": ["microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"]
+      },
+      {
+        "concern": "setup",
+        "step": "An administrator creates and enables an approval workflow for maintenance contracts that uses the new events, with the service manager as approver (see q-approver and q-template).",
+        "knowledge": ["microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"]
+      },
+      {
+        "concern": "upgrade",
+        "step": "If the Maintenance Contract table already holds data, existing rows get Status = Open (ordinal 0), not any InitValue. If they must stay usable, back-fill Released with DataTransfer in an upgrade codeunit guarded by an upgrade tag (status-upgrade-codeunit).",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Add the MAINT CONTR APPROVAL building block (Assignable = false, explicit entries, no wildcards) to the app's requester and approver role sets through IncludedPermissionSets.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Give the Status field a real DataClassification, inherited from the table level only if that value describes it; no ToBeClassified ships. If the field is added through a tableextension, classify it explicitly.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "send-sets-pending-approval",
+        "given": "An enabled maintenance-contract approval workflow created with Library - Workflow, an approver set up, and an Open contract",
+        "when": "The requester sends the contract for approval",
+        "then": "Status is Pending Approval and an open Approval Entry exists for the contract's record ID and the approver",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "approve-releases-contract",
+        "given": "A contract pending approval",
+        "when": "The approver approves the request",
+        "then": "Status is Released and the approval entry is Approved",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "id": "reject-reopens-contract",
+        "given": "A contract pending approval",
+        "when": "The approver rejects the request",
+        "then": "Status is Open and the business fields can be validated again",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "id": "cancel-reopens-contract",
+        "given": "A contract pending approval",
+        "when": "The requester cancels the approval request",
+        "then": "Status is Open and the contract's approval entries are Canceled",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "id": "send-without-workflow-fails",
+        "given": "No enabled maintenance-contract approval workflow",
+        "when": "The requester sends the contract for approval",
+        "then": "An error states that no approval workflow is enabled, and Status stays Open",
+        "knowledge": ["microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"]
+      },
+      {
+        "id": "fields-locked-outside-open",
+        "given": "A contract pending approval, and the same contract after release",
+        "when": "The card page is opened with OpenEdit, and a business field is validated in code",
+        "then": "The business fields report Editable() = false on the page, and validating them raises the TestField error on Status; after reopening they are editable again",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-testpage-editable-to-verify-field-editability.md",
+          "microsoft/knowledge/error-handling/fielderror-vs-testfield.md"
+        ]
+      },
+      {
+        "id": "other-tables-not-claimed",
+        "given": "The maintenance-contract subscribers installed and a standard purchase or sales document approval workflow enabled",
+        "when": "A standard document is sent and approved",
+        "then": "The standard document's status changes as without this app; the contract subscribers did not set Handled",
+        "knowledge": ["microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"]
+      },
+      {
+        "id": "delete-and-rename-follow-approval-entries",
+        "given": "A contract with approval entries",
+        "when": "The contract is renamed, and later deleted with Delete(true)",
+        "then": "The approval entries point to the new record ID after rename and are removed after delete",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/data-modeling/delete-master-data-with-trigger.md"
+        ]
+      },
+      {
+        "id": "requester-permissions-suffice",
+        "given": "A test user lowered with Permissions Mock or Library - Lower Permissions to the requester role that includes MAINT CONTR APPROVAL, under TestPermissions Restrictive",
+        "when": "The user sends and cancels an approval request",
+        "then": "Both succeed without SUPER",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+      "used-for": "Decision map for the whole design: status, events, raising, responses, table relation, rename/delete, page actions, permissions and tests.",
+      "constraints": [
+        "Reuse the standard workflow engine and responses; the extension supplies events, response links, status changes and rename/delete cleanup.",
+        "Register events with OnAddWorkflowEventsToLibrary/AddEventToLibrary, order them with OnAddWorkflowEventPredecessorsToLibrary/AddEventPredecessor, link responses with OnAddWorkflowResponsePredecessorsToLibrary/AddResponsePredecessor, and relate the table with OnAddWorkflowTableRelationsToLibrary and Workflow Setup.InsertTableRelation.",
+        "Send and Cancel check CanExecuteWorkflow, then call HandleEvent.",
+        "Raise OnRenameRecordInApprovalRequest and OnDeleteRecordInApprovalRequest on Approvals Mgmt. from the table triggers.",
+        "Do not insert workflow event, response or table relation rows from install code, and do not handle only the Release response.",
+        "Test enable, send, approve, reject and cancel with Library - Workflow, checking the status each time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+      "used-for": "The three status-response subscribers and their table guard.",
+      "constraints": [
+        "Subscribe to OnSetStatusToPendingApproval (Approvals Mgmt.), OnReleaseDocument and OnOpenDocument (Workflow Response Handling), set the status, modify and set the handled flag.",
+        "Check RecRef.Number first and exit for any other table.",
+        "Keep the status change in a table or codeunit procedure shared by page actions and the workflow.",
+        "Leaving any response unhandled fails with 'Record type %1 is not supported by this workflow response.' on the first approval step."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.good.al",
+        "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+      "used-for": "Send/Cancel actions and status changes live in codeunits and the table, not in the card page.",
+      "constraints": [
+        "A business operation that must hold regardless of entry point belongs in a codeunit or the table, not only in a page trigger.",
+        "Page actions call codeunit procedures instead of computing or persisting inline."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/promoted-action-groups.md",
+      "used-for": "Placement of the approval actions on the card; applies from BC21 (bc-version unknown).",
+      "constraints": [
+        "Use the standard workflow group caption 'Request Approval' for send and cancel approval actions.",
+        "Do not invent custom group captions or fragment the ribbon into one-action groups."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+      "used-for": "Approval entries must be cleaned up from the contract's OnDelete.",
+      "constraints": [
+        "AL has no cascading delete; the owning table removes dependents in OnDelete.",
+        "Rename propagates through TableRelation, delete does not."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/delete-master-data-with-trigger.md",
+      "used-for": "Contracts are deleted with Delete(true) so the OnDelete cleanup runs.",
+      "constraints": [
+        "Outside the owning table's own triggers, delete master and reference records with Delete(true)/DeleteAll(true)."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/error-handling/fielderror-vs-testfield.md",
+      "used-for": "TestStatusOpen and TestStatusReleased checks on the contract.",
+      "constraints": [
+        "Use TestField for a simple presence or equality check on one field.",
+        "Rely on the built-in field and record context rather than restating the field name in a custom message."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/fixed-choice-set-must-use-enum-not-integer.md",
+      "used-for": "Status typed as an enum.",
+      "constraints": [
+        "A fixed set of named states is declared as an Enum and branched on by name, not stored as an Integer."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+      "used-for": "Status-response subscribers exit on the table check before any database call.",
+      "constraints": [
+        "Open the subscriber with an in-memory predicate such as the record type; only then issue database calls."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Structure of the approval permission set.",
+      "constraints": [
+        "Small building blocks with Assignable = false, included into role-shaped assignable sets through IncludedPermissionSets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Explicit object entries in the approval permission set.",
+      "constraints": [
+        "Enumerate each table, tabledata and object explicitly; no '*' grants.",
+        "Grant only the letters the role needs."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+      "used-for": "Status of contracts that exist before the feature is installed.",
+      "constraints": [
+        "A new field on an existing table leaves existing rows at the datatype default, not the InitValue.",
+        "If existing rows need another value, ship an upgrade procedure, typically DataTransfer, guarded by an upgrade tag.",
+        "No upgrade code is needed for a field on a brand-new table."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+      "used-for": "Guard for the optional status back-fill.",
+      "constraints": [
+        "Start each upgrade procedure with HasUpgradeTag and end with SetUpgradeTag; one tag per feature.",
+        "Do not branch on DataVersion to decide which upgrade step runs."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Classification of the new Status field.",
+      "constraints": [
+        "A field inherits the table-level DataClassification of its own table; a tableextension field inherits nothing and must classify itself."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of the new field.",
+      "constraints": [
+        "No field ships with DataClassification = ToBeClassified."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for the workflow and contract tests.",
+      "constraints": [
+        "Build prerequisite data with the test Library codeunits instead of hand-rolled Init/Insert, parents first."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+      "used-for": "Permission test for requesters.",
+      "constraints": [
+        "Use TestPermissions Restrictive and lower the user with Permissions Mock or Library - Lower Permissions before the protected operation.",
+        "A role that includes the set under test is an adequate context."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-testpage-editable-to-verify-field-editability.md",
+      "used-for": "Test that fields are locked outside Open.",
+      "constraints": [
+        "Open the TestPage with OpenEdit and assert Editable(), not Enabled()."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "q-contract-table",
+      "question": "Is 'Maintenance Contract' a custom table in this app, a table in another app (then the Status field goes in a tableextension), or the standard Service Contract of Service Management? The design assumes a custom table in this app.",
+      "affects": ["maintenance-contract-table", "maintenance-contract-card", "contract-status-enum"]
+    },
+    {
+      "id": "q-existing-status",
+      "question": "Do contracts already exist in production? If so, should they start Open (and need approval before use) or be set to Released by an upgrade step?",
+      "affects": ["status-upgrade-codeunit", "maintenance-contract-table"]
+    },
+    {
+      "id": "q-use-points",
+      "question": "Where is a contract 'used' (for example service orders, invoicing, a contract lookup)? Each point of use must call TestStatusReleased; which ones are in scope?",
+      "affects": ["maintenance-contract-table"]
+    },
+    {
+      "id": "q-editable-fields",
+      "question": "Which fields stay editable while Pending Approval and when Released, and can a Released contract be reopened manually (a Reopen action) to change it?",
+      "affects": ["maintenance-contract-table", "maintenance-contract-card", "fields-locked-outside-open"]
+    },
+    {
+      "id": "q-approver",
+      "question": "How is the service manager identified as approver: Approval User Setup approver, a workflow user group, or a specific user? Are there approval limits?",
+      "affects": ["approval-permissionset"]
+    },
+    {
+      "id": "q-template",
+      "question": "Should the app ship a ready workflow template (OnInsertWorkflowTemplates, OnAddWorkflowCategoriesToLibrary) that wires send, approve, reject-to-Open and cancel-to-Open, or will administrators build the workflow themselves?",
+      "affects": ["workflow-events-codeunit", "reject-reopens-contract"]
+    },
+    {
+      "id": "q-approval-entry-details",
+      "question": "Should approvers see an amount, customer or other contract values on the approval entry (OnPopulateApprovalEntryArgument)?",
+      "affects": ["workflow-events-codeunit"]
+    },
+    {
+      "id": "q-delete-pending",
+      "question": "May a contract be deleted or renamed while its approval is pending or after it is released?",
+      "affects": ["maintenance-contract-table", "delete-and-rename-follow-approval-entries"]
+    },
+    {
+      "id": "q-list-actions",
+      "question": "Should the send and cancel actions also appear on the Maintenance Contracts list page?",
+      "affects": ["maintenance-contract-card"]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown: no repository or app.json was supplied. promoted-action-groups applies from BC21.",
+    "The opened article names OnAddWorkflowTableRelationsToLibrary without its publisher codeunit; confirm the publisher in symbols before implementing.",
+    "Workflow template and approval entry details: the approval map lists the extension points but states that no BCQuality article covers them yet; they rest on judgment (q-template, q-approval-entry-details).",
+    "Enforcing Released at points of use (TestStatusReleased) rests on judgment beyond the TestField choice; the points of use are not known (q-use-points)."
+  ]
+}

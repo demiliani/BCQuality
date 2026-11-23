@@ -1,0 +1,1369 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "General journal lines, sales lines and purchase lines get a Project Ref. When a line uses an allocation account, every allocated line must keep the Project Ref., and recurring journal allocations must also post it from the recurring line. When we send an intercompany sales order to a partner company in the same database, the partner's purchase order header and lines must get the Project Ref.",
+    "business-process": "General journal posting with Allocation Accounts and recurring allocations, sales and purchase document posting with Allocation Accounts, and intercompany sales order to partner purchase order (same database)",
+    "candidates": 16,
+    "selected": 13
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "tab-gen-journal-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Holds Project Ref. on general and recurring journal lines. Allocation Account lines are copied with TransferFields, so the same field carries to every generated journal line.",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as on every other table in this design; DataClassification set on the field. Must be saved on the source line before posting: Gen. Journal Alloc. Acc. Mgt. re-reads the line by SystemId."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "id": "tab-gl-entry",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "G/L Entry",
+        "purpose": "Receives Project Ref. from the posted journal lines, including Allocation Account lines and recurring allocation lines, so the posted allocations carry it. Stored field chosen because the request says the allocations must post the value; the hot-ledger article allows a stored field only when the value must appear as a native list column and is read on almost every access, otherwise a related table keyed by Entry No. is preferred (see open question gl-entry-storage).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header",
+        "purpose": "Source of the header-level Project Ref. for intercompany sales orders; copied to IC Outbox Sales Header by TransferFields.",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as on every other table in this design; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Holds Project Ref. on sales lines; source for allocation-generated sales lines and for IC Outbox Sales Line.",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as on every other table in this design; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purchase-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Header",
+        "purpose": "Receives Project Ref. on the partner's purchase order header created from the IC inbox.",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as on every other table in this design; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purchase-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line",
+        "purpose": "Holds Project Ref. on purchase lines; source for allocation-generated purchase lines and target for the partner's IC purchase order lines.",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as on every other table in this design; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-ic-outbox-sales-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "IC Outbox Sales Header",
+        "purpose": "Receives Project Ref. from the sales document (or posted sales invoice/credit memo) by TransferFields; same field number required, no subscriber.",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as on every other table in this design; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-ic-outbox-sales-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "IC Outbox Sales Line",
+        "purpose": "Receives Project Ref. from the sales document (or posted sales invoice/credit memo) by TransferFields; same field number required, no subscriber.",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as on every other table in this design; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-ic-inbox-purchase-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "IC Inbox Purchase Header",
+        "purpose": "Receives Project Ref. field by field from the IC outbox in an event subscriber; copied into the partner company by IC Data Exchange Database with TransferFields.",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as on every other table in this design; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-ic-inbox-purchase-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "IC Inbox Purchase Line",
+        "purpose": "Receives Project Ref. field by field from the IC outbox in an event subscriber; copied into the partner company by IC Data Exchange Database with TransferFields.",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as on every other table in this design; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-shipment-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Header",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-invoice-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Header",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-cr-memo-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Header",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-return-receipt-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Header",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-header-archive",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header Archive",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-shipment-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-invoice-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-cr-memo-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-return-receipt-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-sales-line-archive",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purch-rcpt-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Header",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purch-inv-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Header",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purch-cr-memo-hdr",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Hdr.",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-return-shipment-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Header",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purchase-header-archive",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Header Archive",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purch-rcpt-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Line",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purch-inv-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Line",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purch-cr-memo-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Line",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-return-shipment-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Line",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tab-purchase-line-archive",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line Archive",
+        "purpose": "TransferFields target of posting or archiving; mirrors Project Ref. so the value survives posting. Chosen by the mirroring article, not by the request (see open question posted-and-archive-scope).",
+        "fields": [
+          {
+            "name": "Project Ref.",
+            "type": "Code[20] (provisional; see open question project-ref-type-and-relation)",
+            "note": "Same field number, name, type and length as the source field; Editable = false; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "cu-project-ref-allocation",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Project Ref. Allocation Subscribers",
+        "purpose": "Event subscribers that copy Project Ref. to allocation-generated sales and purchase lines, to recurring-journal allocation lines, and from journal lines to G/L entries.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      },
+      {
+        "id": "cu-ic-project-ref",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "IC Project Ref. Subscribers",
+        "purpose": "Event subscribers for the field-by-field intercompany hops: IC outbox to IC inbox (header and line) and IC inbox to the partner's purchase document (header and line).",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "id": "pag-general-journal",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "General Journal",
+        "purpose": "Shows Project Ref. so users can enter or see it. The exact list of document and posted-document pages is an open question (pages-in-scope).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "pag-recurring-general-journal",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Recurring General Journal",
+        "purpose": "Shows Project Ref. so users can enter or see it. The exact list of document and posted-document pages is an open question (pages-in-scope).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "pag-sales-order",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order",
+        "purpose": "Shows Project Ref. so users can enter or see it. The exact list of document and posted-document pages is an open question (pages-in-scope).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "pag-sales-order-subform",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order Subform",
+        "purpose": "Shows Project Ref. so users can enter or see it. The exact list of document and posted-document pages is an open question (pages-in-scope).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "pag-purchase-order",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purchase Order",
+        "purpose": "Shows Project Ref. so users can enter or see it. The exact list of document and posted-document pages is an open question (pages-in-scope).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "pag-purchase-order-subform",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purchase Order Subform",
+        "purpose": "Shows Project Ref. so users can enter or see it. The exact list of document and posted-document pages is an open question (pages-in-scope).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "ps-project-ref",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Project Ref.",
+        "purpose": "Grants execute on the new subscriber codeunits; extended base tables need no new table permissions.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "Gen. Journal Line (general and recurring)",
+        "mechanism": "user-entry",
+        "note": "User enters Project Ref. on the journal line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Sales Header",
+        "mechanism": "user-entry",
+        "note": "User enters the header Project Ref. on the sales order (source rule is an open question: header-source).",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Sales Line",
+        "mechanism": "user-entry",
+        "note": "User enters Project Ref. on the sales line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Purchase Line",
+        "mechanism": "user-entry",
+        "note": "User enters Project Ref. on the purchase line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line (Allocation Account line)",
+        "to": "Generated Gen. Journal Lines",
+        "mechanism": "transferfields",
+        "note": "Gen. Journal Alloc. Acc. Mgt. copies the saved source line with TransferFields from OnBeforeCode of Gen. Jnl.-Post Batch; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md"
+        ]
+      },
+      {
+        "from": "Sales Line (Allocation Account line)",
+        "to": "Generated Sales Lines",
+        "mechanism": "event-copy",
+        "note": "Validate(\"No.\") clears the TransferFields copy; restored in OnBeforeCreateSalesLine.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md"
+        ]
+      },
+      {
+        "from": "Purchase Line (Allocation Account line)",
+        "to": "Generated Purchase Lines",
+        "mechanism": "event-copy",
+        "note": "Validate(\"No.\") clears the TransferFields copy; restored in OnBeforeCreatePurchaseLine.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md"
+        ]
+      },
+      {
+        "from": "Recurring Gen. Journal Line",
+        "to": "Recurring allocation Gen. Journal Line",
+        "mechanism": "event-copy",
+        "note": "PostAllocations starts the line with Init(); value set from AllocateGenJournalLine in OnPostAllocationsOnBeforeCopyFromGenJnlAlloc, also for reversing allocations.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line",
+        "to": "G/L Entry",
+        "mechanism": "event-copy",
+        "note": "Copied in OnAfterCopyGLEntryFromGenJnlLine; covers direct, allocation-account and recurring-allocation journal postings. Reversal copies the reference unchanged.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      },
+      {
+        "from": "Sales Header / Sales Line",
+        "to": "Sales and Return posted headers/lines and archives",
+        "mechanism": "transferfields",
+        "note": "Standard posting and archiving TransferFields; same field number on all targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header / Purchase Line",
+        "to": "Purchase posted headers/lines and archives",
+        "mechanism": "transferfields",
+        "note": "Standard posting and archiving TransferFields; same field number on all targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Header / Sales Line",
+        "to": "IC Outbox Sales Header / IC Outbox Sales Line",
+        "mechanism": "transferfields",
+        "note": "ICInboxOutboxMgt hop 1; same field number, no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "from": "IC Outbox Sales Header",
+        "to": "IC Inbox Purchase Header",
+        "mechanism": "event-copy",
+        "note": "Built field by field; copy in OnBeforeICInboxPurchHeaderInsert (may run in the sending company).",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "from": "IC Outbox Sales Line",
+        "to": "IC Inbox Purchase Line",
+        "mechanism": "event-copy",
+        "note": "Built field by field; copy in OnBeforeICInboxPurchLineInsert.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "from": "IC Inbox Purchase Header/Line (sending company)",
+        "to": "IC Inbox Purchase Header/Line (partner company, same database)",
+        "mechanism": "transferfields",
+        "note": "Move IC Trans. to Partner Comp builds the inbox rows; IC Data Exchange Database copies them with TransferFields.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "from": "IC Inbox Purchase Header",
+        "to": "Partner Purchase Header",
+        "mechanism": "event-copy",
+        "note": "Header built field by field; copy in OnCreatePurchDocumentOnBeforePurchHeaderModify.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "from": "IC Inbox Purchase Line",
+        "to": "Partner Purchase Line",
+        "mechanism": "event-copy",
+        "note": "Line TransferFields is cleared by Validate(\"No.\"); copy in OnCreatePurchLinesOnBeforeModify.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Sales Alloc. Acc. Mgt.\"",
+        "event": "OnBeforeCreateSalesLine",
+        "purpose": "SalesLine.\"Project Ref.\" := AllocationSalesLine.\"Project Ref.\" on each generated sales line.",
+        "guards": [
+          "Copy from the source line parameter; do not rely on TransferFields, which Validate(\"No.\") clears",
+          "Do not patch posted lines from OnAfterPostSalesDoc"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Purchase Alloc. Acc. Mgt.\"",
+        "event": "OnBeforeCreatePurchaseLine",
+        "purpose": "PurchaseLine.\"Project Ref.\" := AllocationPurchaseLine.\"Project Ref.\" on each generated purchase line.",
+        "guards": [
+          "Copy from the source line parameter; do not rely on TransferFields, which Validate(\"No.\") clears"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Gen. Jnl.-Post Batch\"",
+        "event": "OnPostAllocationsOnBeforeCopyFromGenJnlAlloc",
+        "purpose": "GenJournalLine.\"Project Ref.\" := AllocateGenJournalLine.\"Project Ref.\" once before the allocation loop; the reused line keeps it for every allocation, including reversing allocations.",
+        "guards": [
+          "Set from the recurring line, not from Gen. Jnl. Allocation",
+          "Do not use OnAfterCopyGenJnlLineFromGenJnlAllocation for a recurring-line value"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.md"
+        ]
+      },
+      {
+        "publisher": "Table \"G/L Entry\"",
+        "event": "OnAfterCopyGLEntryFromGenJnlLine",
+        "purpose": "GLEntry.\"Project Ref.\" := GenJournalLine.\"Project Ref.\".",
+        "guards": [
+          "Do not modify posted G/L entries after posting",
+          "No reversal handling needed: a reference is copied unchanged by Gen. Jnl.-Post Reverse"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit ICInboxOutboxMgt",
+        "event": "OnBeforeICInboxPurchHeaderInsert",
+        "purpose": "ICInboxPurchaseHeader.\"Project Ref.\" := ICOutboxSalesHeader.\"Project Ref.\".",
+        "guards": [
+          "May run in the sending company: copy only, read no company setup"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit ICInboxOutboxMgt",
+        "event": "OnBeforeICInboxPurchLineInsert",
+        "purpose": "ICInboxPurchaseLine.\"Project Ref.\" := ICOutboxSalesLine.\"Project Ref.\".",
+        "guards": [
+          "May run in the sending company: copy only, read no company setup"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit ICInboxOutboxMgt",
+        "event": "OnCreatePurchDocumentOnBeforePurchHeaderModify",
+        "purpose": "PurchHeader.\"Project Ref.\" := ICInboxPurchHeader.\"Project Ref.\" on the partner's purchase order header.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit ICInboxOutboxMgt",
+        "event": "OnCreatePurchLinesOnBeforeModify",
+        "purpose": "PurchaseLine.\"Project Ref.\" := ICInboxPurchLine.\"Project Ref.\" on each partner purchase order line.",
+        "guards": [
+          "Do not use OnCreatePurchLinesOnAfterTransferFields: Validate(\"No.\") runs after it and clears the value"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification explicitly on every Project Ref. field in every table extension (a tableextension has no table-level value to inherit); choose the value that matches what the reference holds, such as CustomerContent for a business reference. Never leave ToBeClassified.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Add the two new subscriber codeunits to the app's Project Ref. permission set; name the page extensions in the plan.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "journal-allocation-account-keeps-project-ref",
+        "given": "A general journal line with an Allocation Account with two allocation lines and a Project Ref. saved on the line, created with LibraryERM",
+        "when": "The journal batch is posted",
+        "then": "Every G/L entry created for the allocated lines carries the Project Ref.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "sales-allocation-account-keeps-project-ref",
+        "given": "A sales invoice line with an Allocation Account and a Project Ref., created with LibrarySales",
+        "when": "The sales invoice is posted",
+        "then": "Every posted Sales Invoice Line generated from the allocation carries the Project Ref.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "purchase-allocation-account-keeps-project-ref",
+        "given": "A purchase invoice line with an Allocation Account and a Project Ref., created with LibraryPurchase",
+        "when": "The purchase invoice is posted",
+        "then": "Every posted Purch. Inv. Line generated from the allocation carries the Project Ref.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "recurring-allocation-posts-project-ref",
+        "given": "A recurring general journal line with Project Ref. and two Gen. Jnl. Allocation lines",
+        "when": "The recurring journal is posted",
+        "then": "The recurring line's G/L entry and every allocation G/L entry carry the recurring line's Project Ref.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "recurring-reversing-allocation-posts-project-ref",
+        "given": "A recurring journal line with a reversing recurring method, Project Ref. and allocations",
+        "when": "The recurring journal is posted",
+        "then": "The reversing allocation G/L entries also carry the Project Ref.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      },
+      {
+        "id": "gl-reversal-keeps-project-ref",
+        "given": "A posted journal transaction whose G/L entries carry Project Ref.",
+        "when": "The transaction is reversed",
+        "then": "The reversing G/L entries carry the same Project Ref.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      },
+      {
+        "id": "ic-sales-order-to-partner-po",
+        "given": "An IC partner with database inbox, a sales order to the IC customer with header and line Project Ref.",
+        "when": "The IC sales order is sent, moved to the partner and the partner creates the purchase order from the IC inbox",
+        "then": "The partner Purchase Header and every Purchase Line carry the same Project Ref. as the sending sales header and lines",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "ic-line-value-survives-validate-no",
+        "given": "An IC inbox purchase line with Project Ref.",
+        "when": "The partner purchase line is created (TransferFields then Validate(\"No.\"))",
+        "then": "The purchase line still carries the Project Ref.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "id": "ic-inbox-header-subscriber-reads-no-setup",
+        "given": "An IC outbox sales header with Project Ref.",
+        "when": "The transaction is moved to the partner company in the same database",
+        "then": "The partner IC Inbox Purchase Header carries Project Ref. and the subscriber reads no setup of either company",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+        ]
+      },
+      {
+        "id": "posting-mirrors-project-ref",
+        "given": "A sales order and a purchase order with header and line Project Ref.",
+        "when": "Each is shipped/received and invoiced, and archived",
+        "then": "Shipment, receipt, invoice headers and lines and the archive tables carry the same Project Ref.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md",
+      "used-for": "Allocation Account behavior for journals, sales and purchase lines",
+      "constraints": [
+        "Journal: rely on TransferFields; the value must be saved on the source line because it is re-read by SystemId",
+        "Sales/purchase: copy the field in OnBeforeCreateSalesLine / OnBeforeCreatePurchaseLine, because Validate(\"No.\") clears the TransferFields copy",
+        "Do not patch generated lines from OnAfterPostSalesDoc; they are already posted"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.good.al",
+        "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.md",
+      "used-for": "Recurring journal allocation posting",
+      "constraints": [
+        "Set a recurring-line value in OnPostAllocationsOnBeforeCopyFromGenJnlAlloc from AllocateGenJournalLine",
+        "Do not assume allocation postings inherit the recurring line; PostAllocations starts with Init()",
+        "A per-allocation value must be assigned on every call, including blanks, because the line variable is reused"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.good.al",
+        "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md",
+      "used-for": "Intercompany sales document to partner purchase document",
+      "constraints": [
+        "Add the field with the same number to the source document, IC outbox and IC inbox tables",
+        "Subscribe to the inbox insert events and to the purchase document modify events",
+        "Write code that works in either company; do not read the partner's setup in OnBeforeICInboxPurchHeaderInsert",
+        "Do not copy the line value in OnCreatePurchLinesOnAfterTransferFields",
+        "A file partner cannot carry the value"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.good.al",
+        "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Stage planning, page extensions, permission set and read-back tests",
+      "constraints": [
+        "Plan one extension step per stage the field must reach",
+        "Name page extensions and permission set entries for new objects",
+        "Test by posting and reading the value back from every target",
+        "Do not fill ledger entries after posting by modifying them"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring Sales Header/Line fields on posted and archive tables",
+      "constraints": [
+        "Same field number, name, type and length on every TransferFields target unless the plan excludes a document type",
+        "No subscriber for these stages; keep mirrored fields non-editable on posted tables"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring Purchase Header/Line fields on posted and archive tables",
+      "constraints": [
+        "Same field number, name, type and length on every TransferFields target unless the plan excludes a document type",
+        "No subscriber for these stages; keep mirrored fields non-editable on posted tables"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definition across the TransferFields cascade",
+      "constraints": [
+        "Mirrored fields must have the same field number, data type and length on every table in the cascade"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of the new fields",
+      "constraints": [
+        "Every Normal field in a tableextension must set its own DataClassification",
+        "Choose the value matching the stored data; ToBeClassified and SystemMetadata for customer data are under-classifications"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing Project Ref. if it gets a TableRelation",
+      "constraints": [
+        "Applies only if Project Ref. has a TableRelation",
+        "For an unconditional relation, use the exact type and length of the related field"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+      "used-for": "Carrying the journal value to G/L entries and reversal",
+      "constraints": [
+        "A Gen. Journal Line field reaches G/L Entry only through OnAfterCopyGLEntryFromGenJnlLine",
+        "Decide per entry; VAT and bank entries only if their reports need it",
+        "State reversal behavior: a reference is copied unchanged; add a reversal test"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Storage choice on G/L Entry",
+      "constraints": [
+        "Use a stored tableextension field on a hot ledger only when the value must appear as a native list column and is read on almost every access; otherwise use a related table keyed by Entry No."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures",
+      "constraints": [
+        "Build fixtures with LibrarySales, LibraryPurchase, LibraryERM and LibraryRandom; create parents before dependents"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+      "used-for": "Test data",
+      "constraints": [
+        "Create the records the test owns; do not assume existing records",
+        "Fill every mandatory field; keep scenario-defining values explicit"
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "project-ref-type-and-relation",
+      "question": "What is Project Ref.: free code, or a TableRelation to Job (Project) No. or another table? Its type and length must match the related field exactly for an unconditional relation, and the same definition is then used on every mirrored table.",
+      "affects": [
+        "tab-gen-journal-line",
+        "tab-gl-entry",
+        "tab-sales-header",
+        "tab-sales-line",
+        "tab-purchase-header",
+        "tab-purchase-line",
+        "tab-ic-outbox-sales-header",
+        "tab-ic-outbox-sales-line",
+        "tab-ic-inbox-purchase-header",
+        "tab-ic-inbox-purchase-line",
+        "tab-sales-shipment-header",
+        "tab-sales-invoice-header",
+        "tab-sales-cr-memo-header",
+        "tab-return-receipt-header",
+        "tab-sales-header-archive",
+        "tab-sales-shipment-line",
+        "tab-sales-invoice-line",
+        "tab-sales-cr-memo-line",
+        "tab-return-receipt-line",
+        "tab-sales-line-archive",
+        "tab-purch-rcpt-header",
+        "tab-purch-inv-header",
+        "tab-purch-cr-memo-hdr",
+        "tab-return-shipment-header",
+        "tab-purchase-header-archive",
+        "tab-purch-rcpt-line",
+        "tab-purch-inv-line",
+        "tab-purch-cr-memo-line",
+        "tab-return-shipment-line",
+        "tab-purchase-line-archive"
+      ]
+    },
+    {
+      "id": "header-source",
+      "question": "How does the Sales Header Project Ref. get its value for an IC sales order (user entry, default from lines, or from somewhere else), and should a header value default to the lines?",
+      "affects": [
+        "tab-sales-header",
+        "tab-ic-outbox-sales-header",
+        "tab-purchase-header"
+      ]
+    },
+    {
+      "id": "posted-and-archive-scope",
+      "question": "The mirroring articles add Project Ref. to every posted and archive table. Can any document type (shipments, receipts, credit memos, return documents, archives) be excluded?",
+      "affects": [
+        "tab-sales-shipment-header",
+        "tab-sales-invoice-header",
+        "tab-sales-cr-memo-header",
+        "tab-return-receipt-header",
+        "tab-sales-header-archive",
+        "tab-sales-shipment-line",
+        "tab-sales-invoice-line",
+        "tab-sales-cr-memo-line",
+        "tab-return-receipt-line",
+        "tab-sales-line-archive",
+        "tab-purch-rcpt-header",
+        "tab-purch-inv-header",
+        "tab-purch-cr-memo-hdr",
+        "tab-return-shipment-header",
+        "tab-purchase-header-archive",
+        "tab-purch-rcpt-line",
+        "tab-purch-inv-line",
+        "tab-purch-cr-memo-line",
+        "tab-return-shipment-line",
+        "tab-purchase-line-archive"
+      ]
+    },
+    {
+      "id": "gl-entry-storage",
+      "question": "Must Project Ref. appear as a native column on G/L entries and be read on almost every access? If not, store it in a related table keyed by G/L Entry No. instead of a G/L Entry table extension.",
+      "affects": [
+        "tab-gl-entry"
+      ]
+    },
+    {
+      "id": "sales-purchase-gl-and-ledgers",
+      "question": "Must Project Ref. also reach G/L entries from sales and purchase posting (via the Invoice Posting Buffer, including Group ID), customer/vendor ledger entries, or VAT and bank entries? Not designed.",
+      "affects": [
+        "cu-project-ref-allocation"
+      ]
+    },
+    {
+      "id": "ic-history-and-other-transports",
+      "question": "Do users need Project Ref. on the handled IC tables (history)? Are file-based or API IC partners in scope? A file partner cannot carry the value, because xmlport IC Outbox Imp/Exp has a fixed field list.",
+      "affects": [
+        "cu-ic-project-ref",
+        "tab-ic-inbox-purchase-header",
+        "tab-ic-inbox-purchase-line"
+      ]
+    },
+    {
+      "id": "copy-document-behavior",
+      "question": "Should Project Ref. flow back when a user copies a posted document (Copy Document uses TransferFields), or be cleared?",
+      "affects": [
+        "tab-sales-header",
+        "tab-purchase-header"
+      ]
+    },
+    {
+      "id": "pages-in-scope",
+      "question": "On which journal, document, posted-document and IC pages must Project Ref. be shown?",
+      "affects": [
+        "pag-general-journal",
+        "pag-recurring-general-journal",
+        "pag-sales-order",
+        "pag-sales-order-subform",
+        "pag-purchase-order",
+        "pag-purchase-order-subform"
+      ]
+    },
+    {
+      "id": "field-id-range",
+      "question": "Which field number and object ID range does the app use? The field number must be identical on every table in this design.",
+      "affects": [
+        "tab-gen-journal-line",
+        "tab-gl-entry",
+        "tab-sales-header",
+        "tab-sales-line",
+        "tab-purchase-header",
+        "tab-purchase-line",
+        "tab-ic-outbox-sales-header",
+        "tab-ic-outbox-sales-line",
+        "tab-ic-inbox-purchase-header",
+        "tab-ic-inbox-purchase-line",
+        "tab-sales-shipment-header",
+        "tab-sales-invoice-header",
+        "tab-sales-cr-memo-header",
+        "tab-return-receipt-header",
+        "tab-sales-header-archive",
+        "tab-sales-shipment-line",
+        "tab-sales-invoice-line",
+        "tab-sales-cr-memo-line",
+        "tab-return-receipt-line",
+        "tab-sales-line-archive",
+        "tab-purch-rcpt-header",
+        "tab-purch-inv-header",
+        "tab-purch-cr-memo-hdr",
+        "tab-return-shipment-header",
+        "tab-purchase-header-archive",
+        "tab-purch-rcpt-line",
+        "tab-purch-inv-line",
+        "tab-purch-cr-memo-line",
+        "tab-return-shipment-line",
+        "tab-purchase-line-archive",
+        "cu-project-ref-allocation",
+        "cu-ic-project-ref",
+        "pag-general-journal",
+        "pag-recurring-general-journal",
+        "pag-sales-order",
+        "pag-sales-order-subform",
+        "pag-purchase-order",
+        "pag-purchase-order-subform",
+        "ps-project-ref"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined (no repository)",
+    "Page names in the page extensions rest on the agent's judgment; BCQuality names no specific pages",
+    "Running the IC test in a single test company (partner pointing to the same company) rests on the agent's judgment"
+  ]
+}

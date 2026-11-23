@@ -1,0 +1,364 @@
+{
+  "skill": { "id": "al-feature-design", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "request": "Add a 'By Freight Factor' distribution method to the purchase item charge suggestion, next to Equally, By Amount, By Weight and By Volume, that splits a freight item charge across the received items in proportion to a Freight Factor maintained on each item.",
+    "business-process": "Purchasing: item charge assignment on purchase invoices (Suggest Item Charge Assignment in codeunit \"Item Charge Assgnt. (Purch.)\")",
+    "candidates": 16,
+    "selected": 12
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": ["al"],
+    "countries": [],
+    "application-area": [],
+    "unknown": ["bc-version", "countries", "application-area"]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "item-freight-factor",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item",
+        "purpose": "Stores the Freight Factor each item contributes to the freight distribution.",
+        "fields": [
+          {
+            "name": "Freight Factor",
+            "type": "Decimal",
+            "note": "Explicit DataClassification on the field (a tableextension inherits no table-level default); never ToBeClassified at release. ToolTip on the table field when the target is runtime 13.0 (BC24) or later. Allowed range and decimal places are an open question."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "item-card-freight-factor",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item Card",
+        "purpose": "Lets buyers maintain the Freight Factor on the item. The bound field inherits the table-field ToolTip on runtime 13.0 or later; on earlier targets it needs a page-level ToolTip. Placement on the card is an open question.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "freight-factor-item-charge",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Freight Factor Item Charge",
+        "purpose": "Holds the two event subscribers on \"Item Charge Assgnt. (Purch.)\" that add the 'By Freight Factor' caption to the suggestion menu and distribute Qty. to Assign and Amount to Assign for that caption only. The caption is a Label without a comma, used in both subscribers.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+          "microsoft/knowledge/performance/use-setloadfields-for-partial-records.md"
+        ]
+      },
+      {
+        "id": "freight-factor-item-charge-tests",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Freight Factor Item Charge Tests",
+        "purpose": "Test codeunit (Subtype = Test) tagged with [FEATURE], with a StrMenu handler that picks the 'By Freight Factor' caption, fixtures from the Library codeunits and explicit factor values that define the expected split.",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Buyer on Item Card",
+        "to": "Item.\"Freight Factor\"",
+        "mechanism": "user-entry",
+        "note": "Maintained per item through the Item Card page extension.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "from": "Suggest Item Charge Assignment menu (StrMenu) on the purchase invoice item charge line",
+        "to": "SelectionTxt of OnAssignItemCharges",
+        "mechanism": "user-entry",
+        "note": "The menu is shown only when the charge has more than one assignment line; with one line the standard code picks the first option without asking.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md"
+        ]
+      },
+      {
+        "from": "Item.\"Freight Factor\" of each assignment line's item",
+        "to": "Item Charge Assignment (Purch).\"Qty. to Assign\" and \"Amount to Assign\"",
+        "mechanism": "other",
+        "note": "Read in the OnAssignItemCharges subscriber over the filtered assignment set the event passes; each line gets TotalQtyToAssign and TotalAmtToAssign times its factor divided by the total factor, amounts rounded with the currency's Amount Rounding Precision.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md",
+          "microsoft/knowledge/performance/use-setloadfields-for-partial-records.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Item Charge Assgnt. (Purch.)\"",
+        "event": "OnBeforeShowSuggestItemChargeAssignStrMenu",
+        "purpose": "Append the 'By Freight Factor' caption, with a leading comma, to SuggestItemChargeMenuTxt so it is offered next to Equally, By Amount, By Weight and By Volume.",
+        "guards": [
+          "Append only one caption, taken from the extension's own Label.",
+          "The caption must not contain a comma, because the menu is split on commas.",
+          "Do not replace the standard menu or subscribe to OnBeforeSuggestAssgnt with IsHandled."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Item Charge Assgnt. (Purch.)\"",
+        "event": "OnAssignItemCharges",
+        "purpose": "When the user chose 'By Freight Factor', fill Qty. to Assign and Amount to Assign on every assignment line in the filtered set in proportion to each item's Freight Factor and set ItemChargesAssigned to true.",
+        "guards": [
+          "Exit unless SelectionTxt equals the same Label value used in the menu subscriber; never match a literal English word, and never handle other captions.",
+          "Check SelectionTxt before any database call.",
+          "Use SetLoadFields(\"Freight Factor\") before reading Item, when the loop is large enough to justify it.",
+          "Round Amount to Assign with Currency.\"Amount Rounding Precision\".",
+          "Set ItemChargesAssigned to true only after the lines are filled; if it stays false the standard code raises 'No item charges were assigned.'"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+          "microsoft/knowledge/performance/use-setloadfields-for-partial-records.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Give the Freight Factor field an explicit DataClassification chosen from the data it stores; resolve any ToBeClassified before release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "No setup table or install code is designed: existing items start with a Freight Factor of 0. Whether existing items need an initial value is an open question.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "distributes-by-freight-factor",
+        "given": "Items A and B created with LibraryInventory with explicit Freight Factors 1 and 3, a posted purchase receipt for both, and a purchase invoice with an item charge line assigned to both receipt lines.",
+        "when": "Suggest Item Charge Assignment runs and the StrMenu handler selects the 'By Freight Factor' caption.",
+        "then": "Qty. to Assign and Amount to Assign on the two assignment lines are 25 % and 75 % of the totals, amounts rounded with the currency's Amount Rounding Precision, and the handler executed.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "freight-factor-entered-on-item-card",
+        "given": "An item created with LibraryInventory.",
+        "when": "A Freight Factor is entered on the Item Card test page.",
+        "then": "The Item record holds the entered Freight Factor.",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "standard-method-unaffected",
+        "given": "The same invoice setup as distributes-by-freight-factor.",
+        "when": "The StrMenu handler selects By Amount instead.",
+        "then": "The assignment matches the standard By Amount result, proving the subscriber ignores captions it does not own.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "all-factors-zero-raises-error",
+        "given": "Two items with Freight Factor 0 on the invoice's assignment lines.",
+        "when": "Suggest Item Charge Assignment runs with 'By Freight Factor' selected.",
+        "then": "The standard 'No item charges were assigned.' error is raised, verified with asserterror followed by Assert.ExpectedError on the full message.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md"
+        ]
+      },
+      {
+        "id": "foreign-currency-rounding",
+        "given": "A purchase invoice in a currency with an explicit Amount Rounding Precision and factors chosen so the split does not divide evenly.",
+        "when": "Suggest Item Charge Assignment runs with 'By Freight Factor' selected.",
+        "then": "Each Amount to Assign is rounded to that currency's Amount Rounding Precision.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md",
+      "used-for": "Core mechanism: the two events on \"Item Charge Assgnt. (Purch.)\" that add and handle a custom distribution method.",
+      "constraints": [
+        "Distribution methods are captions in a comma-separated StrMenu string, not an enum.",
+        "Append one caption from your own Label to SuggestItemChargeMenuTxt with a leading comma; the caption must not contain a comma.",
+        "In OnAssignItemCharges act only when SelectionTxt equals that caption, compared against the same Label value; never match a literal English word.",
+        "Fill Qty. to Assign and Amount to Assign on every line in the filtered set, round amounts with the currency's rounding precision, and set ItemChargesAssigned to true; otherwise the standard code raises 'No item charges were assigned.'",
+        "The menu event runs only when the charge has more than one assignment line.",
+        "Implement both the purchase and the sales codeunit when the method applies to both.",
+        "Do not replace the suggestion with OnBeforeSuggestAssgnt and IsHandled, or rewrite assignment rows after the standard suggestion."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.good.al",
+        "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Classification of the Freight Factor field added by the Item tableextension.",
+      "constraints": [
+        "A tableextension inherits no table-level DataClassification; every Normal field it adds needs an explicit valid DataClassification."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release-readiness of the new field's classification.",
+      "constraints": [
+        "ToBeClassified must be resolved to a real classification before the code ships, decided from the data's content."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "ToolTip for the Freight Factor field on the Item Card.",
+      "constraints": [
+        "On runtime 13.0 (BC24) or later, define the tooltip on the table field and omit a duplicate page-level ToolTip.",
+        "Before runtime 13.0, user-facing page fields need a page-level ToolTip.",
+        "Tooltip text should say what the value is used for and expected values, not just repeat the caption; do not invent behavior."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Whether the Item Card extension field needs its own ToolTip (applies from BC24 / runtime 13.0).",
+      "constraints": [
+        "A bound page field inherits the source table field's ToolTip on runtime 13.0 or later; add a page-level override only when different help is needed or nothing can be inherited."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+      "used-for": "Order of checks in the OnAssignItemCharges subscriber.",
+      "constraints": [
+        "Open the subscriber with a cheap in-memory check that filters out calls it does not handle before any database call."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/use-setloadfields-for-partial-records.md",
+      "used-for": "Reading Item.\"Freight Factor\" per assignment line (conditional on the loop size heuristics the article states).",
+      "constraints": [
+        "Call SetLoadFields immediately before the read, listing the normal fields the code reads.",
+        "Skip it when the loop runs ten or fewer iterations or the code reads most fields (BCQuality heuristics)."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for items, vendor, receipt and invoice in the tests.",
+      "constraints": [
+        "Create records with the Library codeunits (LibraryInventory, LibraryPurchase, LibraryRandom), parents before dependents, and Validate foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Structure of the test codeunit.",
+      "constraints": [
+        "[FEATURE] once before the codeunit's opening brace; [SCENARIO] as the first comment in each test; [GIVEN]/[WHEN]/[THEN] marking setup, single action and assertions."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+      "used-for": "Handling the Suggest Item Charge Assignment StrMenu in headless tests.",
+      "constraints": [
+        "Every UI call on the executed path needs a handler listed in HandlerFunctions, and every nonoptional listed handler must execute.",
+        "Each executed handler must contribute meaningful evidence; assert the semantic outcome, not a Boolean set before the action."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/ui-handlers-in-tests.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+      "used-for": "Choosing test values for Freight Factors, amounts and rounding precision.",
+      "constraints": [
+        "Generate incidental fixture data with library codeunits, but keep values that define the expected outcome (factors, amounts, rounding precision) explicit and deliberately chosen."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+      "used-for": "The negative test for all-zero Freight Factors.",
+      "constraints": [
+        "Follow every asserterror with Assert.ExpectedError on text only the intended error produces, and ExpectedErrorCode where known, not the code alone."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "sales-item-charges",
+      "question": "Should 'By Freight Factor' also be offered for sales item charges (\"Item Charge Assgnt. (Sales)\")? The request names purchase invoices only.",
+      "affects": ["freight-factor-item-charge", "freight-factor-item-charge-tests"]
+    },
+    {
+      "id": "all-factors-zero",
+      "question": "When every item on the assignment lines has Freight Factor 0, is the standard 'No item charges were assigned.' error acceptable, or should the method fall back to another distribution?",
+      "affects": ["freight-factor-item-charge", "all-factors-zero-raises-error"]
+    },
+    {
+      "id": "some-factors-zero",
+      "question": "Should items with Freight Factor 0 receive no share of the freight when other items have a factor, or should that be blocked or warned about?",
+      "affects": ["freight-factor-item-charge", "distributes-by-freight-factor"]
+    },
+    {
+      "id": "factor-range",
+      "question": "Which values are allowed for Freight Factor (negative values, maximum, decimal places)?",
+      "affects": ["item-freight-factor"]
+    },
+    {
+      "id": "rounding-residual",
+      "question": "After rounding each Amount to Assign, should any rounding difference be placed on one line so the assigned total equals the charge amount exactly?",
+      "affects": ["freight-factor-item-charge", "foreign-currency-rounding"]
+    },
+    {
+      "id": "single-assignment-line",
+      "question": "With a single assignment line the standard code picks the first menu option without asking; is that acceptable for this method?",
+      "affects": ["freight-factor-item-charge"]
+    },
+    {
+      "id": "existing-items-initial-value",
+      "question": "Do existing items need an initial Freight Factor at install or upgrade, or do buyers maintain it manually?",
+      "affects": ["item-freight-factor"]
+    },
+    {
+      "id": "caption-and-placement",
+      "question": "What caption should the method show in the menu, and where on the Item Card should the Freight Factor field appear?",
+      "affects": ["freight-factor-item-charge", "item-card-freight-factor"]
+    },
+    {
+      "id": "target-version",
+      "question": "Which BC version and runtime does the app target? It decides whether the ToolTip is defined on the table field (runtime 13.0 / BC24 or later) or on the page.",
+      "affects": ["item-freight-factor", "item-card-freight-factor"]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown: no repository or app.json was supplied.",
+    "The 'setup' lifecycle step (no install or upgrade code) rests on agent judgment; no BCQuality article covers it for this feature."
+  ]
+}

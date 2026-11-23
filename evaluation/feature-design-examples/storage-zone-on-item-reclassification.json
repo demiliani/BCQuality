@@ -1,0 +1,472 @@
+{
+  "skill": { "id": "al-feature-design", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "request": "Add Storage Zone and New Storage Zone to the item reclassification journal so the outbound item ledger entry keeps the old zone and every inbound entry gets the new zone, and make scanner-imported journal lines refuse items that need a variant when none is given, following the Business Central variant setup.",
+    "business-process": "Inventory item journals: item reclassification journal posting through Item Jnl.-Post Line, plus creation of item journal lines from an external scanner import.",
+    "candidates": 19,
+    "selected": 17
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": ["al"],
+    "countries": [],
+    "application-area": [],
+    "unknown": ["bc-version", "countries", "application-area"]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "item-jnl-line-storage-zone",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Journal Line",
+        "purpose": "Holds the old zone (Storage Zone) and the zone after reclassification (New Storage Zone), following the standard New ... pattern of reclassification fields such as New Location Code.",
+        "fields": [
+          { "name": "Storage Zone", "type": "Code[10]", "note": "Copied to every item ledger entry the line posts. DataClassification = CustomerContent (never ToBeClassified). Type and length follow the sample; if a TableRelation is added (see open question), size it exactly to the related key field." },
+          { "name": "New Storage Zone", "type": "Code[10]", "note": "Applied only to the positive (inbound) entries of a reclassification. Same type and length as Storage Zone. DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entry-storage-zone",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Ledger Entry",
+        "purpose": "Stores the zone of each posted entry: the old zone on the negative entry and the new zone on each positive entry. Non-editable; filled only by the posting subscribers, never patched after posting.",
+        "fields": [
+          { "name": "Storage Zone", "type": "Code[10]", "note": "Editable = false. DataClassification = CustomerContent. Same type and length as the journal field." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+          "microsoft/knowledge/inventory/carry-item-journal-fields-to-item-and-phys-inventory-ledger.md",
+          "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md"
+        ]
+      },
+      {
+        "id": "storage-zone-reclass-posting",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Storage Zone Reclass Posting",
+        "purpose": "Holds the two posting subscribers on Item Jnl.-Post Line: copy Storage Zone in OnAfterInitItemLedgEntry (all entries), then overwrite with New Storage Zone in OnBeforeInsertTransferEntry (positive entries only).",
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+          "microsoft/knowledge/inventory/carry-item-journal-fields-to-item-and-phys-inventory-ledger.md"
+        ]
+      },
+      {
+        "id": "item-reclass-journal-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item Reclass. Journal",
+        "purpose": "Shows Storage Zone and New Storage Zone on the reclassification journal lines so users can enter them. Presentation only; no business logic on the page. Tooltips are defined on the table fields and inherited from BC24 (runtime 13.0); before that the page controls need their own ToolTip.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md"
+        ]
+      },
+      {
+        "id": "scanner-reclass-line-import",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Scanner Item Jnl. Line Import",
+        "purpose": "Creates item journal lines from scanner data. Before building a line it calls Item.IsVariantMandatory() and raises a clear error when it returns true and no variant code was supplied; it never reads Inventory Setup or the item option itself. It then validates fields in order: Item No., Variant Code, Location Code, Bin Code, Unit of Measure Code, Quantity, and the storage-zone fields. The line is posted only through the journal (Item Jnl.-Post Batch / Item Jnl.-Post Line), never by inserting ledger entries. The transport that calls this codeunit (API page, XMLport, file) is not designed here; see open question.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md",
+          "microsoft/knowledge/scm/derive-base-quantities-through-the-line-unit-of-measure.md",
+          "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md"
+        ]
+      },
+      {
+        "id": "storage-zone-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Storage Zone - Edit",
+        "purpose": "Grants execute on the new codeunits and on whatever object the scanner app calls; composed from a non-assignable building block through IncludedPermissionSets.",
+        "knowledge": [
+          "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User or scanner input",
+        "to": "Item Journal Line.Storage Zone / New Storage Zone (reclassification journal)",
+        "mechanism": "user-entry",
+        "note": "Entered on the Item Reclass. Journal page or set by the scanner import codeunit with Validate.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md"
+        ]
+      },
+      {
+        "from": "Item Journal Line.Storage Zone",
+        "to": "Item Ledger Entry.Storage Zone (negative/outbound entry and initial value of every positive entry)",
+        "mechanism": "event-copy",
+        "note": "Subscriber to Item Jnl.-Post Line OnAfterInitItemLedgEntry. Runs for the negative entry and every positive entry; it must not try to tell the sides apart.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+          "microsoft/knowledge/inventory/carry-item-journal-fields-to-item-and-phys-inventory-ledger.md"
+        ]
+      },
+      {
+        "from": "Item Journal Line.New Storage Zone",
+        "to": "Item Ledger Entry.Storage Zone (each positive/inbound entry)",
+        "mechanism": "event-copy",
+        "note": "Subscriber to Item Jnl.-Post Line OnBeforeInsertTransferEntry, which runs only for the positive entries; one line can produce several positive entries unless the item uses average cost.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md"
+        ]
+      },
+      {
+        "from": "Scanner line data (item, variant, location, bin, unit of measure, quantity, zones)",
+        "to": "Item Journal Line",
+        "mechanism": "validate",
+        "note": "Item.IsVariantMandatory() check first; then Validate in the order Item No., Variant Code, Location Code, Bin Code, Unit of Measure Code, Quantity so blocked-variant checks run, the bin is not cleared, and base quantity is derived.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md",
+          "microsoft/knowledge/scm/derive-base-quantities-through-the-line-unit-of-measure.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Item Jnl.-Post Line\"",
+        "event": "OnAfterInitItemLedgEntry(var NewItemLedgEntry: Record \"Item Ledger Entry\"; var ItemJournalLine: Record \"Item Journal Line\"; var ItemLedgEntryNo: BigInteger)",
+        "purpose": "Copy Item Journal Line.Storage Zone to every item ledger entry the line creates (negative entry and the initial state of each positive entry).",
+        "guards": [
+          "Do not branch on NewItemLedgEntry.Quantity > 0 or Location Code here: every transfer entry of a normal line is still negative and at the old location at this point.",
+          "Do not set the new zone here and do not rely on the positive entry inheriting from the negative entry; it is rebuilt from the journal line."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+          "microsoft/knowledge/inventory/carry-item-journal-fields-to-item-and-phys-inventory-ledger.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Item Jnl.-Post Line\"",
+        "event": "OnBeforeInsertTransferEntry(var NewItemLedgerEntry: Record \"Item Ledger Entry\"; var OldItemLedgerEntry: Record \"Item Ledger Entry\"; var ItemJournalLine: Record \"Item Journal Line\")",
+        "purpose": "Overwrite Storage Zone with New Storage Zone on each positive (inbound) transfer entry.",
+        "guards": [
+          "Apply only when New Storage Zone is not blank, as the sample does; transfer orders also reach this event and their journal lines carry no New Storage Zone (blank-handling rule pending open question)."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+          "microsoft/knowledge/warehouse/carry-transfer-line-fields-to-item-ledger.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on Storage Zone and New Storage Zone in both table extensions; no field may ship as ToBeClassified.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship a non-assignable building-block permission set with execute on Storage Zone Reclass Posting and Scanner Item Jnl. Line Import, plus an explicit = X entry for the API page, query or web-service object the scanner app calls; include it from an assignable role set through IncludedPermissionSets.",
+        "knowledge": [
+          "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "No new setup table: the variant rule is read from the standard Inventory Setup and Item fields only through Item.IsVariantMandatory().",
+        "knowledge": [
+          "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "reclass-outbound-entry-keeps-old-zone",
+        "given": "An item with inventory created through LibraryInventory, and a reclassification journal line with Storage Zone = A and New Storage Zone = B (random codes from library helpers).",
+        "when": "The reclassification journal line is posted.",
+        "then": "The negative item ledger entry for the line has Storage Zone = A.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "reclass-inbound-entries-get-new-zone",
+        "given": "A FIFO (non-average-cost) item with two separate positive inventory entries, and one reclassification line whose quantity applies to both, with Storage Zone = A and New Storage Zone = B.",
+        "when": "The reclassification journal line is posted.",
+        "then": "Every positive item ledger entry created by the line (two of them) has Storage Zone = B.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "transfer-order-entries-unaffected",
+        "given": "A transfer order for an item, with the extension installed.",
+        "when": "The transfer order is shipped and received.",
+        "then": "Posting succeeds and the resulting item ledger entries have a blank Storage Zone (unless the transfer-order open question decides otherwise).",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-transfer-line-fields-to-item-ledger.md"
+        ]
+      },
+      {
+        "id": "import-refuses-missing-variant-setup-default",
+        "given": "Inventory Setup Variant Mandatory if Exists = true, an item with Variant Mandatory if Exists = Default and at least one item variant.",
+        "when": "The scanner import creates a line for the item with no variant code.",
+        "then": "The import raises the variant-required error; asserterror is followed by Assert.ExpectedError with the full label text built with StrSubstNo, and no journal line exists.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md"
+        ]
+      },
+      {
+        "id": "import-refuses-missing-variant-item-yes",
+        "given": "Inventory Setup Variant Mandatory if Exists = false, an item with Variant Mandatory if Exists = Yes and at least one item variant.",
+        "when": "The scanner import creates a line for the item with no variant code.",
+        "then": "The import raises the variant-required error, verified with Assert.ExpectedError.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md"
+        ]
+      },
+      {
+        "id": "import-accepts-item-no-or-without-variants",
+        "given": "Inventory Setup Variant Mandatory if Exists = true, and either an item with Variant Mandatory if Exists = No that has variants, or a Default item with no item variants.",
+        "when": "The scanner import creates a line for the item with no variant code.",
+        "then": "The journal line is created with a blank Variant Code.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md"
+        ]
+      },
+      {
+        "id": "import-rejects-blocked-variant",
+        "given": "An item with a variant that is Blocked.",
+        "when": "The scanner import creates a line for that item and variant.",
+        "then": "Validating Variant Code raises the standard blocked-variant error, verified with Assert.ExpectedError.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md"
+        ]
+      },
+      {
+        "id": "import-keeps-bin-and-base-quantity",
+        "given": "A bin-mandatory location, an item with a variant and a non-base unit of measure (Qty. per Unit of Measure > 1).",
+        "when": "The scanner import creates a line with variant, bin, unit of measure and quantity.",
+        "then": "The line keeps the imported Bin Code and Quantity (Base) equals Quantity times Qty. per Unit of Measure.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md",
+          "microsoft/knowledge/scm/derive-base-quantities-through-the-line-unit-of-measure.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+      "used-for": "Core mechanism: journal fields, the two posting subscribers, and the tests for outbound and inbound entries.",
+      "constraints": [
+        "A reclassification line posts a negative entry and one positive entry per applied entry (unless average cost); OnAfterInitItemLedgEntry runs for all of them with the same journal line.",
+        "For a value the reclassification changes, add a second New ... journal field; copy the old value in OnAfterInitItemLedgEntry and overwrite it with the new value in OnBeforeInsertTransferEntry, which runs only for positive entries.",
+        "Do not tell the sides apart in OnAfterInitItemLedgEntry with Quantity > 0 or Location Code; every transfer entry is still negative and at the old location there.",
+        "Do not set the value on the negative entry and expect the positive entry to inherit it; the positive entry is rebuilt from the journal line."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.good.al",
+        "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/inventory/carry-item-journal-fields-to-item-and-phys-inventory-ledger.md",
+      "used-for": "Confirms OnAfterInitItemLedgEntry as the subscriber that copies a journal field to the item ledger entry, and that table extension fields survive the tracking split.",
+      "constraints": [
+        "Add the field to Item Journal Line and to each ledger table needed; copy it to the item ledger entry in OnAfterInitItemLedgEntry on Item Jnl.-Post Line.",
+        "Do not patch ledger entries after posting by document number."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/inventory/carry-item-journal-fields-to-item-and-phys-inventory-ledger.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md",
+      "used-for": "Variant rule for scanner-imported lines and its tests.",
+      "constraints": [
+        "When lines are created from an import, decide the variant before release or posting: call Item.IsVariantMandatory() and stop with a clear error when it returns true and no variant is known.",
+        "Do not rebuild the rule from Inventory Setup alone or test only the item field for Yes; IsVariantMandatory combines setup, the item's Default/No/Yes option, and whether any variant (blocked included) exists.",
+        "Set the variant with Validate after Item No. and before quantity, unit of measure and bin, so blocked checks run and the bin is not cleared; never assign Variant Code directly."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.good.al",
+        "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/scm/derive-base-quantities-through-the-line-unit-of-measure.md",
+      "used-for": "Field order and quantity handling in the scanner import.",
+      "constraints": [
+        "Validate Unit of Measure Code before Quantity, and validate both; never assign Quantity, Qty. per Unit of Measure or a (Base) field directly on a line that is posted."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md",
+      "used-for": "Imported lines and zone values reach the ledger only through journal posting.",
+      "constraints": [
+        "Post prepared journal lines through Item Jnl.-Post Line.RunWithCheck or persisted batches through Item Jnl.-Post Batch.",
+        "Do not insert, delete or overwrite posted quantity, application or cost fields of Item Ledger Entry or Value Entry outside posting; a custom annotation field filled within posting is outside this concern."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/carry-transfer-line-fields-to-item-ledger.md",
+      "used-for": "Shows that transfer-order posting also runs OnAfterInitItemLedgEntry for both entries, which motivates the blank guard and the transfer-order test and open question.",
+      "constraints": [
+        "Transfer journal lines are built by the transfer posting codeunits and post a negative and a positive entry through InsertTransferEntry; OnAfterInitItemLedgEntry runs for each.",
+        "If only some transfer legs should carry the value, decide in the journal-line subscribers of the transfer codeunits, not in OnAfterInitItemLedgEntry."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md",
+      "used-for": "Basis for the open question on whether warehouse entries at bin locations must also carry the zone; not designed because the request does not ask for it.",
+      "constraints": [
+        "A custom field reaches Warehouse Entry only if it is on Warehouse Journal Line and copied in OnBeforeInsertWhseEntry on Whse. Jnl.-Register Line.",
+        "For a path other than document posting, confirm in the target version where its warehouse journal line is built before designing the subscriber; do not modify warehouse entries after posting."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Decision list applied to the open question of a Storage Zone master table and to permissions and tests.",
+      "constraints": [
+        "If Storage Zone becomes a new record type, plan table type, numbering, setup, data rules, privacy, pages, permissions, install/upgrade and tests together.",
+        "A decision the request does not settle is a question for the requester, not a default to assume."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Applies if the zone fields get a TableRelation (open question).",
+      "constraints": [
+        "For an unconditional TableRelation the field must have the same type and exact length as the related field; read the related field's declared length rather than assuming Code[10] or Code[20]."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Data classification of the new fields.",
+      "constraints": [
+        "Do not ship any field with DataClassification = ToBeClassified; choose a real classification from the data's content."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+      "used-for": "Permission entry for the object the scanner app calls.",
+      "constraints": [
+        "Every page, query or codeunit reachable from outside the app's UI needs an explicit = X entry in a permission set the app ships; prefer an API page over a new SOAP codeunit web service."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Structure of the permission set.",
+      "constraints": [
+        "Ship focused building blocks with Assignable = false and assemble assignable role sets through IncludedPermissionSets instead of duplicating object lists."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips for the journal page fields; applies from BC24 (runtime 13.0) for inheritance from table fields.",
+      "constraints": [
+        "From runtime 13.0 define the tooltip on the table field and let the bound page field inherit it; before runtime 13.0 user-facing page fields need a page-level ToolTip.",
+        "Tooltip text must say what the value is used for or what changing it affects, not just repeat the caption, and must not invent behavior."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+      "used-for": "Keeps the variant check and line creation in a codeunit, not in a page.",
+      "constraints": [
+        "A rule that must hold regardless of entry point belongs in a codeunit or the table, not only in a page trigger."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for items, variants, inventory and journals.",
+      "constraints": [
+        "Build items, variants, journals and inventory with the Library codeunits (LibraryInventory, LibraryRandom) top-down and Validate foreign keys; do not hand-roll Init/Insert records."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+      "used-for": "Negative tests for the variant refusal and the blocked variant.",
+      "constraints": [
+        "Follow every asserterror with Assert.ExpectedError using text only the intended error produces, ideally the full label built with StrSubstNo; ExpectedErrorCode alone is not enough."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Structure of the test codeunit.",
+      "constraints": [
+        "Tag the codeunit with [FEATURE] and each test with [SCENARIO], [GIVEN], [WHEN], [THEN] comments."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "storage-zone-master-data",
+      "question": "Is Storage Zone a free code, a reference to an existing table (for example the warehouse Zone table, which is keyed by location), or a new master table you want created? This decides the TableRelation, the field length and whether a new entity with page, permissions and data rules is needed.",
+      "affects": ["item-jnl-line-storage-zone", "item-ledger-entry-storage-zone", "storage-zone-permissionset"]
+    },
+    {
+      "id": "blank-new-storage-zone",
+      "question": "When New Storage Zone is blank on a reclassification line, should the inbound entries keep the old zone, get a blank zone, or should posting be refused? Should New Storage Zone default from Storage Zone when the line is created?",
+      "affects": ["storage-zone-reclass-posting", "reclass-inbound-entries-get-new-zone"]
+    },
+    {
+      "id": "storage-zone-source",
+      "question": "Where does the old Storage Zone come from: entered by the user/scanner, or defaulted from the item ledger entries being moved? Must posting check that it matches the zone of the applied entries?",
+      "affects": ["item-jnl-line-storage-zone", "storage-zone-reclass-posting"]
+    },
+    {
+      "id": "scanner-transport",
+      "question": "How does the scanner app deliver lines to Business Central (API page, OData web service, XMLport/file, or another integration)? Which journal template and batch receive them, and are the lines always reclassification lines?",
+      "affects": ["scanner-reclass-line-import", "storage-zone-permissionset"]
+    },
+    {
+      "id": "scanner-batch-failure",
+      "question": "When one scanned line is refused for a missing variant, should the whole import fail, or should the other lines be created and the refused ones reported back to the scanner app?",
+      "affects": ["scanner-reclass-line-import", "import-refuses-missing-variant-setup-default"]
+    },
+    {
+      "id": "scanner-carries-zones",
+      "question": "Does the scanner payload include Storage Zone and New Storage Zone, or are they entered in Business Central after import?",
+      "affects": ["scanner-reclass-line-import"]
+    },
+    {
+      "id": "other-journals-and-transfers",
+      "question": "OnAfterInitItemLedgEntry also runs for other item journals and for transfer orders. Should Storage Zone also be recorded for those postings (positive/negative adjustments, transfer orders), or only for reclassification?",
+      "affects": ["storage-zone-reclass-posting", "transfer-order-entries-unaffected"]
+    },
+    {
+      "id": "warehouse-entries",
+      "question": "At locations with bins, should Warehouse Entries also carry the storage zone? This needs fields on Warehouse Journal Line and Warehouse Entry and a confirmed path for reclassification lines, which is not designed here.",
+      "affects": ["item-ledger-entry-storage-zone"]
+    },
+    {
+      "id": "ledger-page-visibility",
+      "question": "Should Storage Zone be shown on the Item Ledger Entries page or other inquiry pages?",
+      "affects": ["item-ledger-entry-storage-zone"]
+    },
+    {
+      "id": "target-version",
+      "question": "Which Business Central version does the app target? From BC24 (runtime 13.0) tooltips can live on the table fields; earlier targets need page-level tooltips.",
+      "affects": ["item-reclass-journal-page-ext"]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown; all cited articles apply to bc-version [all], countries [w1] and application-area [all], so applicability is not affected.",
+    "The page name \"Item Reclass. Journal\" as the extension target is not named in any opened article; confirm it in the target version's symbols (agent judgment).",
+    "The transport object for the scanner import (API page, XMLport or other) is not designed because the request does not say how lines arrive; see open question scanner-transport."
+  ]
+}

@@ -1,0 +1,493 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Sales order lines carry the customer's PO reference. When we buy the goods as a drop shipment or special order, the reference must be on the vendor purchase lines, whether buyers use Get Sales Order on the purchase order or the requisition worksheet. The header Delivery Window must also show on customer ledger entries for prepayment invoices, not just normal invoices.",
+    "business-process": "Sales order purchasing for drop shipments and special orders (purchase order Get Sales Order / Get Special Order and requisition worksheet), and sales prepayment invoice posting to the customer ledger.",
+    "candidates": 14,
+    "selected": 10
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "requisition-line-po-ref",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Requisition Line",
+        "purpose": "Hold the customer PO reference between Get Sales Orders and Req. Wksh.-Make Order, because the purchase line on the requisition route sees only the requisition line, not the sales line.",
+        "fields": [
+          {
+            "name": "Customer PO Ref.",
+            "type": "Same type and length as the existing Sales Line field",
+            "note": "DataClassification = CustomerContent; exact type, length and field number to be confirmed against the existing Sales Line field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purchase-line-po-ref",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line",
+        "purpose": "Store the customer PO reference on drop shipment and special order purchase lines. A matching field number with Sales Line copies nothing on its own; the value is assigned by event subscribers.",
+        "fields": [
+          {
+            "name": "Customer PO Ref.",
+            "type": "Same type and length as the existing Sales Line field",
+            "note": "DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-delivery-window",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Carrier of Delivery Window from Sales Header to Cust. Ledger Entry. The request implies normal invoices already carry it, so reuse the existing field; create it only if it does not exist.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Same type as the Sales Header field",
+            "note": "DataClassification = CustomerContent. Expected to exist already."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "cust-ledger-entry-delivery-window",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Cust. Ledger Entry",
+        "purpose": "Delivery Window on the customer entry, filled during posting before insert. Stored on the ledger because users must see it on customer ledger entries; reuse the existing field that normal invoices already fill.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Same type as the Sales Header field",
+            "note": "Non-editable, DataClassification = CustomerContent. Expected to exist already."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "po-ref-linking-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Customer PO Ref. Linking",
+        "purpose": "Event subscribers that copy the customer PO reference from the sales line to the purchase line on the purchase-order route and through the requisition line on the worksheet route.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md"
+        ]
+      },
+      {
+        "id": "prepayment-delivery-window-codeunit",
+        "action": "extend",
+        "object-type": "codeunit",
+        "target": "Existing Delivery Window posting subscriber codeunit",
+        "purpose": "Add a subscriber for the prepayment customer journal line next to the existing normal-invoice subscriber. The existing Gen. Journal Line to Cust. Ledger Entry subscriber then carries the value on.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Sales Line.Customer PO Ref.",
+        "to": "Purchase Line.Customer PO Ref. (Get Sales Order / Get Special Order on the purchase order)",
+        "mechanism": "event-copy",
+        "note": "OnAfterTransfldsFromSalesToPurchLine on Copy Document Mgt., raised before the purchase line is inserted; one subscriber covers drop shipments and special orders.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Customer PO Ref.",
+        "to": "Requisition Line.Customer PO Ref. (Get Sales Orders on the requisition worksheet)",
+        "mechanism": "event-copy",
+        "note": "OnBeforeInsertReqWkshLine on report Get Sales Orders; assign without Modify.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md"
+        ]
+      },
+      {
+        "from": "Requisition Line.Customer PO Ref.",
+        "to": "Purchase Line.Customer PO Ref. (Carry Out Action Message / Req. Wksh.-Make Order)",
+        "mechanism": "event-copy",
+        "note": "OnAfterInitPurchOrderLine on Req. Wksh.-Make Order; runs before insert, so assign without Modify.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Delivery Window",
+        "to": "Gen. Journal Line.Delivery Window (prepayment customer line)",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyGenJnlLineFromSalesHeaderPrepmtPost on Gen. Journal Line. OnAfterCopyGenJnlLineFromSalesHeader is never raised by Sales-Post Prepayments.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line.Delivery Window",
+        "to": "Cust. Ledger Entry.Delivery Window",
+        "mechanism": "event-copy",
+        "note": "Existing OnAfterCopyCustLedgerEntryFromGenJnlLine subscriber, shared with normal invoices; assigned while the entry is initialized, before insert.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Copy Document Mgt.\"",
+        "event": "OnAfterTransfldsFromSalesToPurchLine",
+        "purpose": "Copy FromSalesLine.Customer PO Ref. to ToPurchaseLine for drop shipments (Get Sales Order) and special orders (Get Special Order).",
+        "guards": [
+          "Assign only; no Modify, the event runs before the purchase line is inserted."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md"
+        ]
+      },
+      {
+        "publisher": "Report \"Get Sales Orders\"",
+        "event": "OnBeforeInsertReqWkshLine",
+        "purpose": "Copy SalesLine.Customer PO Ref. to ReqLine.",
+        "guards": [
+          "Assign only; no Modify, the event runs before insert."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Req. Wksh.-Make Order\"",
+        "event": "OnAfterInitPurchOrderLine",
+        "purpose": "Copy RequisitionLine.Customer PO Ref. to PurchaseLine.",
+        "guards": [
+          "Assign only; no Modify, the event runs before insert."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Gen. Journal Line\"",
+        "event": "OnAfterCopyGenJnlLineFromSalesHeaderPrepmtPost",
+        "purpose": "Copy SalesHeader.Delivery Window to the prepayment customer journal line.",
+        "guards": [
+          "Assign during the copy; never find and Modify the posted Cust. Ledger Entry after posting."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Cust. Ledger Entry\"",
+        "event": "OnAfterCopyCustLedgerEntryFromGenJnlLine",
+        "purpose": "Existing subscriber; copies Delivery Window from the journal line to the customer entry. Reused unchanged for prepayment entries; create it only if it does not exist.",
+        "guards": [
+          "Assign before insert; no Modify."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on every new table extension field (Requisition Line, Purchase Line, and Gen. Journal Line / Cust. Ledger Entry if they must be created); a tableextension field cannot inherit a table-level value.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "No new tables, pages or exposed objects are designed, so no permission set entry is planned. Revisit if a page or new table is added.",
+        "knowledge": []
+      },
+      {
+        "concern": "upgrade",
+        "step": "No upgrade step: open drop shipment or special order purchase lines and existing prepayment customer entries are not backfilled. Confirm with the requester.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "drop-shipment-get-sales-order",
+        "given": "A customer, item and vendor created with LibrarySales/LibraryPurchase/LibraryInventory; a sales order line marked Drop Shipment with a random Customer PO Ref.; a purchase order for the vendor with the same Sell-to Customer No.",
+        "when": "Get Sales Order (Purch.-Get Drop Shpt.) is run on the purchase order",
+        "then": "The created purchase line has the sales line's Customer PO Ref.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "special-order-get-special-order",
+        "given": "A sales order line marked Special Order with a random Customer PO Ref., built with the test libraries; a purchase order for the vendor",
+        "when": "Get Special Order is run on the purchase order",
+        "then": "The created purchase line has the sales line's Customer PO Ref.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "drop-shipment-requisition-worksheet",
+        "given": "A drop shipment sales order line with a random Customer PO Ref. and a requisition worksheet batch",
+        "when": "Get Sales Orders is run on the worksheet and the line is carried out (Req. Wksh.-Make Order)",
+        "then": "The requisition line and the created purchase line both have the sales line's Customer PO Ref.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "special-order-requisition-worksheet",
+        "given": "A special order sales order line with a random Customer PO Ref. and a requisition worksheet batch",
+        "when": "Get Sales Orders is run on the worksheet and the line is carried out (Req. Wksh.-Make Order)",
+        "then": "The created purchase line has the sales line's Customer PO Ref.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "prepayment-invoice-delivery-window",
+        "given": "A sales order with a prepayment % and a Delivery Window, with the full posting chain set up: customer and gen. posting groups, VAT posting setup and the prepayment accounts on General Posting Setup",
+        "when": "The prepayment invoice is posted (Sales-Post Prepayments)",
+        "then": "The Cust. Ledger Entry for the prepayment invoice has the order's Delivery Window",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "final-invoice-after-prepayment",
+        "given": "The same prepayment order after its prepayment invoice was posted",
+        "when": "The order is shipped and invoiced with Sales-Post",
+        "then": "The final invoice's Cust. Ledger Entry still has the Delivery Window, proving the normal-invoice subscriber and the prepayment subscriber coexist",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md",
+      "used-for": "Both routes from sales lines to drop shipment and special order purchase lines; the three subscribers, the Requisition Line field and the route tests.",
+      "constraints": [
+        "The linked purchase line is never created with TransferFields; a matching field number on Purchase Line copies nothing.",
+        "Purchase order route (Get Sales Order and Get Special Order): subscribe to OnAfterTransfldsFromSalesToPurchLine and copy FromSalesLine to ToPurchaseLine; one subscriber covers both.",
+        "Requisition route: add the field to Requisition Line, copy it in OnBeforeInsertReqWkshLine on Get Sales Orders, then to the purchase line in OnAfterInitPurchOrderLine on Req. Wksh.-Make Order; both run before insert, so assign without Modify.",
+        "Do not subscribe only to OnAfterPurchaseLineInsert on Purch.-Get Drop Shpt. and Modify the line: it covers one route and adds a write per line.",
+        "The Create Purchase Order action on a sales order (Purch. Doc. From Sales Doc.) builds requisition lines without Get Sales Orders; if users rely on it, test that path separately.",
+        "Test both routes, for a drop shipment and for a special order."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.good.al",
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md",
+      "used-for": "Delivery Window on prepayment invoice customer entries: the prepayment-specific copy event and the prepayment test.",
+      "constraints": [
+        "Sales-Post Prepayments never calls CopyFromSalesHeader, so OnAfterCopyGenJnlLineFromSalesHeader does not run for prepayments.",
+        "For a header field on the customer entry, subscribe to OnAfterCopyGenJnlLineFromSalesHeaderPrepmtPost next to the normal-invoice subscriber; the existing OnAfterCopyCustLedgerEntryFromGenJnlLine subscriber carries it on.",
+        "If the value must also reach the prepayment G/L entries, subscribe to OnAfterCopyGenJnlLineFromSalesHeaderPrepmt as well.",
+        "Include a prepayment order in the tests whenever the feature touches posted invoices or ledger entries."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.good.al",
+        "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+      "used-for": "The Gen. Journal Line and Cust. Ledger Entry fields and the journal-line-to-entry subscriber the prepayment flow reuses.",
+      "constraints": [
+        "Add the field to Gen. Journal Line and Cust. Ledger Entry and copy it in the two copy events while the entry is initialized, before insert.",
+        "Store the field on the ledger entry only when users must see or filter it as a native list column or it is read on almost every access; otherwise prefer a related table keyed by entry number.",
+        "Do not subscribe to OnAfterPostSalesDoc and Modify the customer entry: it runs after the posting commit and edits a posted ledger entry outside the posting engine."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.good.al",
+        "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Stage planning for sales fields through posting; source of the open questions on posted documents, archives, pages and Copy Document.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage; each stage uses a different mechanism.",
+        "For each stage name the page extensions that show the field, permission set entries for new objects, and a test that posts and reads the value back from every target.",
+        "Do not plan to fill ledger entries after posting by finding and modifying them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Justifies keeping Delivery Window as a stored field on Cust. Ledger Entry. Applies from BC23; the target version is unknown.",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by the ledger entry number.",
+        "Use a tableextension stored field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Guard on the prepayment subscriber: the value is set during posting, not patched onto the posted customer entry.",
+      "constraints": [
+        "Do not persist changes to posted financial records outside the supported posting and correction workflows; a subscriber inside a supported workflow is judged by the fields it changes."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Classification of every new table extension field.",
+      "constraints": [
+        "A tableextension field cannot inherit a table-level DataClassification; every Normal field it adds must set its own.",
+        "Classify customer data as CustomerContent; do not leave it ToBeClassified or mark it SystemMetadata."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for all tests.",
+      "constraints": [
+        "Build customers, vendors, items and documents with the Library codeunits (LibrarySales, LibraryPurchase, LibraryInventory, LibraryERM, LibraryRandom), parents first, validating foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+      "used-for": "Precondition chain for the prepayment posting tests.",
+      "constraints": [
+        "A posting test's GIVEN must set up the full posting-group chain and the setup records the specific posting path reads, not just the sales header."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+      "used-for": "Tests that drive Get Sales Order or Get Special Order through the purchase order page.",
+      "constraints": [
+        "Every UI call on the executed path needs a matching handler in HandlerFunctions, and every nonoptional listed handler must execute.",
+        "Each executed handler must contribute meaningful evidence; assert the semantic postcondition."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "existing-po-ref-field",
+      "question": "What are the name, field number, type and length of the existing customer PO reference field on Sales Line? The Requisition Line and Purchase Line fields must match it.",
+      "affects": [
+        "requisition-line-po-ref",
+        "purchase-line-po-ref"
+      ]
+    },
+    {
+      "id": "existing-delivery-window-flow",
+      "question": "Confirm that Delivery Window already exists on Sales Header, Gen. Journal Line and Cust. Ledger Entry with an OnAfterCopyGenJnlLineFromSalesHeader / OnAfterCopyCustLedgerEntryFromGenJnlLine pair for normal invoices, and in which codeunit.",
+      "affects": [
+        "gen-journal-line-delivery-window",
+        "cust-ledger-entry-delivery-window",
+        "prepayment-delivery-window-codeunit"
+      ]
+    },
+    {
+      "id": "prepayment-credit-memos",
+      "question": "Should prepayment credit memo customer entries also carry Delivery Window? The request names prepayment invoices only.",
+      "affects": [
+        "prepayment-delivery-window-codeunit",
+        "prepayment-invoice-delivery-window"
+      ]
+    },
+    {
+      "id": "prepayment-gl-entries",
+      "question": "Must Delivery Window also reach the prepayment G/L entries? That needs a subscriber to OnAfterCopyGenJnlLineFromSalesHeaderPrepmt.",
+      "affects": [
+        "prepayment-delivery-window-codeunit"
+      ]
+    },
+    {
+      "id": "create-purchase-order-action",
+      "question": "Do buyers also use the Create Purchase Order action on the sales order (Purch. Doc. From Sales Doc.)? It builds requisition lines without Get Sales Orders and is not covered by this design.",
+      "affects": [
+        "po-ref-linking-codeunit"
+      ]
+    },
+    {
+      "id": "po-ref-downstream",
+      "question": "Must the customer PO reference go further than the open purchase line, for example to posted purchase receipts and invoices, purchase archives or the vendor ledger?",
+      "affects": [
+        "purchase-line-po-ref"
+      ]
+    },
+    {
+      "id": "po-ref-visibility",
+      "question": "Should the reference be shown and editable on the purchase order subform and the requisition worksheet? The request only requires it on the purchase lines.",
+      "affects": [
+        "purchase-line-po-ref",
+        "requisition-line-po-ref"
+      ]
+    },
+    {
+      "id": "backfill",
+      "question": "Should existing open drop shipment or special order purchase lines, or already posted prepayment customer entries, be backfilled?",
+      "affects": [
+        "purchase-line-po-ref",
+        "cust-ledger-entry-delivery-window"
+      ]
+    },
+    {
+      "id": "target-version",
+      "question": "Which Business Central version and countries does the app target? The hot-ledger guidance applies from BC23.",
+      "affects": [
+        "cust-ledger-entry-delivery-window"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Target bc-version, countries and application-area are unknown; no repository was supplied, so existing objects could not be confirmed.",
+    "Permission set decision rests on the agent's judgment; not covered by BCQuality knowledge.",
+    "No-backfill decision for existing open lines and posted entries rests on the agent's judgment; not covered by BCQuality knowledge."
+  ]
+}

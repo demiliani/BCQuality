@@ -1,0 +1,811 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Sales orders carry a Project Code. It must appear in the PEPPOL invoice we send through E-Documents, and when a supplier sends us an e-invoice containing a project code, that code must land on the purchase invoice created from the e-document.",
+    "business-process": "Sales order posting with outgoing PEPPOL e-invoicing through E-Document Core, and incoming e-invoice import (V2) into purchase invoices.",
+    "candidates": 13,
+    "selected": 9
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "sales-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header",
+        "purpose": "Holds the Project Code the user enters on the sales order; source of every sales TransferFields copy.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Length Code[20] assumed pending q-project-code-definition; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Header",
+        "purpose": "Receives Project Code by TransferFields at posting; the posted invoice is the record E-Document Core maps and passes to the PEPPOL format.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Header",
+        "purpose": "Mirror target chosen by the article (every TransferFields target unless the plan states a document type never needs the field); confirm with q-sales-mirror-targets.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Header",
+        "purpose": "Mirror target chosen by the article (every TransferFields target unless the plan states a document type never needs the field); confirm with q-sales-mirror-targets.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "return-receipt-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Header",
+        "purpose": "Mirror target chosen by the article (every TransferFields target unless the plan states a document type never needs the field); confirm with q-sales-mirror-targets.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-header-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header Archive",
+        "purpose": "Mirror target chosen by the article (every TransferFields target unless the plan states a document type never needs the field); confirm with q-sales-mirror-targets.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purchase-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Header",
+        "purpose": "Holds the Project Code on the purchase invoice created from the e-document; filled after the V2 finish step, and source of every purchase TransferFields copy.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Length Code[20] assumed pending q-project-code-definition; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purch-inv-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Header",
+        "purpose": "Mirror target chosen by the article (every purchase TransferFields target unless the plan states a document type never needs the field); confirm with q-purchase-mirror-targets.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purch-rcpt-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Header",
+        "purpose": "Mirror target chosen by the article (every purchase TransferFields target unless the plan states a document type never needs the field); confirm with q-purchase-mirror-targets.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purch-cr-memo-hdr-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Hdr.",
+        "purpose": "Mirror target chosen by the article (every purchase TransferFields target unless the plan states a document type never needs the field); confirm with q-purchase-mirror-targets.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "return-shipment-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Header",
+        "purpose": "Mirror target chosen by the article (every purchase TransferFields target unless the plan states a document type never needs the field); confirm with q-purchase-mirror-targets.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purchase-header-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Header Archive",
+        "purpose": "Mirror target chosen by the article (every purchase TransferFields target unless the plan states a document type never needs the field); confirm with q-purchase-mirror-targets.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header/Purchase Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "edoc-purchase-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "E-Document Purchase Header",
+        "purpose": "V2 staging field that the custom reader fills from the incoming e-invoice. Core never copies an extension field from staging to Purchase Header, so the import subscriber copies it.",
+        "fields": [
+          {
+            "name": "Project Code",
+            "type": "Code[20]",
+            "note": "Staging field; not part of a TransferFields cascade with Purchase Header. DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "read-into-draft-enumext",
+        "action": "extend",
+        "object-type": "enumextension",
+        "target": "E-Doc. Read into Draft",
+        "purpose": "New reader value whose Implementation binds IStructuredFormatReader to the custom reader codeunit; the built-in PEPPOL reader is internal and raises no event.",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "id": "edoc-reader-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "IStructuredFormatReader implementation",
+        "purpose": "Reads the incoming e-invoice blob into E-Document Purchase Header and E-Document Purchase Line (InsertForEDocument), including the Project Code staging field, and returns the Purchase Invoice draft type. It must also parse the standard fields the built-in reader would fill (see unresolved).",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "id": "edoc-project-code-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "E-Document Project Code subscribers",
+        "purpose": "Holds the export subscriber (adds Project Code to the PEPPOL XML) and the import subscriber (copies the staging value to the created Purchase Header).",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "id": "sales-pageexts",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order; Posted Sales Invoice",
+        "purpose": "Show Project Code for entry on the sales order and read-only on the posted invoice. Other pages per q-pages.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "purchase-pageexts",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purchase Invoice; Posted Purchase Invoice",
+        "purpose": "Show the imported Project Code on the purchase invoice and the posted purchase invoice. Other pages per q-pages.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "project-code-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Project Code e-document feature",
+        "purpose": "Permission set entries for the new codeunits created by the feature.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "Sales Header.Project Code",
+        "mechanism": "user-entry",
+        "note": "Entered on the sales order (page extension).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Project Code",
+        "to": "Sales Invoice Header.Project Code",
+        "mechanism": "transferfields",
+        "note": "Sales-Post TransferFields(SalesHeader); same field number and type required, no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Project Code",
+        "to": "Sales Shipment Header / Sales Cr.Memo Header / Return Receipt Header .Project Code",
+        "mechanism": "transferfields",
+        "note": "Article-chosen stages; see q-sales-mirror-targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Project Code",
+        "to": "Sales Header Archive.Project Code",
+        "mechanism": "transferfields",
+        "note": "ArchiveManagement TransferFields; article-chosen stage.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Sales Invoice Header.Project Code",
+        "to": "SourceDocumentHeader RecordRef (mapped temporary copy)",
+        "mechanism": "other",
+        "note": "E-Doc. Mapping.MapRecord uses RecordRef.Copy, so the table extension field is carried; E-Document created by Core after the posting commit.",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md",
+          "microsoft/knowledge/e-documents/e-document-creation-runs-after-the-posting-commit.md"
+        ]
+      },
+      {
+        "from": "SourceDocumentHeader RecordRef",
+        "to": "PEPPOL BIS 3.0 XML in Temp Blob",
+        "mechanism": "event-copy",
+        "note": "OnAfterCreatePEPPOLXMLDocument subscriber loads the XML from the blob, adds the element and writes it back to the same blob. UBL element per q-ubl-element.",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "from": "Incoming e-invoice blob",
+        "to": "E-Document Purchase Header.Project Code",
+        "mechanism": "other",
+        "note": "Custom IStructuredFormatReader bound to the new E-Doc. Read into Draft value (V2 import process).",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "from": "E-Document Purchase Header.Project Code",
+        "to": "Purchase Header.Project Code",
+        "mechanism": "event-copy",
+        "note": "OnAfterProcessIncomingEDocument with DesiredEndState = Processed; header found by E-Document Link = EDocument.SystemId; value set with Validate and Modify(true).",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "from": "Purchase Header.Project Code",
+        "to": "Purch. Inv. Header / Purch. Rcpt. Header / Purch. Cr. Memo Hdr. / Return Shipment Header .Project Code",
+        "mechanism": "transferfields",
+        "note": "Purch.-Post TransferFields(PurchHeader); article-chosen stages, see q-purchase-mirror-targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header.Project Code",
+        "to": "Purchase Header Archive.Project Code",
+        "mechanism": "transferfields",
+        "note": "ArchiveManagement TransferFields; article-chosen stage.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"EDoc PEPPOL BIS 3.0\"",
+        "event": "OnAfterCreatePEPPOLXMLDocument",
+        "purpose": "Add the Project Code element to the finished PEPPOL XML for an outgoing sales invoice.",
+        "guards": [
+          "Exit unless SourceDocumentHeader.Number() = Database::\"Sales Invoice Header\" (other document types per q-credit-memo-peppol).",
+          "Read the value from the SourceDocumentHeader record ref (SetTable), never re-read the posted invoice by number, so the service mapping rules apply.",
+          "Exit when Project Code is empty.",
+          "Load the XML from the passed Temp Blob and write the result back to the same blob.",
+          "No blocking errors here: Create runs after the posting commit; posting-blocking rules belong in the format Check (q-require-on-posting)."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md",
+          "microsoft/knowledge/e-documents/e-document-creation-runs-after-the-posting-commit.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"E-Doc. Import\"",
+        "event": "OnAfterProcessIncomingEDocument",
+        "purpose": "Copy the staged Project Code to the purchase invoice created by the V2 finish step, which copies only named staging fields and raises no event.",
+        "guards": [
+          "Exit unless DesiredEndState = Processed.",
+          "Find Purchase Header by \"E-Document Link\" = EDocument.SystemId; exit if none is linked.",
+          "Exit when the staging Project Code is empty.",
+          "Do not use the V1 E-Document Create Purch. Doc. events; they never fire for a Version 2.0 service."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "E-Document Service: keep Import Process = Version 2.0 and configure the service to read incoming documents with the new E-Doc. Read into Draft value (exact configuration step unresolved).",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Outgoing: the bill-to customer document sending profile must use Electronic Document = Extended E-Document Service Flow with an enabled workflow that uses the PEPPOL BIS 3.0 service, and the service must support the outgoing sales invoice type; otherwise no E-Document is created and no error is raised.",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/e-document-creation-runs-after-the-posting-commit.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent (or the classification the requester confirms) on every Project Code field, including the staging field; no ToBeClassified ships.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship a permission set covering the new codeunits.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "sales-order-posts-project-code-to-invoice",
+        "given": "A customer and item created with LibrarySales/LibraryInventory and a sales order with Project Code set",
+        "when": "The order is shipped and invoiced",
+        "then": "Sales Invoice Header and Sales Shipment Header hold the same Project Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "sales-credit-memo-and-return-carry-project-code",
+        "given": "A sales credit memo and a sales return order with Project Code set",
+        "when": "Each is posted",
+        "then": "Sales Cr.Memo Header and Return Receipt Header hold the Project Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "sales-archive-carries-project-code",
+        "given": "A sales order with Project Code",
+        "when": "The order is archived",
+        "then": "Sales Header Archive holds the Project Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "id": "peppol-export-contains-project-code",
+        "given": "PEPPOL BIS 3.0 service with supported outgoing sales invoice type, enabled workflow and a customer document sending profile set to Extended E-Document Service Flow; sales order with Project Code",
+        "when": "The order is posted and the E-Document is exported",
+        "then": "The exported PEPPOL XML in the E-Document log contains the Project Code element with the value",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md",
+          "microsoft/knowledge/e-documents/e-document-creation-runs-after-the-posting-commit.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "peppol-export-without-project-code",
+        "given": "Same e-document setup; sales order without Project Code",
+        "when": "The order is posted and exported",
+        "then": "The XML contains no Project Code element and the E-Document is not in Export Error",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md",
+          "microsoft/knowledge/e-documents/e-document-creation-runs-after-the-posting-commit.md"
+        ]
+      },
+      {
+        "id": "peppol-export-ignores-other-document-types",
+        "given": "Same e-document setup; a posted sales credit memo",
+        "when": "The credit memo E-Document is exported",
+        "then": "The subscriber exits on the table-number guard and the XML is unchanged",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "id": "import-copies-project-code-to-purchase-invoice",
+        "given": "An E-Document Service with Import Process Version 2.0 using the custom reader; an incoming e-invoice containing a project code",
+        "when": "The E-Document is processed to Processed",
+        "then": "The Purchase Header linked by E-Document Link holds the Project Code",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "id": "import-not-processed-leaves-header-alone",
+        "given": "Same service and incoming e-invoice",
+        "when": "Processing stops before Processed (draft state)",
+        "then": "E-Document Purchase Header holds the Project Code and no Purchase Header is changed",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "id": "import-without-project-code",
+        "given": "Same service; an incoming e-invoice without a project code",
+        "when": "The E-Document is processed to Processed",
+        "then": "The purchase invoice is created and its Project Code is empty with no error",
+        "knowledge": [
+          "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md"
+        ]
+      },
+      {
+        "id": "purchase-invoice-posts-project-code",
+        "given": "A purchase invoice with Project Code (created by import or LibraryPurchase)",
+        "when": "It is posted",
+        "then": "Purch. Inv. Header holds the Project Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "purchase-archive-carries-project-code",
+        "given": "A purchase document with Project Code",
+        "when": "It is archived",
+        "then": "Purchase Header Archive holds the Project Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md",
+      "used-for": "Export through the PEPPOL event and V2 import through a custom reader plus the after-processing subscriber.",
+      "constraints": [
+        "Value must already be on the posted table (Sales Invoice Header) for export.",
+        "For PEPPOL subscribe to OnAfterCreatePEPPOLXMLDocument; read the field from the record ref, load the XML from the blob, add the element and write it back to the same blob.",
+        "Do not re-read the posted invoice by number in the PEPPOL subscriber; that bypasses the service mapping rules.",
+        "Add the field to E-Document Purchase Header and Purchase Header; fill the staging field in an own IStructuredFormatReader bound to a new E-Doc. Read into Draft value.",
+        "Subscribe to OnAfterProcessIncomingEDocument; act only when DesiredEndState is Processed, find the purchase header by E-Document Link, exit if none is linked.",
+        "Do not use V1 purchase-creation events for a V2 service, and do not expect Core to copy a staging extension field by matching name."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.good.al",
+        "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Stage map for the sales field, page extensions, permission entries, Copy Document decision and posting tests.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage.",
+        "Name the page extensions, the permission set entries for new objects, and a test that posts and reads the value back from every target.",
+        "Decide whether Copy Document flowing the field back from posted documents is wanted; if not, clear it in OnAfterCopySalesHeaderDone.",
+        "Do not plan to fill ledger entries by modifying them after posting."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/e-documents/e-document-creation-runs-after-the-posting-commit.md",
+      "used-for": "Where blocking checks belong and the setup needed for an E-Document to be created.",
+      "constraints": [
+        "E-Document creation runs after the posting commit; errors in Create leave the invoice posted and set Export Error.",
+        "Rules that must stop posting go in the format Check.",
+        "Tests must enable the document sending profile, workflow and supported types or no E-Document is created and no error is raised.",
+        "No E-Document is created right after posting when commit is suppressed or in preview."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/e-documents/e-document-creation-runs-after-the-posting-commit.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Sales header mirror fields on posted headers and archive.",
+      "constraints": [
+        "Same field number, name, type and length on Sales Header and every target the plan needs: all four posted headers and the archive unless the plan states a document type never needs it.",
+        "No subscriber is needed for TransferFields stages.",
+        "Keep mirrored fields non-editable on posted tables."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+      "used-for": "Purchase header mirror fields on posted headers and archive.",
+      "constraints": [
+        "Same field number, name, type and length on Purchase Header and all four posted tables and the archive unless the plan states a document type never needs it.",
+        "No subscriber for TransferFields stages; keep mirrored fields non-editable on posted tables."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definition consistency across both cascades.",
+      "constraints": [
+        "Mirrored fields must have the exact same field number, data type and length on every table in the cascade, set at creation time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Data classification of all new fields.",
+      "constraints": [
+        "No field ships with DataClassification = ToBeClassified; choose the classification from the data content."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Create customers, vendors, items and documents with the Library codeunits; create parents first and Validate foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Page extension fields.",
+      "constraints": [
+        "User-facing page fields need an explicit or inherited tooltip; on runtime 13.0+ define it on the table field and do not duplicate it on pages (applies from BC24 for inheritance)."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "q-project-code-definition",
+      "question": "What is \"Project Code\" on the sales order today: an existing field (which table extension, field number, type and length, table relation), a new field to add, a dimension (shortcut dimension) or the Job No.? The design assumes a custom Code[20] header field; a dimension or Job No. would change objects and data flow.",
+      "affects": [
+        "sales-header-ext",
+        "purchase-header-ext",
+        "edoc-purchase-header-ext",
+        "sales-invoice-header-ext"
+      ]
+    },
+    {
+      "id": "q-field-number-range",
+      "question": "Which object ID and field number range does the app own? The same field number must be used on every TransferFields target.",
+      "affects": [
+        "sales-header-ext",
+        "purchase-header-ext"
+      ]
+    },
+    {
+      "id": "q-sales-mirror-targets",
+      "question": "Must Project Code also reach Sales Shipment Header, Sales Cr.Memo Header, Return Receipt Header and Sales Header Archive? The article includes them unless a document type never needs it.",
+      "affects": [
+        "sales-shipment-header-ext",
+        "sales-cr-memo-header-ext",
+        "return-receipt-header-ext",
+        "sales-header-archive-ext"
+      ]
+    },
+    {
+      "id": "q-purchase-mirror-targets",
+      "question": "Must Project Code reach the posted purchase invoice and the other posted purchase tables and archive, or only the unposted purchase invoice the request names?",
+      "affects": [
+        "purch-inv-header-ext",
+        "purch-rcpt-header-ext",
+        "purch-cr-memo-hdr-ext",
+        "return-shipment-header-ext",
+        "purchase-header-archive-ext"
+      ]
+    },
+    {
+      "id": "q-ledgers",
+      "question": "Must Project Code reach Cust. Ledger Entry, Vendor Ledger Entry or G/L Entry? Not designed.",
+      "affects": [
+        "sales-header-ext",
+        "purchase-header-ext"
+      ]
+    },
+    {
+      "id": "q-line-level",
+      "question": "Is Project Code a header-only value, or can lines carry different project codes (in the PEPPOL export and on import)?",
+      "affects": [
+        "sales-header-ext",
+        "edoc-reader-codeunit"
+      ]
+    },
+    {
+      "id": "q-ubl-element",
+      "question": "Which UBL element carries the project code in the outgoing invoice and is read from incoming invoices (for example a project reference or accounting cost element), and at which position in the document?",
+      "affects": [
+        "edoc-project-code-subscribers",
+        "edoc-reader-codeunit"
+      ]
+    },
+    {
+      "id": "q-credit-memo-peppol",
+      "question": "Should PEPPOL credit memos also carry the project code? The design adds it to sales invoices only.",
+      "affects": [
+        "edoc-project-code-subscribers"
+      ]
+    },
+    {
+      "id": "q-require-on-posting",
+      "question": "Must posting or release be blocked when Project Code is empty for customers that receive e-invoices? That rule would belong in a format Check, which the built-in PEPPOL format does not offer to extend.",
+      "affects": [
+        "sales-header-ext",
+        "edoc-project-code-subscribers"
+      ]
+    },
+    {
+      "id": "q-unknown-incoming-code",
+      "question": "What should happen when an incoming project code does not exist in BC or fails validation on Purchase Header: error, store as is, or skip?",
+      "affects": [
+        "edoc-project-code-subscribers",
+        "purchase-header-ext"
+      ]
+    },
+    {
+      "id": "q-replace-peppol-reader",
+      "question": "Is it acceptable to replace the built-in PEPPOL reader with an own reader that must also parse all standard invoice data, given the built-in reader is internal and raises no event?",
+      "affects": [
+        "edoc-reader-codeunit",
+        "read-into-draft-enumext"
+      ]
+    },
+    {
+      "id": "q-copy-document",
+      "question": "Should Copy Document carry Project Code back from posted or archived documents into new sales or purchase documents?",
+      "affects": [
+        "sales-header-ext",
+        "purchase-header-ext"
+      ]
+    },
+    {
+      "id": "q-pages",
+      "question": "On which pages should Project Code be visible besides Sales Order, Posted Sales Invoice, Purchase Invoice and Posted Purchase Invoice (lists, other posted documents, E-Document draft page)?",
+      "affects": [
+        "sales-pageexts",
+        "purchase-pageexts"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Choice and position of the UBL element for the project code is not covered by BCQuality knowledge; the sample appends AccountingCost only for brevity.",
+    "Parsing the standard PEPPOL invoice content in the own IStructuredFormatReader rests on the agent's judgment; BCQuality knowledge only states that the reader fills the staging tables.",
+    "How the E-Document Service is configured to use the new E-Doc. Read into Draft value is not stated in BCQuality knowledge.",
+    "bc-version, countries and application-area are unknown (no repository supplied)."
+  ]
+}

@@ -25,6 +25,8 @@ The samples start after warehouse quantity registration and report whether inven
 
 See sample: [`reconcile-warehouse-adjustments-with-the-item-ledger.good.al`](reconcile-warehouse-adjustments-with-the-item-ledger.good.al).
 
+To design a feature that carries its own data through this process, see [carry fields to warehouse entries through the warehouse journal line](../warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md).
+
 ## Anti Pattern
 
 A manually mirrored ordinary item-journal line does not reconcile a registered advanced-warehouse quantity adjustment. Likewise, a reconciliation function that returns completion after only registration or adjustment calculation leaves any generated adjustment lines unposted. Calculation prepares journal lines; it does not post them.

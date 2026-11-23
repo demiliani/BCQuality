@@ -1,0 +1,183 @@
+# Feature design
+
+> Sales orders get a Packing Note on each line and an Export Status on the header that our EDI job sets once the invoice is sent. Both must be on posted invoices. When users copy documents, restore an archived order version, or cancel/correct a posted invoice, the packing notes must come along but the credit memo must not appear as already exported.
+
+**Result:** Complete design. **Business process:** Sales order processing and posting, including Copy Document, sales document archiving/restore and Cancel/Correct of posted sales invoices. **Knowledge used:** 15 BCQuality articles.
+
+## 1. Questions to answer before implementation
+
+The request does not settle these points. Answer them, then approve the design.
+
+1. Which object/field ID range applies, and what maximum length does Packing Note need? The same number, type and length must be used on every mirrored table. _(affects: tex-sales-line, tex-sales-invoice-line, tex-sales-cr-memo-line, tex-sales-shipment-line, tex-return-receipt-line, tex-sales-line-archive, tex-sales-header, tex-sales-invoice-header, tex-sales-cr-memo-header, tex-sales-shipment-header, tex-return-receipt-header, tex-sales-header-archive)_
+2. Which Export Status values does the EDI job need besides Not Exported and Exported (for example a failure state), and should the enum be extensible? _(affects: enum-doc-export-status)_
+3. Do posted shipments and return receipts need Export Status? The mirroring rule includes every posted header unless you exclude a document type. _(affects: tex-sales-shipment-header, tex-return-receipt-header)_
+4. Does the EDI job also send posted credit memos and set their Export Status? This decides whether it needs indirect modify on Sales Cr.Memo Header. _(affects: tex-sales-cr-memo-header, ps-packing-export)_
+5. Is the EDI job part of this app or another one? The permission design and the status-write path depend on it. _(affects: ps-packing-export)_
+6. Invoices posted and sent before installation will read Export Status Not Exported (ordinal 0). Should they be backfilled as Exported, and from which source? _(affects: tex-sales-invoice-header)_
+7. Is Packing Note ever defaulted from customer or item? If so, restoring an archive overwrites it during revalidation and subscribers to OnAfterTransferFromArchToSalesHeader/Line are needed. _(affects: tex-sales-line, tex-sales-line-archive)_
+8. When an archived order version is restored, should the archived Export Status be kept or reset to Not Exported? _(affects: tex-sales-header-archive)_
+9. Must Packing Note appear on posted prepayment invoice lines? That needs the field on Prepayment Inv. Line Buffer and works only with Compress Prepayment off. _(affects: tex-sales-invoice-line)_
+10. Which pages must show the fields (order header, posted shipment, archive pages, lists)? The design covers the order subform and posted invoice and credit memo pages. _(affects: pext-sales-order-subform, pext-posted-sales-invoice, pext-posted-sales-invoice-subform, pext-posted-sales-credit-memo, pext-posted-sales-cr-memo-subform)_
+11. Are purchase documents out of scope? The design covers sales only; the copy events have purchase counterparts. _(affects: cu-packing-export-copy-rules)_
+
+## 2. Objects
+
+| # | Action | Type | Object | Purpose | Fields | Sources |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | create | enum | Doc. Export Status | Named states of the EDI export of one document, starting with 'Not Exported' (ordinal 0, the value a new or copied document must have) and 'Exported'. New values are only ever appended at the end. |  | [8] [9] |
+| 2 | extend | tableextension | Sales Header | Source of Export Status for the TransferFields cascade to posted headers and the archive. Export Status is per-document state, not business data, so it is reset whenever a header is created by Copy Document (including Cancel and Correct). | Export Status (Enum "Doc. Export Status"): Field number reused on every posted and archive header table; DataClassification set on the field. | [1] [2] [3] [10] [5] |
+| 3 | extend | tableextension | Sales Line | Holds the user-entered Packing Note per order line; source for posted, archive and copied lines. | Packing Note (Text (length open; identical on every table)): Field number reused on every posted and archive line table; DataClassification = CustomerContent. | [1] [2] [3] [10] |
+| 4 | extend | tableextension | Sales Invoice Header | Receives Export Status from Sales Header via TransferFields at posting (normal and prepayment invoices); the EDI job sets it to Exported after sending. | Export Status (Enum "Doc. Export Status"): Same field number and type as on Sales Header; Editable = false; DataClassification set on the field. | [2] [3] [10] |
+| 5 | extend | tableextension | Sales Cr.Memo Header | Receives Export Status at credit memo posting; for a corrective credit memo it arrives as Not Exported because the copy resets it. | Export Status (Enum "Doc. Export Status"): Same field number and type as on Sales Header; Editable = false; DataClassification set on the field. | [2] [3] [10] |
+| 6 | extend | tableextension | Sales Shipment Header | Mirror required by the TransferFields rule for every posted header unless the requester states shipments never need it (see open question). | Export Status (Enum "Doc. Export Status"): Same field number and type as on Sales Header; Editable = false; DataClassification set on the field. | [2] [3] [10] |
+| 7 | extend | tableextension | Return Receipt Header | Mirror required by the TransferFields rule for every posted header unless the requester states return receipts never need it (see open question). | Export Status (Enum "Doc. Export Status"): Same field number and type as on Sales Header; Editable = false; DataClassification set on the field. | [2] [3] [10] |
+| 8 | extend | tableextension | Sales Header Archive | Keeps Export Status on archived versions so archive and restore use the same field number. | Export Status (Enum "Doc. Export Status"): Same field number and type as on Sales Header; Editable = false; DataClassification set on the field. | [2] [3] [10] |
+| 9 | extend | tableextension | Sales Invoice Line | Receives Packing Note from Sales Line via InitFromSalesLine/TransferFields at invoice posting; source for Cancel/Correct and copy from a posted invoice. | Packing Note (Text (length open; identical on every table)): Same field number, name, type and length as on Sales Line; Editable = false on posted and archive tables; DataClassification = CustomerContent. | [2] [3] [10] |
+| 10 | extend | tableextension | Sales Cr.Memo Line | Receives Packing Note when the (corrective) credit memo is posted. | Packing Note (Text (length open; identical on every table)): Same field number, name, type and length as on Sales Line; Editable = false on posted and archive tables; DataClassification = CustomerContent. | [2] [3] [10] |
+| 11 | extend | tableextension | Sales Shipment Line | Receives Packing Note at shipment posting; source when a posted shipment is copied (always recalculated). | Packing Note (Text (length open; identical on every table)): Same field number, name, type and length as on Sales Line; Editable = false on posted and archive tables; DataClassification = CustomerContent. | [2] [3] [10] |
+| 12 | extend | tableextension | Return Receipt Line | Mirror on the remaining posted line table so return receipts and copies from them keep Packing Note. | Packing Note (Text (length open; identical on every table)): Same field number, name, type and length as on Sales Line; Editable = false on posted and archive tables; DataClassification = CustomerContent. | [2] [3] [10] |
+| 13 | extend | tableextension | Sales Line Archive | Keeps Packing Note on archived versions so restoring an archived order brings it back. | Packing Note (Text (length open; identical on every table)): Same field number, name, type and length as on Sales Line; Editable = false on posted and archive tables; DataClassification = CustomerContent. | [2] [3] [10] |
+| 14 | create | codeunit | Packing Export Copy Rules | Event subscribers for Copy Document Mgt.: carry Packing Note on the recalculate-lines path and reset Export Status on every copied header (manual Copy Document, Cancel, Correct, Create Corrective Credit Memo). |  | [4] [5] |
+| 15 | extend | pageextension | Sales Order Subform | Lets users enter Packing Note on order lines; tooltip defined once on the table field where the runtime supports inheritance. |  | [1] [14] [15] |
+| 16 | extend | pageextension | Posted Sales Invoice | Shows Export Status (read-only) on the posted invoice. |  | [1] [14] [15] |
+| 17 | extend | pageextension | Posted Sales Invoice Subform | Shows Packing Note (read-only) on posted invoice lines. |  | [1] [14] [15] |
+| 18 | extend | pageextension | Posted Sales Credit Memo | Shows Export Status on the posted credit memo so users can see a corrective credit memo is Not Exported. |  | [1] [14] [15] |
+| 19 | extend | pageextension | Posted Sales Cr. Memo Subform | Shows Packing Note on posted credit memo lines. |  | [1] [14] [15] |
+| 20 | create | permissionset | Packing Export | Grants execute on the new codeunit and, for the EDI status update, indirect modify on the posted header tables only. |  | [1] [11] |
+
+## 3. How the data flows
+
+- **User** → **Sales Line.Packing Note**: entered by the user. Entered on the Sales Order Subform. [1]
+- **Sales Header.Export Status** → **Sales Invoice Header.Export Status**: standard TransferFields copy. Sales-Post creates the posted invoice header with TransferFields; no subscriber needed. [1] [2] [3]
+- **Sales Header.Export Status** → **Sales Cr.Memo Header.Export Status**: standard TransferFields copy. Same mechanism for credit memos, including corrective credit memos. [1] [2] [3]
+- **Sales Header.Export Status** → **Sales Shipment Header / Return Receipt Header.Export Status**: standard TransferFields copy. Mirror chosen by the TransferFields rule; can be dropped if the requester excludes these document types. [2] [3]
+- **Sales Line.Packing Note** → **Sales Invoice Line.Packing Note**: standard TransferFields copy. InitFromSalesLine calls TransferFields(SalesLine). [1] [2] [3]
+- **Sales Line.Packing Note** → **Sales Shipment Line / Sales Cr.Memo Line / Return Receipt Line.Packing Note**: standard TransferFields copy. Same InitFromSalesLine mechanism on the other posted line tables. [1] [2] [3]
+- **Sales Header / Sales Line** → **Sales Header Archive / Sales Line Archive**: standard TransferFields copy. ArchiveManagement stores both fields by field number. [2] [6]
+- **Sales Header Archive / Sales Line Archive** → **Sales Header / Sales Line (restored order)**: standard TransferFields copy. RestoreSalesDocument copies back with TransferFields; Packing Note survives revalidation as long as it is not defaulted from master data (see open question). [6]
+- **Posted or archived Sales Line (via Copy Document, RecalculateLines = false)** → **Sales Line (target document)**: standard TransferFields copy. Posted/archive line is built with TransferFields, then assigned to the target line; all fields kept. [4]
+- **FromSalesLine.Packing Note (Copy Document, RecalculateLines = true)** → **ToSalesLine.Packing Note**: copied in an event subscriber. OnAfterRecalculateSalesLine; covers Include Header off, posted shipments, posted return receipts and archive copies. [4]
+- **Source header (open, posted or archived) .Export Status** → **Sales Header (copy target) .Export Status**: copied in an event subscriber. Header arrives via TransferFields and is then reset to Not Exported in OnAfterCopySalesHeaderDone, before the header is modified. [5] [1]
+- **Sales Invoice Header / Sales Invoice Line** → **Corrective credit memo / correcting invoice (Sales Header, Sales Line)**: standard TransferFields copy. Cancel and Correct use Copy Document from the posted invoice with header included and lines not recalculated: Packing Note comes along; Export Status is reset by the header subscriber. [5]
+- **Sales Header.Export Status (prepayment invoice)** → **Sales Invoice Header.Export Status**: standard TransferFields copy. Sales-Post Prepayments also creates the posted header with TransferFields; prepayment lines are not copied from order lines (see open question on Packing Note). [7]
+- **EDI job (after successful send)** → **Sales Invoice Header.Export Status = Exported**: other. The existing EDI job modifies the posted header after sending. Not covered by BCQuality knowledge beyond the permission rule; rests on judgment. agent judgment
+
+## 4. Event subscriptions
+
+| Publisher | Event | Purpose | Rules the subscriber must follow | Sources |
+| --- | --- | --- | --- | --- |
+| Codeunit "Copy Document Mgt." | `OnAfterRecalculateSalesLine` | Copy Packing Note from FromSalesLine to ToSalesLine on the recalculation path, where the target line is created with Init and standard fields are revalidated. | Assign only; do not call Modify (the target line is not inserted yet). · Copy only Packing Note; Export Status is a header field and is handled separately. | [4] |
+| Codeunit "Copy Document Mgt." | `OnAfterCopySalesHeaderDone` | Reset ToSalesHeader.Export Status to Not Exported after the header is copied from any source, covering manual Copy Document, Cancel, Correct and Create Corrective Credit Memo. | Assign without Modify (runs before the header is modified). · Do not reset in Correct Posted Sales Invoice OnAfterCreateCopyDocument with Modify; that misses manual copies and adds a write. · Do not clear Packing Note here; it is business data that must be copied. | [5] [1] |
+
+## 5. Setup, permissions and lifecycle
+
+- **permissions**: Add the new codeunit (execute) to the app's permission set alongside the table extensions' objects. [1]
+- **permissions**: For the EDI job's update of Export Status on posted headers, grant indirect modify (tabledata "Sales Invoice Header" = m, and Sales Cr.Memo Header if credit memos are exported) to users, paired with the EDI codeunit that holds the direct right; do not grant uppercase M on posted documents. Document why the indirect grant is needed. [11]
+- **privacy**: Set DataClassification on every Packing Note and Export Status field in every table extension (table extensions have no table-level value to inherit); Packing Note is CustomerContent. [10]
+
+## 6. Tests
+
+1. **post-order-carries-both-fields** [1] [2] [12] [13]
+    - Given A sales order created with LibrarySales for a new customer and item, with Packing Note on each line
+    - When The order is shipped and invoiced
+    - Then Sales Shipment Line, Sales Invoice Line carry each line's Packing Note and Sales Invoice Header has Export Status Not Exported
+2. **archive-carries-both-fields** [2]
+    - Given A sales order with Packing Note on lines
+    - When The order is archived
+    - Then Sales Line Archive has each Packing Note and Sales Header Archive has the Export Status field value
+3. **restore-archive-keeps-packing-note** [6] [2]
+    - Given An archived order version whose lines have Packing Note, after which the notes on the open order are changed
+    - When The archived version is restored
+    - Then The restored Sales Lines have the archived Packing Note values
+4. **copy-open-order-include-header** [4]
+    - Given A sales order with Packing Note on lines
+    - When Copy Document copies it to a new order with Include Header on (no recalculation)
+    - Then Every target line has the source Packing Note
+5. **copy-open-order-recalculate** [4]
+    - Given A sales order with Packing Note on lines
+    - When Copy Document copies it with Include Header off (Recalculate Lines on)
+    - Then Every target line has the source Packing Note
+6. **copy-posted-shipment** [4]
+    - Given A posted sales shipment whose lines have Packing Note
+    - When It is copied into a new order (recalculation forced)
+    - Then Every target line has the Packing Note
+7. **copy-posted-invoice-resets-status** [5] [4]
+    - Given A posted invoice with Export Status Exported and Packing Note on lines
+    - When Copy Document copies it to a new sales invoice
+    - Then The new header has Export Status Not Exported and the lines keep Packing Note
+8. **cancel-invoice-credit-memo-not-exported** [5]
+    - Given A posted invoice with Export Status Exported and Packing Note on lines
+    - When The user runs Cancel on the posted invoice
+    - Then The posted Sales Cr.Memo Header has Export Status Not Exported and its Sales Cr.Memo Lines carry the Packing Notes
+9. **correct-invoice-resets-status** [5]
+    - Given A posted invoice with Export Status Exported and Packing Note on lines
+    - When The user runs Correct
+    - Then The new sales invoice has Export Status Not Exported and its lines carry the Packing Notes
+10. **prepayment-invoice-header-status** [7]
+    - Given A sales order with a prepayment % and Packing Note on lines
+    - When The prepayment invoice is posted
+    - Then The posted prepayment Sales Invoice Header has Export Status Not Exported (Packing Note on prepayment lines per the answer to the open question)
+
+## 7. Limits of this design
+
+These points are not backed by BCQuality knowledge or could not be confirmed. Check them before relying on the design.
+
+- bc-version, countries and application-area could not be determined from the request; no repository was supplied.
+- The EDI job's write of Export Status to posted headers (data-flow hop 'EDI job') is not covered by BCQuality knowledge beyond the permission rule and rests on the agent's judgment.
+- Tooltip inheritance from table fields applies only from BC24 (runtime 13.0); target version unknown.
+
+## Sources
+
+[1] `microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md`: Stage map for the custom sales fields, page and permission steps, and the Copy Document header-clearing point.
+    - Plan one extension step per stage the field must reach.
+    - Name page extensions, permission-set entries and a post-and-read-back test for each stage.
+    - Clear header fields that must not be copied in OnAfterCopySalesHeaderDone on ToSalesHeader.
+    - Do not fill posted ledger entries after posting by modifying them.
+[2] `microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md`: Mirroring both fields on all posted header/line tables and the archive tables.
+    - Same field number, name, type and length on the source and every TransferFields target the plan needs.
+    - Header fields go on all four posted headers and the archive unless the plan states a document type never needs them.
+    - No subscriber is needed for TransferFields stages; keep mirrored fields non-editable on posted tables.
+[3] `microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md`: Length and type agreement for Packing Note and Export Status across the cascade.
+    - Define mirrored fields with exactly the same number, type and length on every table in the cascade at creation time.
+[4] `microsoft/knowledge/sales-purchase/copy-document-recalculate-lines-drops-custom-line-fields.md`: Keeping Packing Note on the Copy Document recalculate-lines path and the copy tests.
+    - Subscribe to OnAfterRecalculateSalesLine and copy from FromSalesLine to ToSalesLine without Modify.
+    - Mirror the line field on posted and archive line tables.
+    - Test both copy modes (Include Header on and off) and a posted shipment copy.
+    - Do not patch inserted lines in OnAfterInsertToSalesLine with Modify.
+[5] `microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md`: Classifying Export Status as per-document state and resetting it on Cancel, Correct and Copy Document; Packing Note as business data that stays mirrored.
+    - Per-document state is cleared in OnAfterCopySalesHeaderDone, before the header is modified.
+    - Business data stays mirrored and needs no code.
+    - Custom posting checks must be valid for a credit memo created by Cancel.
+    - Test Cancel on an invoice with the custom fields filled and read the posted credit memo back.
+    - Do not clear the field in OnAfterCreateCopyDocument with Modify.
+[6] `microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md`: Archive and restore of Packing Note; condition under which restore subscribers are needed.
+    - Mirror the field on Sales Header Archive and Sales Line Archive.
+    - Only if the field is also defaulted from master data: reassign the archived value in OnAfterTransferFromArchToSalesHeader/Line without Modify.
+    - Do not fix lines in OnAfterRestoreSalesDocument with a Modify per line.
+[7] `microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md`: Prepayment invoices are posted invoices: header field via TransferFields, line field not copied from order lines.
+    - A line field reaches posted prepayment lines only through Prepayment Inv. Line Buffer and OnBeforeSalesInvLineInsert, and only with Compress Prepayment off.
+    - Include a prepayment order in the tests when the feature touches posted invoices.
+[8] `microsoft/knowledge/style/fixed-choice-set-must-use-enum-not-integer.md`: Typing Export Status as an Enum.
+    - A fixed set of named states uses an Enum, not a raw Integer.
+[9] `microsoft/knowledge/upgrade/enum-values-additive-at-end.md`: Evolving Doc. Export Status safely.
+    - Add new values only at the end; never renumber; retire values through ObsoleteState rather than deleting.
+[10] `microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md`: Classification of every new table extension field.
+    - Every Normal field in a tableextension sets its own DataClassification.
+    - Classify by the data actually stored; do not leave ToBeClassified or use SystemMetadata for customer data.
+[11] `microsoft/knowledge/security/indirect-permissions-for-elevated-access.md`: Permission for the EDI job's modify of posted headers.
+    - Use lowercase indirect grants when access must go through a specific codeunit; grant only the letters needed.
+    - Do not grant uppercase rights on posted documents when the path is code-mediated.
+    - Document why the indirect permission is required.
+[12] `microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md`: Fixture construction in all tests.
+    - Create customers, items and documents with LibrarySales/LibraryInventory, parents before dependents, validating foreign keys.
+[13] `microsoft/knowledge/testing/test-data-must-be-random-and-complete.md`: Test data choices.
+    - Create the records the test owns; do not rely on existing records.
+    - Use library helpers for incidental values; keep scenario-defining values explicit.
+[14] `microsoft/knowledge/style/tooltip-required-on-page-fields.md`: Tooltips for the new page fields.
+    - User-facing page fields need an explicit or inherited non-empty ToolTip.
+    - Define shared tooltip on the table field where inheritance is available; add page-level tooltips on earlier runtimes.
+[15] `microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md`: Applies from BC24 (runtime 13.0): define the tooltip on the table field and let bound page fields inherit it.
+    - Do not duplicate an inherited tooltip on the page unless the page needs different text.
+    - Inheritance is not available on earlier runtimes.
+
+_Context: BC version unknown; countries unknown; application areas unknown. Unknown: bc-version, countries, application-area. Produced by BCQuality `al-feature-design` v1. The design is input to implementation, not proof that the result is correct: review the finished code with al-code-review._

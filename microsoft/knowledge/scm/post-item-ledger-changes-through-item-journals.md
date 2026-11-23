@@ -25,6 +25,8 @@ The clean sample takes an already prepared positive-adjustment journal line. It 
 
 See sample: [`post-item-ledger-changes-through-item-journals.good.al`](post-item-ledger-changes-through-item-journals.good.al).
 
+To design a feature that carries its own data through this process, see [carry item journal fields to item and physical inventory ledger entries](../inventory/carry-item-journal-fields-to-item-and-phys-inventory-ledger.md) and [item reclassification posts two entries from one journal line](../inventory/item-reclassification-posts-two-entries-from-one-journal-line.md).
+
 ## Anti Pattern
 
 Independent inserts/deletes of persistent `"Item Ledger Entry"` or `"Value Entry"` transaction rows, or overwrites of posted quantity, remaining quantity, application identity, or cost amounts, bypass the coordinated receipt, shipment, adjustment, or cost-correction workflow. `Insert(true)`, `Modify(true)`, and balanced-looking quantities do not supply that orchestration: stock can change without the corresponding application/value graph, or downstream cost flow can remain stale.

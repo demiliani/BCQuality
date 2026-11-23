@@ -33,6 +33,8 @@ Prefer adjusting the standard result to replacing it. Let the price calculation 
 
 See sample: [`round-calculated-unit-prices-to-unit-amount-precision.good.al`](round-calculated-unit-prices-to-unit-amount-precision.good.al).
 
+For designing a pricing feature end to end, start from [plan a custom pricing rule](../feature-design/plan-a-custom-pricing-rule.md).
+
 ## Anti Pattern
 
 These shapes are the anti-pattern:

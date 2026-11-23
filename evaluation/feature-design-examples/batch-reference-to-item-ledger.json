@@ -1,0 +1,394 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Add a user-entered Customer Batch Reference to sales lines and carry it, during sales posting, onto every item ledger entry created for that line.",
+    "business-process": "Sales document posting (Sales-Post creating item ledger entries through the item journal line and Item Jnl.-Post Line)",
+    "candidates": 15,
+    "selected": 8
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [
+      "unknown"
+    ],
+    "application-area": [
+      "unknown"
+    ],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "sales-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Hold the Customer Batch Reference the user types on each sales line; source of the posting path.",
+        "fields": [
+          {
+            "name": "Customer Batch Reference",
+            "type": "Code[N] (type and length to be confirmed; see open question field-type-and-length)",
+            "note": "Set DataClassification explicitly on the field (a tableextension cannot inherit a table-level value); CustomerContent is the likely value, to be confirmed. Define the ToolTip on the table field when the target runtime is 13.0 or later."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "item-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Journal Line",
+        "purpose": "Carry the reference from the sales line to the item ledger entry during posting.",
+        "fields": [
+          {
+            "name": "Customer Batch Reference",
+            "type": "Code[N] (type and length to be confirmed; see open question field-type-and-length)",
+            "note": "Same type and length as the Sales Line field so the event copy never truncates; explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Ledger Entry",
+        "purpose": "Store the reference on each item ledger entry created for the sales line.",
+        "fields": [
+          {
+            "name": "Customer Batch Reference",
+            "type": "Code[N] (type and length to be confirmed; see open question field-type-and-length)",
+            "note": "Same type and length as the source field; Editable = false; explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "batch-ref-posting-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Batch Ref. Item Posting (new)",
+        "purpose": "Event subscribers that copy the reference Sales Line -> Item Journal Line -> Item Ledger Entry inside the posting transaction.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md"
+        ]
+      },
+      {
+        "id": "sales-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order Subform (plus the other sales subforms named in open question document-types)",
+        "purpose": "Let the user type the reference on the sales line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item Ledger Entries",
+        "purpose": "Show the reference (read-only) on the item ledger entries for traceability lookups.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "Sales Line.Customer Batch Reference",
+        "mechanism": "user-entry",
+        "note": "Typed on the sales subform page extension.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Item Journal Line",
+        "mechanism": "event-copy",
+        "note": "Sales-Post builds the item journal line with CopyFromSalesLine, which copies named fields only; subscriber to OnAfterCopyItemJnlLineFromSalesLine assigns the value.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Item Journal Line",
+        "to": "Item Ledger Entry",
+        "mechanism": "event-copy",
+        "note": "Subscriber to OnAfterInitItemLedgEntry sets the value on the new entry before it is inserted, so it is written as part of posting with no extra Modify.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Item Journal Line\"",
+        "event": "OnAfterCopyItemJnlLineFromSalesLine",
+        "purpose": "Copy Customer Batch Reference from the Sales Line to the Item Journal Line built by Sales-Post.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Item Jnl.-Post Line\"",
+        "event": "OnAfterInitItemLedgEntry",
+        "purpose": "Copy Customer Batch Reference from the Item Journal Line to the new Item Ledger Entry before insert.",
+        "guards": [
+          "No source-document filter: item journals posted directly and other documents reach this subscriber with an empty journal field, so the entry stays empty.",
+          "Assign only the custom field; do not change quantity, cost or application fields of the entry."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification explicitly on all three new table-extension fields (no table-level inheritance in a tableextension); never leave ToBeClassified or use SystemMetadata for a customer-supplied reference.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Add the new subscriber codeunit and other new objects to the app's permission set entries, as the full-path plan requires for new objects.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "ship-carries-reference-to-ile",
+        "given": "A customer and item created with LibrarySales/LibraryInventory, and a sales order with one item line whose Customer Batch Reference is set to a generated value.",
+        "when": "The order is posted with Ship.",
+        "then": "The item ledger entry for the shipment line (Document No. = posted shipment, Document Line No. = line) has the same Customer Batch Reference.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "ship-and-invoice-carries-reference",
+        "given": "A library-created sales order with one item line carrying a reference.",
+        "when": "The order is posted with Ship and Invoice.",
+        "then": "Every item ledger entry created for that line carries the line's reference.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "each-line-keeps-own-reference",
+        "given": "A library-created sales order with two item lines carrying different references.",
+        "when": "The order is posted.",
+        "then": "Each line's item ledger entries carry that line's reference, not the other line's.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "item-journal-posting-leaves-reference-empty",
+        "given": "An item journal line created with LibraryInventory, not from a sales line.",
+        "when": "The item journal is posted.",
+        "then": "The resulting item ledger entry has an empty Customer Batch Reference.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Mapping which posting stages the field must reach and the extension step per stage; page extensions and permission entries per stage; post-and-read-back test.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage before writing code.",
+        "Item Ledger Entry is reached by a field-by-field copy into Item Journal Line, then into the entry: two subscribers.",
+        "Name the page extensions that show the field, the permission set entries for new objects, and a test that posts a document and reads the value back from every target.",
+        "Do not plan to fill ledger entries after posting by finding and modifying them.",
+        "If the field is mirrored on posted tables, decide whether Copy Document should copy it back."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+      "used-for": "Core mechanism: Sales Line -> Item Journal Line -> Item Ledger Entry via two events.",
+      "constraints": [
+        "Add the field to Item Journal Line and Item Ledger Entry and subscribe to OnAfterCopyItemJnlLineFromSalesLine and OnAfterInitItemLedgEntry.",
+        "Copy the value into the new item ledger entry before it is inserted, as part of posting.",
+        "No source-document filter is needed: other item postings leave the field empty.",
+        "Value entries, warehouse entries and other inventory records are separate stages; extend them only when the plan names them.",
+        "Do not find item ledger entries after posting and Modify them, and do not rely on posted sales lines to reach the item ledger."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.good.al",
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md",
+      "used-for": "Confirms that enriching the item journal line through supported posting events stays within the owning sales posting workflow.",
+      "constraints": [
+        "Item ledger entries are created only by the posting workflow; never insert or overwrite posted quantity, remaining quantity, application or cost fields.",
+        "Supported posting events may enrich validated journal data within the owning workflow; an extension-owned annotation field is outside the transaction-state concern."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification on the new table-extension fields.",
+      "constraints": [
+        "Every Normal field added by a tableextension must set its own DataClassification.",
+        "ToBeClassified is not a safe default; do not under-classify customer data as SystemMetadata.",
+        "Choose the classification at field definition time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltip placement for the new field on the sales subform and item ledger entries page.",
+      "constraints": [
+        "On runtime 13.0 or later, define the tooltip on the table field and omit duplicate page-level tooltips.",
+        "Before runtime 13.0, user-facing page fields need page-level tooltips.",
+        "Tooltip text must say what the value is used for, without inventing behavior."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Whether page fields can inherit the table-field tooltip.",
+      "constraints": [
+        "A bound page field inherits the source field's ToolTip only on runtime 13.0 (BC24) or later.",
+        "A control with neither inline nor inherited tooltip is a real gap."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for customers, items, sales documents and item journals.",
+      "constraints": [
+        "Create fixtures with the Library codeunits (LibrarySales, LibraryInventory, LibraryRandom), not hand-rolled Init/Insert.",
+        "Create parents before dependent records and Validate foreign keys."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+      "used-for": "Test values for the reference and quantities.",
+      "constraints": [
+        "Do not rely on pre-existing business records; create what the test needs.",
+        "Generate incidental values such as the reference; keep scenario-defining values explicit."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "field-type-and-length",
+      "question": "Should Customer Batch Reference be Code or Text, and what maximum length does the customer's batch reference need?",
+      "affects": [
+        "sales-line-ext",
+        "item-journal-line-ext",
+        "item-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "document-types",
+      "question": "Which sales document types need the reference: orders and invoices only, or also return orders and credit memos (whose item ledger entries come from return receipts)? This decides which subform pages get the field.",
+      "affects": [
+        "sales-subform-ext",
+        "ship-carries-reference-to-ile"
+      ]
+    },
+    {
+      "id": "other-stages",
+      "question": "Must the reference also reach posted shipment/invoice/credit memo/return receipt lines, Sales Line Archive, value entries or warehouse entries? The request names only item ledger entries; if posted lines are added, should Copy Document copy it back?",
+      "affects": [
+        "sales-line-ext"
+      ]
+    },
+    {
+      "id": "mandatory-before-posting",
+      "question": "Must posting be blocked when an item line has no Customer Batch Reference, or is an empty reference allowed?",
+      "affects": [
+        "sales-line-ext",
+        "batch-ref-posting-subscribers"
+      ]
+    },
+    {
+      "id": "non-item-lines",
+      "question": "Should the field be editable on non-item lines (G/L account, resource, charge), which create no item ledger entries?",
+      "affects": [
+        "sales-line-ext",
+        "sales-subform-ext"
+      ]
+    },
+    {
+      "id": "item-tracking-splits",
+      "question": "When a line is split across several item ledger entries (lot/serial tracking or partial shipments), should every entry carry the same line-level reference? Confirm with a test on a tracked item.",
+      "affects": [
+        "batch-ref-posting-subscribers",
+        "ship-and-invoice-carries-reference"
+      ]
+    },
+    {
+      "id": "target-runtime",
+      "question": "What bc-version/runtime does the app target? It decides whether the tooltip lives on the table field (runtime 13.0+) or on each page control.",
+      "affects": [
+        "sales-subform-ext",
+        "item-ledger-entries-page-ext",
+        "sales-line-ext"
+      ]
+    },
+    {
+      "id": "data-classification-value",
+      "question": "Does the reference identify a person or only a batch? Confirm CustomerContent versus a more specific classification.",
+      "affects": [
+        "sales-line-ext",
+        "item-journal-line-ext",
+        "item-ledger-entry-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version is unknown (no repository or app.json supplied); all cited articles declare bc-version [all], and the tooltip placement depends on it (open question target-runtime).",
+    "countries and application-area are unknown; all cited articles declare countries [w1] and application-area [all].",
+    "Permission-set membership: no repository was supplied, so it is unknown whether the app already has a permission set to extend."
+  ]
+}

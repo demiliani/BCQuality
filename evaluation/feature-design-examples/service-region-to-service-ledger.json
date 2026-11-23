@@ -1,0 +1,957 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Service orders and service contracts need a Region Code. Contract invoices must take it from the contract. The code must appear on posted service invoices and on all service ledger entries, including those from credit memos, and after a service invoice is posted our field-planning system must be notified.",
+    "business-process": "Service management: service orders, service contract invoicing and service posting (Service-Post, Serv-Documents Mgt., ServLedgEntries-Post), plus outbound integration after posting.",
+    "candidates": 35,
+    "selected": 29
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "service-contract-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Contract Header",
+        "purpose": "Holds the Region Code on service contracts so contract invoices can take it from the contract.",
+        "fields": [
+          {
+            "name": "Region Code",
+            "type": "Code[n], n equal to the key length of the table Region Code relates to (see open question region-code-source-table)",
+            "note": "TableRelation to the region table; same type and exact length as the related key. Explicit DataClassification on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "service-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Header",
+        "purpose": "Holds the Region Code on service orders, service invoices (including contract invoices) and service credit memos; it is the source for posted invoices and every service ledger entry.",
+        "fields": [
+          {
+            "name": "Region Code",
+            "type": "Code[n], n equal to the key length of the table Region Code relates to (see open question region-code-source-table)",
+            "note": "Same field number, name, type and length as on Service Invoice Header. TableRelation sized to the related key. Explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "service-invoice-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Invoice Header",
+        "purpose": "Shows the Region Code on posted service invoices; filled by the standard TransferFields from Service Header, so no subscriber is needed.",
+        "fields": [
+          {
+            "name": "Region Code",
+            "type": "Code[n], n equal to the key length of the table Region Code relates to (see open question region-code-source-table)",
+            "note": "Same field number, name, type and length as on Service Header. Editable = false. Explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "service-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Ledger Entry",
+        "purpose": "Stores the Region Code on every service ledger entry. A stored field is chosen over a related table keyed by Entry No. because the request requires the code on all entries; the related-table alternative applies to optional or sparse attributes on hot ledgers (BC23 and later) and is kept as an open question.",
+        "fields": [
+          {
+            "name": "Region Code",
+            "type": "Code[n], n equal to the key length of the table Region Code relates to (see open question region-code-source-table)",
+            "note": "Filled before insert on all four ServLedgEntries-Post insert paths. Explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "service-region-posting",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Service Region Posting",
+        "purpose": "Event subscribers that copy the Region Code from the service contract to the contract invoice header and from the service header to each service ledger entry insert path.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "id": "field-planning-outbox",
+        "action": "create",
+        "object-type": "table",
+        "target": "Field Planning Notif. Outbox",
+        "purpose": "Outbox row per posted service invoice, inserted in the posting follow-up and deleted by the job queue worker only after the notification succeeded. Its SystemId is the idempotency key sent to the field-planning system.",
+        "fields": [
+          {
+            "name": "Entry No.",
+            "type": "Integer",
+            "note": "AutoIncrement primary key."
+          },
+          {
+            "name": "Service Invoice No.",
+            "type": "Code[20]",
+            "note": "Posted service invoice number passed by OnAfterPostServiceDoc."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "field-planning-setup",
+        "action": "create",
+        "object-type": "table",
+        "target": "Field Planning Setup",
+        "purpose": "Singleton setup holding the field-planning endpoint URL and options; credentials are not stored in it.",
+        "fields": [
+          {
+            "name": "Primary Key",
+            "type": "Code[10]",
+            "note": "Sole key, blank value."
+          },
+          {
+            "name": "Endpoint URL",
+            "type": "Text",
+            "note": "Validated against a fixed expected host or pattern before every call."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/security/validate-user-configurable-urls.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "field-planning-setup-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Field Planning Setup",
+        "purpose": "Card page for the singleton setup: InsertAllowed = false, DeleteAllowed = false, inserts the blank row on open; credential entry writes to IsolatedStorage, not to a field.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "field-planning-notif-posting",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Field Planning Notif. Posting",
+        "purpose": "Subscriber to Service-Post OnAfterPostServiceDoc that inserts an outbox row when a service invoice was posted. No HTTP call, no Commit, no PreviewMode parameter.",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      },
+      {
+        "id": "field-planning-notif-sender",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Field Planning Notif. Sender",
+        "purpose": "Job queue handler (TableNo = Job Queue Entry) that sends each committed outbox row to the field-planning system with the row SystemId as idempotency key, checks transport failure and HTTP status, and deletes the row only after success. Non-interactive; failures propagate to the job queue.",
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+          "microsoft/knowledge/security/validate-user-configurable-urls.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/security/secrettext-for-credentials.md",
+          "microsoft/knowledge/security/prefer-oauth2-over-api-keys-for-external-http-calls.md",
+          "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md"
+        ]
+      },
+      {
+        "id": "field-planning-privacy-notice",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Field Planning Privacy Notice",
+        "purpose": "Registers a dedicated privacy notice ID for the field-planning integration through OnRegisterPrivacyNotices; the sender checks that same ID.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-integration-in-privacy-notice-registrations.md",
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md"
+        ]
+      },
+      {
+        "id": "service-order-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Service Order",
+        "purpose": "Lets users enter the Region Code on service orders.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "service-contract-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Service Contract",
+        "purpose": "Lets users enter the Region Code on service contracts.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "posted-service-invoice-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Service Invoice",
+        "purpose": "Shows the Region Code on posted service invoices (read-only).",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "service-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Service Ledger Entries",
+        "purpose": "Shows the Region Code as a column on service ledger entries.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md"
+        ]
+      },
+      {
+        "id": "field-planning-permissions",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Service Region + Field Planning",
+        "purpose": "Non-assignable building block listing each new table, page and codeunit explicitly (no wildcards), included by an assignable role-shaped set.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "Service Contract Header.Region Code",
+        "mechanism": "user-entry",
+        "note": "Entered on the Service Contract page.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Service Header.Region Code (service order, invoice, credit memo)",
+        "mechanism": "user-entry",
+        "note": "Entered on the service document page; any default source is an open question.",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md"
+        ]
+      },
+      {
+        "from": "Service Contract Header.Region Code",
+        "to": "Service Header.Region Code (contract invoice)",
+        "mechanism": "event-copy",
+        "note": "ServContractManagement OnBeforeServHeaderModify in CreateServHeader.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "Service Header.Region Code",
+        "to": "Service Invoice Header.Region Code",
+        "mechanism": "transferfields",
+        "note": "Serv-Documents Mgt. TransferFields into a temporary record, copied to the real table in Finalize; requires the same field number, type and length.",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Service Header.Region Code",
+        "to": "Service Ledger Entry.Region Code (usage)",
+        "mechanism": "event-copy",
+        "note": "OnBeforeServLedgerEntryInsert.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "Service Header.Region Code",
+        "to": "Service Ledger Entry.Region Code (sale)",
+        "mechanism": "event-copy",
+        "note": "OnBeforeServLedgerEntrySaleInsert; covers contract invoices.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "Service Header.Region Code",
+        "to": "Service Ledger Entry.Region Code (credit memo)",
+        "mechanism": "event-copy",
+        "note": "OnInsertServLedgEntryCrMemoOnBeforeServLedgEntryInsert.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "Service Header.Region Code",
+        "to": "Service Ledger Entry.Region Code (credit memo usage)",
+        "mechanism": "event-copy",
+        "note": "OnInsertServLedgerEntryCrMUsageOnBeforeServLedgEntryInsert.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "OnAfterPostServiceDoc ServInvoiceNo",
+        "to": "Field Planning Notif. Outbox",
+        "mechanism": "event-copy",
+        "note": "Row inserted only when ServInvoiceNo is not blank.",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      },
+      {
+        "from": "Field Planning Notif. Outbox",
+        "to": "Field-planning system",
+        "mechanism": "other",
+        "note": "Recurring job queue entry sends committed rows over HTTP with SystemId as idempotency key, then deletes the row.",
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit ServContractManagement",
+        "event": "OnBeforeServHeaderModify(var ServiceHeader; ServiceContractHeader)",
+        "purpose": "Copy Region Code from the contract to the contract invoice header before CreateServHeader modifies it.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit ServLedgEntries-Post",
+        "event": "OnBeforeServLedgerEntryInsert(var ServiceLedgerEntry; ServiceLine; ServiceItemLine; ServiceHeader)",
+        "purpose": "Set Region Code on usage service ledger entries.",
+        "guards": [
+          "Assign only; do not Modify posted entries afterwards."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit ServLedgEntries-Post",
+        "event": "OnBeforeServLedgerEntrySaleInsert(var ServiceLedgerEntry; ServiceLine; ServiceItemLine; ServiceHeader)",
+        "purpose": "Set Region Code on sale service ledger entries created on invoicing.",
+        "guards": [
+          "Assign only; do not Modify posted entries afterwards."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit ServLedgEntries-Post",
+        "event": "OnInsertServLedgEntryCrMemoOnBeforeServLedgEntryInsert(var ServiceLedgerEntry; ServiceHeader; ServiceLine)",
+        "purpose": "Set Region Code on credit memo service ledger entries.",
+        "guards": [
+          "Parameter order differs from the usage and sale events; write the signature for this event."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit ServLedgEntries-Post",
+        "event": "OnInsertServLedgerEntryCrMUsageOnBeforeServLedgEntryInsert(var ServiceLedgerEntry; ServiceHeader; ServiceLine)",
+        "purpose": "Set Region Code on credit memo usage service ledger entries.",
+        "guards": [
+          "Parameter order differs from the usage and sale events; write the signature for this event."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit Service-Post",
+        "event": "OnAfterPostServiceDoc(var ServiceHeader; ServShipmentNo; ServInvoiceNo; ServCrMemoNo; var ServDocumentsMgt; CommitIsSuppressed; PassedShip; PassedConsume; PassedInvoice; WhseShip; Invoice)",
+        "purpose": "Queue a field-planning notification for the posted service invoice.",
+        "guards": [
+          "Exit when ServInvoiceNo is blank.",
+          "No PreviewMode parameter: the event is not raised during posting preview.",
+          "Do not call Commit(); never when CommitIsSuppressed is true.",
+          "No HTTP call in the subscriber; insert an outbox row only.",
+          "Do not raise errors expecting posting to roll back."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit Privacy Notice",
+        "event": "OnRegisterPrivacyNotices",
+        "purpose": "Register the dedicated field-planning privacy notice ID.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-integration-in-privacy-notice-registrations.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Give every field added by the table extensions an explicit DataClassification, classify the new tables at table level where it fits, and leave no ToBeClassified.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Register a dedicated privacy notice for the field-planning integration and check approval for that ID before any data is sent; the job queue path checks the state without UI.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-integration-in-privacy-notice-registrations.md",
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+          "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Field Planning Setup singleton with card page holding the endpoint URL; validate the URL against a fixed expected host or pattern before each call.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/security/validate-user-configurable-urls.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Store credentials only in IsolatedStorage and carry them as SecretText (BC23 and later per the article); use the OAuth2 codeunit when the field-planning system supports OAuth.",
+        "knowledge": [
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/security/secrettext-for-credentials.md",
+          "microsoft/knowledge/security/prefer-oauth2-over-api-keys-for-external-http-calls.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "Recurring job queue entry running Field Planning Notif. Sender over committed outbox rows; non-interactive, errors propagate, row deleted only after success.",
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Non-assignable building-block permission set for the new tables, pages and codeunits with explicit entries and least letters, included by an assignable set.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "service-order-region-reaches-invoice-and-ledger",
+        "given": "A service order with Region Code set, created with the test Library codeunits and random values.",
+        "when": "The order is posted as shipped and invoiced.",
+        "then": "Service Invoice Header and the usage and sale Service Ledger Entries carry the same Region Code.",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "contract-invoice-takes-region-from-contract",
+        "given": "A signed service contract with Region Code set.",
+        "when": "Contract invoices are created and the resulting service invoice is posted.",
+        "then": "The created Service Header, the Service Invoice Header and the sale Service Ledger Entries carry the contract's Region Code.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md",
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "credit-memo-ledger-entries-carry-region",
+        "given": "A service credit memo with Region Code set and lines producing credit memo and credit memo usage entries.",
+        "when": "The credit memo is posted.",
+        "then": "Every Service Ledger Entry created by the posting carries the Region Code.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "invoice-posting-queues-notification",
+        "given": "A service order with Region Code set.",
+        "when": "The order is posted with invoice.",
+        "then": "One Field Planning Notif. Outbox row exists with the posted invoice number.",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "ship-only-posting-queues-nothing",
+        "given": "A service order.",
+        "when": "The order is posted as ship only.",
+        "then": "No outbox row is created.",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "preview-posting-queues-nothing",
+        "given": "A service order ready to invoice.",
+        "when": "Posting preview is run.",
+        "then": "No outbox row exists afterwards.",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "sender-deletes-row-only-after-success",
+        "given": "An outbox row, approved privacy notice and a mocked endpoint returning success.",
+        "when": "The job queue handler runs.",
+        "then": "The request carries the row SystemId as idempotency key and the row is deleted.",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "sender-propagates-non-success-status",
+        "given": "An outbox row and an endpoint returning a non-success HTTP status.",
+        "when": "The job queue handler runs.",
+        "then": "The handler ends with an error, the row remains, and the response body is not parsed as a success payload.",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+          "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "sender-blocks-without-consent",
+        "given": "An outbox row and the field-planning privacy notice not approved.",
+        "when": "The job queue handler runs.",
+        "then": "No request is sent and the row remains.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "sender-rejects-unexpected-endpoint-host",
+        "given": "Field Planning Setup with an endpoint URL whose host does not match the expected host or pattern.",
+        "when": "The job queue handler runs.",
+        "then": "The call fails with an error before any request is sent.",
+        "knowledge": [
+          "microsoft/knowledge/security/validate-user-configurable-urls.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md",
+      "used-for": "Service ledger entry insert paths and contract invoice header event.",
+      "constraints": [
+        "Subscribe to every ServLedgEntries-Post insert event whose entry type is needed; all service ledger entries need all four subscribers.",
+        "Parameter order differs between the events; a subscriber written for one does not match another.",
+        "Copy a contract value to the invoice header in ServContractManagement OnBeforeServHeaderModify.",
+        "Add the field to Warranty Ledger Entry and subscribe to OnBeforeWarrantyLedgerEntryInsert only when warranty analysis needs it.",
+        "Do not find service ledger entries after posting and Modify them."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.good.al",
+        "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+      "used-for": "Posted service document mirroring and follow-up after service posting.",
+      "constraints": [
+        "Same field number, name, type and length on Service Header and each posted table the plan needs; no subscriber for that hop.",
+        "Posted documents exist only after Finalize; do not Get the posted invoice from a subscriber that runs while lines are posted.",
+        "Do follow-up work in OnAfterPostServiceDoc using the posted document numbers it passes.",
+        "OnAfterPostServiceDoc has no PreviewMode parameter and is not raised in posting preview; do not add one.",
+        "An error there does not undo posting; hand external calls to an outbox; do not Commit when CommitIsSuppressed is true."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.good.al",
+        "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Field-number mirroring rule the service article refers to.",
+      "constraints": [
+        "TransferFields matches by field number; a different number is skipped without error.",
+        "Keep mirrored fields non-editable on posted tables.",
+        "Do not patch posted documents with an OnAfter insert subscriber and Modify."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+      "used-for": "Outbox rule for after-posting follow-up referenced by the service article.",
+      "constraints": [
+        "Treat the after-posting event as follow-up processing, not as part of posting.",
+        "Do not call Commit() in the subscriber; when CommitIsSuppressed is true the caller owns the transaction.",
+        "Insert an outbox row and let a recurring job queue entry send it; make the call idempotent."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length of the mirrored Region Code.",
+      "constraints": [
+        "A field mirrored across a TransferFields cascade has the exact same number, data type and length on every table in the cascade."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing Region Code against the table it relates to.",
+      "constraints": [
+        "Read the related field's declared type and length; do not assume Code[10] or Code[20].",
+        "An unconditional TableRelation field has the same type and exact length as the related field."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Stored field versus related table on Service Ledger Entry (applies from BC23).",
+      "constraints": [
+        "Put optional, sparse or integration attributes on hot ledgers in a related table keyed by Entry No.",
+        "Use a stored tableextension field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Decisions for the new outbox and setup tables: setup, privacy, permissions.",
+      "constraints": [
+        "Plan setup, data classification and permissions for every new table instead of only the table and page.",
+        "A decision the request does not settle is a question for the requester, not a default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md",
+      "used-for": "Planning order for the outbound field-planning notification.",
+      "constraints": [
+        "Outbound calls never run inside a write transaction; record an outbox row and send it from a recurring job queue entry.",
+        "Use a stable idempotency key per outbox row; the external service must deduplicate.",
+        "Who calls whom, how often and what the external service does with a repeated request are questions for the requester."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+      "used-for": "Deferring the HTTP call out of posting.",
+      "constraints": [
+        "Insert the outbox work item in the same transaction as the change and process committed rows with a recurring job queue entry.",
+        "The worker performs HTTP before deleting the item; do not use Commit() as a general remedy."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+      "used-for": "Retry safety of the notification.",
+      "constraints": [
+        "Send a stable request ID that exists before processing, such as the outbox row SystemId, on every attempt.",
+        "Delete the outbox row only after the external call and all local updates succeed; a Processed flag does not solve the failure window."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+      "used-for": "Job queue handler behaviour.",
+      "constraints": [
+        "No Confirm, Page.RunModal, Report.RunModal, upload, download or Message-only outcome in the job queue entry point."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+      "used-for": "Job queue failure reporting.",
+      "constraints": [
+        "Let an error that invalidates the run propagate out of the entry point; do not swallow a failed TryFunction or Boolean result."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md",
+      "used-for": "Transport failure handling in the sender.",
+      "constraints": [
+        "When the Boolean return is captured and false, do not read status, headers or content."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+      "used-for": "HTTP status handling in the sender.",
+      "constraints": [
+        "Check IsSuccessStatusCode or the expected status before treating the body as a success payload."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+      "used-for": "Consent before sending data to the field-planning system.",
+      "constraints": [
+        "Check the integration's own notice ID before sending; use GetPrivacyNoticeApprovalState when the flow must not show UI.",
+        "No path issues the request without approval; do not borrow a built-in notice ID."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/register-integration-in-privacy-notice-registrations.md",
+      "used-for": "Registering the field-planning privacy notice.",
+      "constraints": [
+        "Use a stable extension-owned ID registered through Privacy Notice OnRegisterPrivacyNotices or CreatePrivacyNotice; use the same ID for consent checks."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/secrets-isolated-storage.md",
+      "used-for": "Where field-planning credentials are stored.",
+      "constraints": [
+        "Credentials live in IsolatedStorage, never in a table field, including a setup table."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/secrettext-for-credentials.md",
+      "used-for": "Carrying credentials (applies from BC23).",
+      "constraints": [
+        "Declare credential parameters and variables as SecretText end to end; never round-trip through Text."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/prefer-oauth2-over-api-keys-for-external-http-calls.md",
+      "used-for": "Authentication choice for the field-planning call.",
+      "constraints": [
+        "When the partner supports OAuth, use the OAuth2 codeunit; keep tokens and secrets as SecretText in IsolatedStorage."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/validate-user-configurable-urls.md",
+      "used-for": "Endpoint URL stored in setup.",
+      "constraints": [
+        "Before any HttpClient call whose URL comes from a table field, validate it with Uri.AreURIsHaveSameHost or Uri.IsValidURIPattern and error when it fails."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Classification of added fields and new tables.",
+      "constraints": [
+        "Every Normal field a tableextension adds needs an explicit DataClassification; a table-level value covers fields of the table itself."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of classification.",
+      "constraints": [
+        "No field ships with DataClassification = ToBeClassified."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Permission set structure.",
+      "constraints": [
+        "Ship a non-assignable building block and an assignable role-shaped set that includes it."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Permission set entries.",
+      "constraints": [
+        "Enumerate each table and tabledata entry explicitly with only the letters needed; no wildcards."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Page fields showing Region Code.",
+      "constraints": [
+        "From runtime 13.0 (BC24) define the tooltip on the table field and let bound page fields inherit it; earlier targets need page-level tooltips.",
+        "Tooltip text explains what the value is used for, without invented effects."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+      "used-for": "Field Planning Setup table and page.",
+      "constraints": [
+        "Primary Key Code[10] is the sole key; card page with InsertAllowed = false, DeleteAllowed = false and an open-time insert of the blank row."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Build prerequisite data with the test Library codeunits, parents first, and Validate foreign keys; no hand-rolled Init/Insert."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Test structure.",
+      "constraints": [
+        "Tag the codeunit with [FEATURE] and each test with [SCENARIO], [GIVEN], [WHEN], [THEN]."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "region-code-source-table",
+      "question": "Which table does Region Code relate to (an existing table such as a territory or country/region table, or a new Region table)? Its key type and length fix the field type on every table.",
+      "affects": [
+        "service-contract-header-ext",
+        "service-header-ext",
+        "service-invoice-header-ext",
+        "service-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "service-document-region-default",
+      "question": "Where does Region Code come from on service orders, standalone service invoices and service credit memos: manual entry only, or a default from the customer, ship-to address or service item?",
+      "affects": [
+        "service-header-ext",
+        "service-order-page-ext"
+      ]
+    },
+    {
+      "id": "other-posted-service-documents",
+      "question": "Must Region Code also appear on posted service shipments and posted service credit memos (Service Shipment Header, Service Cr.Memo Header) and on posted lines?",
+      "affects": [
+        "service-invoice-header-ext"
+      ]
+    },
+    {
+      "id": "warranty-ledger-entries",
+      "question": "Does warranty analysis need Region Code on Warranty Ledger Entry as well?",
+      "affects": [
+        "service-ledger-entry-ext",
+        "service-region-posting"
+      ]
+    },
+    {
+      "id": "ledger-entries-outside-posting",
+      "question": "Are there service ledger entries that must carry Region Code but are created outside ServLedgEntries-Post posting (for example during contract invoice creation)? The opened knowledge covers only the four ServLedgEntries-Post insert paths.",
+      "affects": [
+        "service-region-posting",
+        "credit-memo-ledger-entries-carry-region"
+      ]
+    },
+    {
+      "id": "ledger-field-storage",
+      "question": "Is Region Code needed as a native column on service ledger lists and read on most accesses, or could it live in a related table keyed by Entry No.?",
+      "affects": [
+        "service-ledger-entry-ext",
+        "service-ledger-entries-page-ext"
+      ]
+    },
+    {
+      "id": "field-planning-interface",
+      "question": "How is the field-planning system notified: HTTP push from Business Central (endpoint, payload, authentication, OAuth support) or does it pull through an API? Does it deduplicate on an idempotency key?",
+      "affects": [
+        "field-planning-notif-sender",
+        "field-planning-setup",
+        "field-planning-outbox"
+      ]
+    },
+    {
+      "id": "notification-timing-and-scope",
+      "question": "How soon after posting must the notification arrive (job queue recurrence), and does it apply to every posted service invoice, including contract invoices, or only some?",
+      "affects": [
+        "field-planning-notif-posting",
+        "field-planning-notif-sender"
+      ]
+    },
+    {
+      "id": "notification-payload-personal-data",
+      "question": "Which data does the notification send (invoice number only, or customer and address data)? This sets the privacy notice text and data classification.",
+      "affects": [
+        "field-planning-privacy-notice",
+        "field-planning-outbox"
+      ]
+    },
+    {
+      "id": "existing-contracts-backfill",
+      "question": "Must existing service contracts and open service documents get a Region Code on upgrade, or stay blank?",
+      "affects": [
+        "service-contract-header-ext",
+        "service-header-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area were not supplied; performance/prefer-related-table-over-extension-on-hot-ledgers and security/secrettext-for-credentials apply from BC23 and style/tooltip-required-on-page-fields inheritance from BC24 (runtime 13.0).",
+    "The field-planning system's interface (protocol, endpoint, payload, authentication) is not covered by BCQuality knowledge; the sender design rests on the outbound guidance and must be confirmed against the answer to field-planning-interface."
+  ]
+}

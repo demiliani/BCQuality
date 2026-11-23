@@ -1,0 +1,459 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Shopify is the master for our customer and product data. When the Shopify Connector creates or updates a customer from Shopify, we want the Shopify customer id stored on the Business Central customer. When it creates or updates an item from a Shopify product, the Shopify product type must be stored in a new item field so purchasing can filter on it. The sync runs every hour in the background.",
+    "business-process": "Store two Shopify values on Business Central master data when the Shopify Connector, with Shopify as the master side, creates or updates customers and items during its hourly background sync: the Shopify customer id on Customer and the Shopify product type on a new Item field that purchasing can filter on.",
+    "candidates": 11,
+    "selected": 11
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "customer-shopify-id-field",
+        "action": "create",
+        "object-type": "tableextension",
+        "target": "Customer",
+        "purpose": "Holds the Shopify customer id that the connector's create and update paths stamp. Read-only for users because Shopify is the master.",
+        "fields": [
+          {
+            "name": "Shopify Customer Id",
+            "type": "BigInteger",
+            "note": "Same type as the Shopify customer Id it copies. Editable = false. DataClassification = CustomerContent, set on the field because a tableextension has no table-level value to inherit. Field number from the app's ID range."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "item-shopify-product-type-field",
+        "action": "create",
+        "object-type": "tableextension",
+        "target": "Item",
+        "purpose": "New Item field that holds the Shopify product type so purchasing can filter items on it.",
+        "fields": [
+          {
+            "name": "Shopify Product Type",
+            "type": "Text[100]",
+            "note": "Value copied with CopyStr to the field length. DataClassification = CustomerContent. Carry a Caption and a ToolTip on the table field so page controls inherit the tooltip (from BC24/runtime 13.0). Length must be confirmed against the Shpfy Product 'Product Type' field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "item-list-product-type",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item List",
+        "purpose": "Show Shopify Product Type as a column on the item list so purchasing can see and filter on it. The bound control inherits the table field's ToolTip; on runtimes before 13.0 the control needs its own ToolTip.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "shopify-master-data-stamps",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Shopify Master Data Stamps",
+        "purpose": "Holds the four event subscribers on Shpfy Customer Events and Shpfy Product Events that stamp the customer id and the product type. Each subscriber delegates to a procedure of this codeunit that takes the Shopify and BC records, so tests can call the stamping logic directly. No UI and no Commit, because the sync runs as a job queue entry.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Shpfy Customer Address.Customer Id",
+        "to": "Customer.Shopify Customer Id",
+        "mechanism": "event-copy",
+        "note": "Customer creation (import with Auto Create Unknown Customers, or explicit creation from the Shopify customer): in OnAfterCreateCustomer the customer is already inserted and modified, and the connector stores the Shopify link only afterwards, so take the id from the Shopify customer address parameter, assign it and call Customer.Modify.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md"
+        ]
+      },
+      {
+        "from": "Shpfy Customer.Id",
+        "to": "Customer.Shopify Customer Id",
+        "mechanism": "event-copy",
+        "note": "Customer update by Shpfy Customer Import, which runs only when Shopify Can Update Customer is on: in OnAfterUpdateCustomer the customer is already saved, so assign and call Customer.Modify, only when the value differs. The standard update never touches extension fields.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md"
+        ]
+      },
+      {
+        "from": "Shpfy Product.Product Type",
+        "to": "Item.Shopify Product Type",
+        "mechanism": "event-copy",
+        "note": "Item creation from a Shopify product (Auto Create Unknown Items): in OnAfterCreateItem the item is already inserted from the template and modified, so assign with CopyStr and call Item.Modify.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md"
+        ]
+      },
+      {
+        "from": "Shpfy Product.Product Type",
+        "to": "Item.Shopify Product Type",
+        "mechanism": "event-copy",
+        "note": "Item update by Shpfy Product Import, which runs Shpfy Update Item only when Shopify Can Update Items is on: in OnDoUpdateItemBeforeModify assign the value without Modify and set IsModifiedByEvent to true, so the connector modifies the item even when no standard field changed.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Shpfy Customer Events",
+        "event": "OnAfterCreateCustomer",
+        "purpose": "Stamp the Shopify customer id on a customer the connector just created, then Modify.",
+        "guards": [
+          "Exit when Customer.\"No.\" is blank.",
+          "Take the id from ShopifyCustomerAddress.\"Customer Id\"; the connector stores the Shopify customer link only after this event.",
+          "Raised also when an OnBeforeCreateCustomer subscriber handled the creation.",
+          "No UI and no Commit: the sync can run in a job queue session."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/events/treat-local-and-internal-events-as-subscriber-contracts.md"
+        ]
+      },
+      {
+        "publisher": "Shpfy Customer Events",
+        "event": "OnAfterUpdateCustomer",
+        "purpose": "Keep the Shopify customer id in step on every customer update from Shopify, then Modify.",
+        "guards": [
+          "Compare in memory and exit when Customer.\"Shopify Customer Id\" already equals ShopifyCustomer.Id, before calling Modify.",
+          "Raised after Customer.Modify, also when OnBeforeUpdateCustomer was handled.",
+          "No UI and no Commit."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      },
+      {
+        "publisher": "Shpfy Product Events",
+        "event": "OnAfterCreateItem",
+        "purpose": "Stamp the Shopify product type on an item the connector just created from a Shopify product, then Modify.",
+        "guards": [
+          "Exit when Item.\"No.\" is blank.",
+          "CopyStr the product type to the field length.",
+          "No UI and no Commit."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "publisher": "Shpfy Product Events",
+        "event": "OnDoUpdateItemBeforeModify",
+        "purpose": "Set the Shopify product type during the item update and let the connector save it.",
+        "guards": [
+          "Exit when the value already equals the truncated product type, so IsModifiedByEvent is not set needlessly.",
+          "Do not call Modify; set IsModifiedByEvent to true.",
+          "Do not use OnAfterUpdateItem: it fires only when a standard field changed and the item is already saved.",
+          "No UI and no Commit."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "Document the shop settings the feature requires on each Shpfy Shop: Shopify Can Update Customer on (not Can Update Shopify Customer), Sync Item = From Shopify with Shopify Can Update Items on (not Can Update Shopify Products), and Auto Create Unknown Customers / Auto Create Unknown Items on if Shopify should create new records. With BC as the master the update events never run and the fields stay blank.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "The hourly sync runs as job queue entries when Allow Background Syncs is on. All subscribers stay non-interactive (no Confirm, RunModal or Message) and do not Commit; let errors propagate so the connector marks the failure.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Classify both new fields as CustomerContent on the field itself; a tableextension cannot inherit a table-level classification.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Add an app.json dependency on the Shopify Connector app.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "create-customer-stamps-shopify-id",
+        "given": "A customer created with LibrarySales.CreateCustomer and a Shpfy Customer Address record with a random Customer Id",
+        "when": "The stamping procedure behind OnAfterCreateCustomer runs",
+        "then": "Customer.\"Shopify Customer Id\" read back from the database equals the address's Customer Id. The connector's create path calls Shopify and its event publishers are internal procedures, so the test calls the subscriber's procedure directly.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "update-customer-stamps-shopify-id",
+        "given": "A customer with a blank or different Shopify Customer Id and a Shpfy Customer record with a random Id",
+        "when": "The stamping procedure behind OnAfterUpdateCustomer runs",
+        "then": "The stored Customer.\"Shopify Customer Id\" equals the Shpfy Customer Id; running it again with the same Id performs no further change.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      },
+      {
+        "id": "create-item-stamps-product-type",
+        "given": "An item created with LibraryInventory.CreateItem and a Shpfy Product with a random Product Type",
+        "when": "The stamping procedure behind OnAfterCreateItem runs",
+        "then": "Item.\"Shopify Product Type\" read back from the database equals the product type.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "update-item-sets-modified-flag",
+        "given": "An item whose Shopify Product Type differs from the Shpfy Product's Product Type",
+        "when": "The procedure behind OnDoUpdateItemBeforeModify runs with IsModifiedByEvent = false",
+        "then": "The item variable carries the new product type and IsModifiedByEvent is true; the procedure itself did not modify the item in the database.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "update-item-unchanged-leaves-flag",
+        "given": "An item whose Shopify Product Type already equals the Shpfy Product's Product Type",
+        "when": "The procedure behind OnDoUpdateItemBeforeModify runs with IsModifiedByEvent = false",
+        "then": "IsModifiedByEvent stays false.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      },
+      {
+        "id": "long-product-type-is-truncated",
+        "given": "A Shpfy Product whose Product Type is longer than the Item field",
+        "when": "The procedure behind OnAfterCreateItem runs",
+        "then": "The item stores the first characters up to the field length and no overflow error is raised.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md"
+        ]
+      }
+    ],
+    "dependencies": [
+      {
+        "app": "Shopify Connector",
+        "id": "ec255f57-31d0-4ca2-b751-f2fa7c745abb",
+        "publisher": "Microsoft",
+        "reason": "The subscribers bind to Shpfy Customer Events and Shpfy Product Events and read Shpfy Customer, Shpfy Customer Address and Shpfy Product.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+      "used-for": "Master side, the four subscriber events, where each one needs Modify or IsModifiedByEvent, and the shop settings.",
+      "constraints": [
+        "Write the master side into the design and hook only the events of that direction; with BC as master the BC-side update events never run.",
+        "Shopify as master: set customer fields in OnAfterCreateCustomer and OnAfterUpdateCustomer and call Customer.Modify, because the record is already saved.",
+        "Items: set fields in OnDoUpdateItemBeforeModify and set IsModifiedByEvent to true; in OnAfterCreateItem assign and call Item.Modify.",
+        "Do not rely on OnAfterUpdateItem without Modify, nor on Customer OnAfterInsertEvent to detect Shopify-created customers.",
+        "The Shopify customer link is stored only after OnAfterCreateCustomer; OnAfterFindMapping and the customer template events are [InternalEvent]."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.good.al",
+        "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+      "used-for": "Dependency on the Shopify Connector, subscribable integration events, background sync behavior.",
+      "constraints": [
+        "Depend on Shopify Connector, id ec255f57-31d0-4ca2-b751-f2fa7c745abb, publisher Microsoft.",
+        "Check that each event exists and is an [IntegrationEvent]; [InternalEvent] publishers cannot be subscribed to from another app.",
+        "Subscribers must not need UI and must not Commit; with Allow Background Syncs the sync runs as a job queue entry.",
+        "Do not copy connector code; ask for missing events in BCApps."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Cross-cutting rows for a new field: privacy, upgrade back-fill of existing rows, tests reading the value back.",
+      "constraints": [
+        "Existing rows keep blank unless upgrade code fills them; whether to back-fill is a question for the requester.",
+        "Classify the field on every table that holds it.",
+        "Test through each chosen entry point and read the value back from the target."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md",
+      "used-for": "Background-sync row: the job queue handler must be non-interactive and propagate failures.",
+      "constraints": [
+        "Job queue work has no UI and lets failures propagate so the entry shows an error."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+      "used-for": "Guards on every subscriber, which run inside the connector's job queue sync.",
+      "constraints": [
+        "No Confirm, Page.RunModal, Report.RunModal, upload or download in code run by the job queue.",
+        "Do not use Message as the only result notification; let failures propagate to the job queue log."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/events/treat-local-and-internal-events-as-subscriber-contracts.md",
+      "used-for": "Confirms that the connector's event publishers declared internal can still be subscribed to, unlike [InternalEvent].",
+      "constraints": [
+        "local and internal access on Business and Integration event publishers restricts who raises the event, not who subscribes; [InternalEvent] is module-only."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Classification of the two new tableextension fields.",
+      "constraints": [
+        "Every Normal field a tableextension adds must set its own DataClassification.",
+        "Use the value that matches the data, such as CustomerContent; never SystemMetadata or ToBeClassified for customer data."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+      "used-for": "Open question on back-filling customers and items that were synced before the app is installed.",
+      "constraints": [
+        "New fields on existing tables get the datatype default on existing rows; filling them needs an upgrade or install routine guarded by an upgrade tag."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "ToolTip placement for the Item List column; applies from BC24 (runtime 13.0).",
+      "constraints": [
+        "On runtime 13.0 or later a bound page field inherits the table field's ToolTip; do not duplicate it on the page.",
+        "On earlier runtimes, or when the table field has no ToolTip, the page control needs its own."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for customers and items.",
+      "constraints": [
+        "Create customers and items with LibrarySales.CreateCustomer and LibraryInventory.CreateItem, and values with LibraryRandom, not hand-rolled Init/Insert."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+      "used-for": "Cheap in-memory comparison before Modify in the update subscribers, which fire for every synced record.",
+      "constraints": [
+        "Open the subscriber with an in-memory check that exits when there is nothing to do, before any database call."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "back-fill-existing-records",
+      "question": "Customers and items already linked to Shopify before this app is installed will have blank fields until the connector next updates them. Should an install/upgrade routine (guarded by an upgrade tag) fill them from the existing Shpfy Customer and Shpfy Product links, or is waiting for the next sync acceptable?",
+      "affects": [
+        "customer-shopify-id-field",
+        "item-shopify-product-type-field"
+      ]
+    },
+    {
+      "id": "mapped-but-not-updated-customers",
+      "question": "When the connector maps a Shopify customer to an existing BC customer but does not update it (for example Shopify Can Update Customer is off for that shop), no stamp is written. Is that acceptable, or must matched customers also be stamped?",
+      "affects": [
+        "shopify-master-data-stamps",
+        "customer-shopify-id-field"
+      ]
+    },
+    {
+      "id": "multiple-shops",
+      "question": "Is there more than one Shopify shop? A BC customer or item linked to products or customers in several shops would get the value of whichever shop synced last.",
+      "affects": [
+        "customer-shopify-id-field",
+        "item-shopify-product-type-field"
+      ]
+    },
+    {
+      "id": "customer-field-visibility",
+      "question": "Should the Shopify Customer Id be shown on the Customer Card or Customer List, or only stored?",
+      "affects": [
+        "customer-shopify-id-field"
+      ]
+    },
+    {
+      "id": "item-card-and-editability",
+      "question": "Should Shopify Product Type also appear on the Item Card, and should users be able to edit it (it is overwritten on the next sync) or should it be read-only?",
+      "affects": [
+        "item-shopify-product-type-field",
+        "item-list-product-type"
+      ]
+    },
+    {
+      "id": "product-type-length",
+      "question": "Confirm the length of Shpfy Product 'Product Type' in the targeted connector version so the Item field can match it instead of truncating.",
+      "affects": [
+        "item-shopify-product-type-field"
+      ]
+    },
+    {
+      "id": "target-version",
+      "question": "Which Business Central version does the app target? It decides whether the Item List column can inherit the ToolTip from the table field (BC24 and later).",
+      "affects": [
+        "item-list-product-type"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown: no repository or app.json was supplied.",
+    "The Item List page extension rests partly on judgment: no article says which page purchasing filters on; only its ToolTip rule is grounded.",
+    "Testing approach rests partly on judgment: tests call the subscriber codeunit's procedures directly because the connector's sync calls Shopify and its publishers are internal procedures; no opened article prescribes a test library for the Shopify Connector.",
+    "Whether a secondary key on Item 'Shopify Product Type' is needed for purchasing's filters is not covered by an opened article."
+  ]
+}

@@ -28,6 +28,8 @@ For a document table, when the field that attaches the document to a master reco
 
 See sample: [`dimension-management-wiring.good.al`](dimension-management-wiring.good.al).
 
+For designing dimensions for a feature end to end, start from [plan the dimension sources of a custom document](../feature-design/plan-the-dimension-sources-of-a-custom-document.md).
+
 ## Anti Pattern
 
 Adding a dimension-looking field with only a `TableRelation` to Dimension Value, and no call into `DimensionManagement` at all. The field accepts input but never becomes a real Default Dimension record, so it does not validate against blocked values and does not flow into postings.

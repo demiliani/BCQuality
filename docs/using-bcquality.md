@@ -228,6 +228,14 @@ false positive or choose a correct remediation.
 Each article describes one concern. Where samples exist, use its linked
 `.good.al` and `.bad.al` files. Samples are demonstrations, not a deployable app.
 
+Two kinds of domain cover the same business processes. `finance` and `scm`
+state which standard workflow a change must go through, and mainly serve
+reviews. The process domains below them, such as `finance-extensions`,
+`inventory`, `warehouse` and `manufacturing`, describe the path a feature's own
+data takes through that workflow, and mainly serve design. The articles link
+each other where they meet. To plan a feature, start from the feature design
+maps.
+
 | Domain | Browse knowledge |
 | --- | --- |
 | Agent SDK | [Agents (Community)](../community/knowledge/agents/) |
@@ -236,8 +244,20 @@ Each article describes one concern. Where samples exist, use its linked
 | Compatibility | [Breaking changes](../microsoft/knowledge/breaking-changes/) |
 | Data modeling | [Data modeling](../microsoft/knowledge/data-modeling/) |
 | Error handling | [Error handling](../microsoft/knowledge/error-handling/) |
+| Feature design maps | [Feature design](../microsoft/knowledge/feature-design/) |
+| Sales and purchase extensions | [sales-purchase](../microsoft/knowledge/sales-purchase/) |
+| Warehouse and transfers | [warehouse](../microsoft/knowledge/warehouse/) |
+| Item tracking and inventory | [inventory](../microsoft/knowledge/inventory/) |
+| Manufacturing and assembly | [manufacturing](../microsoft/knowledge/manufacturing/) |
+| Projects | [projects](../microsoft/knowledge/projects/) |
+| Finance, payments and fixed assets | [finance-extensions](../microsoft/knowledge/finance-extensions/) |
+| Service management | [service](../microsoft/knowledge/service/) |
+| E-Documents app extensions | [e-documents](../microsoft/knowledge/e-documents/) |
+| Shopify Connector extensions | [shopify](../microsoft/knowledge/shopify/) |
+| Subscription Billing extensions | [subscription-billing](../microsoft/knowledge/subscription-billing/) |
+| Price lists and price calculation | [pricing](../microsoft/knowledge/pricing/) |
 | Events | [Events](../microsoft/knowledge/events/) |
-| Finance | [Finance](../microsoft/knowledge/finance/) |
+| Finance posting rules | [Finance](../microsoft/knowledge/finance/) |
 | Interfaces | [Interfaces](../microsoft/knowledge/interfaces/) |
 | Performance | [Performance](../microsoft/knowledge/performance/) |
 | Privacy | [Privacy](../microsoft/knowledge/privacy/) |
@@ -245,7 +265,7 @@ Each article describes one concern. Where samples exist, use its linked
 | Reporting | [Reporting](../microsoft/knowledge/reporting/) |
 | Security | [Security](../microsoft/knowledge/security/) |
 | Style | [Style](../microsoft/knowledge/style/) |
-| Supply Chain Management | [SCM](../microsoft/knowledge/scm/) |
+| Supply chain posting rules | [SCM](../microsoft/knowledge/scm/) |
 | Telemetry | [Telemetry](../microsoft/knowledge/telemetry/) |
 | Testing | [Testing](../microsoft/knowledge/testing/) |
 | User interface | [UI](../microsoft/knowledge/ui/) |

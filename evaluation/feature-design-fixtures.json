@@ -1,0 +1,2655 @@
+{
+  "description": "Experimental fixtures for al-feature-design. Each case is a plain-language feature request and the checks a design for it must pass. Checks name outcomes a reviewer would insist on, not one exact design.",
+  "cases": [
+    {
+      "id": "delivery-window-to-customer-ledger",
+      "request": "Sales orders need a Delivery Window code chosen by the order taker. The code must be visible on posted shipments and posted invoices, and the collections team wants to filter customer ledger entries by it.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+        "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+      ],
+      "must-extend": [
+        "Sales Header",
+        "Sales Shipment Header",
+        "Sales Invoice Header",
+        "Gen. Journal Line",
+        "Cust. Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyGenJnlLineFromSalesHeader",
+        "OnAfterCopyCustLedgerEntryFromGenJnlLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPostSalesDoc",
+        "OnAfterSalesInvHeaderInsert"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Credit memos, return receipts and archives also receive the header by TransferFields; the design must include them or ask.",
+          "any": [
+            {
+              "object-target": "Sales Cr.Memo Header"
+            },
+            {
+              "open-question-contains": "credit memo"
+            },
+            {
+              "open-question-contains": "return"
+            },
+            {
+              "open-question-contains": "archive"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "batch-reference-to-item-ledger",
+      "request": "For traceability, each sales line gets a Customer Batch Reference typed by the user. After posting, the reference must be on the item ledger entries created for that line.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+      ],
+      "must-extend": [
+        "Sales Line",
+        "Item Journal Line",
+        "Item Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyItemJnlLineFromSalesLine",
+        "OnAfterInitItemLedgEntry"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPostSalesDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Posted sales lines receive the line by TransferFields; the design must mirror the field or ask whether it is needed there.",
+          "any": [
+            {
+              "object-target": "Sales Invoice Line"
+            },
+            {
+              "object-target": "Sales Shipment Line"
+            },
+            {
+              "open-question-contains": "posted"
+            }
+          ]
+        }
+      ],
+      "min-tests": 1
+    },
+    {
+      "id": "notify-delivery-platform-after-posting",
+      "request": "When a sales invoice is posted, send the invoice number to our external delivery platform so it can schedule the truck.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md"
+      ],
+      "must-extend": [],
+      "must-subscribe": [
+        "OnAfterPostSalesDoc"
+      ],
+      "must-not-subscribe": [],
+      "required-guards": {
+        "OnAfterPostSalesDoc": "PreviewMode"
+      },
+      "must-cover-any": [
+        {
+          "why": "The external call must leave the posting path, for example through a job queue entry.",
+          "any": [
+            {
+              "lifecycle-concern": "background"
+            },
+            {
+              "object-target": "Job Queue Entry"
+            }
+          ]
+        }
+      ],
+      "min-tests": 1
+    },
+    {
+      "id": "maintenance-contracts-new-entity",
+      "request": "We service equipment for our customers and need to manage maintenance contracts. Each contract gets a number from a number series and has a customer, a start date, an end date and a status. Users must be able to find contracts in a list and open them on a card. Only the service team may create or change contracts; everyone else can only view them.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+        "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+        "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+        "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+        "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md"
+      ],
+      "must-extend": [],
+      "must-subscribe": [],
+      "must-not-subscribe": [],
+      "must-include-object-types": [
+        "table",
+        "page",
+        "permissionset"
+      ],
+      "must-cover-lifecycle": [
+        "setup",
+        "permissions",
+        "privacy"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Two access levels are requested; the design must give the service team and other users different permission sets.",
+          "any": [
+            {
+              "object-type-count": {
+                "permissionset": 2
+              }
+            },
+            {
+              "open-question-contains": "permission"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "supplier-contract-ref-purchase",
+      "request": "Purchase orders need a Supplier Contract Reference typed by the buyer. It must be visible on posted purchase invoices and on vendor ledger entries. When a purchase invoice is posted, the reference and the invoice number must be sent to the supplier's web portal.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+        "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+        "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.md"
+      ],
+      "must-extend": [
+        "Purchase Header",
+        "Purch. Inv. Header",
+        "Gen. Journal Line",
+        "Vendor Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyGenJnlLineFromPurchHeader",
+        "OnAfterCopyVendLedgerEntryFromGenJnlLine",
+        "OnAfterPostPurchaseDoc"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPurchInvHeaderInsert"
+      ],
+      "required-guards": {
+        "OnAfterPostPurchaseDoc": "IsActive"
+      },
+      "must-cover-any": [
+        {
+          "why": "Receipts, credit memos and return shipments also receive the header by TransferFields; the design must include them or ask.",
+          "any": [
+            {
+              "object-target": "Purch. Rcpt. Header"
+            },
+            {
+              "object-target": "Purch. Cr. Memo Hdr."
+            },
+            {
+              "open-question-contains": "credit memo"
+            },
+            {
+              "open-question-contains": "receipt"
+            }
+          ]
+        },
+        {
+          "why": "The portal call must leave the posting path.",
+          "any": [
+            {
+              "lifecycle-concern": "background"
+            },
+            {
+              "object-target": "Job Queue Entry"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "sales-defaults-propagation-and-gl",
+      "request": "Customers have a Collection Group that must default on sales invoices from the bill-to customer, and items have a Product Line Code that must default on sales lines. If the Collection Group is changed on the header, the lines must follow. Finance wants G/L entries split by Product Line Code, and an order cannot be posted without a Collection Group.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+        "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+        "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+        "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+      ],
+      "must-extend": [
+        "Sales Header",
+        "Sales Line",
+        "Invoice Posting Buffer",
+        "Gen. Journal Line",
+        "G/L Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterSetFieldsBilltoCustomer",
+        "OnAfterAssignItemValues",
+        "OnUpdateSalesLineByChangedFieldName",
+        "OnAfterCheckSalesDoc",
+        "OnPrepareLineOnAfterFillInvoicePostingBuffer",
+        "OnAfterBuildPrimaryKey",
+        "OnAfterCopyToGenJnlLine",
+        "OnAfterCopyGLEntryFromGenJnlLine",
+        "OnAfterInitHeaderDefaults"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPostSalesDoc",
+        "OnAfterCopySellToCustomerAddressFieldsFromCustomer"
+      ],
+      "must-cover-any": [],
+      "min-tests": 3
+    },
+    {
+      "id": "purchase-defaults-propagation-and-release-rule",
+      "request": "Vendors have a Handling Class that must default on purchase orders from the buy-from vendor and on each purchase line from the item. When the buyer changes the Handling Class on the order, existing lines must be updated. A purchase order cannot be released without a Handling Class.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+        "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+        "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md"
+      ],
+      "must-extend": [
+        "Purchase Header",
+        "Purchase Line"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyBuyFromVendorFieldsFromVendor",
+        "OnAfterAssignItemValues",
+        "OnUpdatePurchLinesByChangedFieldName",
+        "OnCheckPurchaseReleaseRestrictions"
+      ],
+      "must-not-subscribe": [
+        "OnUpdatePurchLineByChangedFieldName",
+        "OnAfterPostPurchaseDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Release restrictions are skipped in posting preview; the design must say whether posting must also be blocked.",
+          "any": [
+            {
+              "open-question-contains": "post"
+            },
+            {
+              "open-question-contains": "preview"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "handling-code-to-warehouse",
+      "request": "Sales order lines need a Handling Code chosen by the order taker, for example fragile or refrigerated. Warehouse staff must see it on the warehouse shipment lines and on posted warehouse shipments, and the code must be stored on the warehouse entries so we can analyse handling by bin.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+        "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+        "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md"
+      ],
+      "must-extend": [
+        "Sales Line",
+        "Warehouse Shipment Line",
+        "Posted Whse. Shipment Line",
+        "Warehouse Journal Line",
+        "Warehouse Entry"
+      ],
+      "must-subscribe": [
+        "OnBeforeCreateShptLineFromSalesLine",
+        "OnBeforeInsertWhseEntry"
+      ],
+      "must-not-subscribe": [
+        "OnAfterCreateShptLineFromSalesLine",
+        "OnAfterPostSalesDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Warehouse entries are built from warehouse journal lines, which document posting builds from the item journal line; the design must carry the value through that path or ask which warehouse paths matter.",
+          "any": [
+            {
+              "object-target": "Item Journal Line"
+            },
+            {
+              "open-question-contains": "pick"
+            },
+            {
+              "open-question-contains": "put-away"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "carrier-ref-on-transfers",
+      "request": "Transfer orders need a Carrier Booking Reference entered by the warehouse planner. It must be visible on posted transfer shipments and posted transfer receipts, and on the item ledger entries created when the transfer is shipped and received.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/warehouse/posted-transfer-documents-copy-fields-one-by-one.md",
+        "microsoft/knowledge/warehouse/carry-transfer-line-fields-to-item-ledger.md"
+      ],
+      "must-extend": [
+        "Transfer Header",
+        "Transfer Shipment Header",
+        "Transfer Receipt Header",
+        "Item Journal Line",
+        "Item Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyFromTransferHeader",
+        "OnAfterCreateItemJnlLine",
+        "OnBeforePostItemJournalLine",
+        "OnAfterInitItemLedgEntry"
+      ],
+      "must-not-subscribe": [
+        "OnAfterTransferOrderPostShipment",
+        "OnAfterTransferOrderPostReceipt"
+      ],
+      "must-cover-any": [
+        {
+          "why": "A header field reaches item ledger entries only through the transfer line or the posting codeunits; the design must carry it to the lines or ask how.",
+          "any": [
+            {
+              "object-target": "Transfer Line"
+            },
+            {
+              "open-question-contains": "line"
+            }
+          ]
+        },
+        {
+          "why": "Direct transfers post through a different codeunit and tables; the design must cover them or ask.",
+          "any": [
+            {
+              "object-target": "Direct Trans. Header"
+            },
+            {
+              "open-question-contains": "direct transfer"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "site-visit-code-to-job-ledger",
+      "request": "Our technicians record a Site Visit Code for project costs. It is typed on project journal lines and on purchase lines charged to a project, and it must end up on the project ledger entries so project managers can analyze costs per site visit.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+        "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md"
+      ],
+      "must-extend": [
+        "Job Journal Line",
+        "Job Ledger Entry",
+        "Purchase Line"
+      ],
+      "must-subscribe": [
+        "OnAfterFromJnlLineToLedgEntry",
+        "OnAfterFromPurchaseLineToJnlLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterJobLedgEntryInsert"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Planning lines and general journal lines also build project journal lines; the design must cover them or ask.",
+          "any": [
+            {
+              "object-target": "Job Planning Line"
+            },
+            {
+              "open-question-contains": "planning"
+            },
+            {
+              "open-question-contains": "general journal"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "service-fee-gl-posting",
+      "request": "Our service contracts charge a monthly handling fee. When a user runs Post Fees, each fee must be posted to the general ledger, and the G/L entries must carry the contract number so finance can analyze fees per contract. Posted fees must be reversible.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+        "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+        "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md"
+      ],
+      "must-extend": [
+        "Gen. Journal Line",
+        "G/L Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyGLEntryFromGenJnlLine"
+      ],
+      "must-not-subscribe": [],
+      "must-include-object-types": [
+        "tableextension",
+        "codeunit"
+      ],
+      "must-cover-lifecycle": [
+        "setup"
+      ],
+      "must-cover-any": [
+        {
+          "why": "The fee and balancing accounts are an accounting decision; the design must take them from setup or posting groups, or ask.",
+          "any": [
+            {
+              "open-question-contains": "account"
+            },
+            {
+              "lifecycle-concern": "setup"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "contract-type-default-dimensions",
+      "request": "We are adding Service Contract Types as a new master list. Each type must support default dimensions like customers and items do, and new service contracts must inherit dimensions from their contract type and from the customer.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+        "microsoft/knowledge/finance/write-dimensions-as-dimension-set-entries.md"
+      ],
+      "must-extend": [],
+      "must-subscribe": [
+        "OnAfterUpdateGlobalDimCode"
+      ],
+      "must-not-subscribe": [],
+      "must-include-object-types": [
+        "table",
+        "page"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Contracts must store dimensions as a dimension set, not as copied codes.",
+          "any": [
+            {
+              "open-question-contains": "dimension"
+            },
+            {
+              "object-type-count": {
+                "table": 2
+              }
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "contract-approval-workflow",
+      "request": "Maintenance contracts must be approved by a service manager before they can be used. The person who creates a contract sends it for approval, the approver approves or rejects it, and a rejected or canceled request puts the contract back to open so it can be changed.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+        "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+      ],
+      "must-extend": [],
+      "must-subscribe": [
+        "OnAddWorkflowEventsToLibrary",
+        "OnAddWorkflowResponsePredecessorsToLibrary",
+        "OnSetStatusToPendingApproval",
+        "OnReleaseDocument",
+        "OnOpenDocument"
+      ],
+      "must-not-subscribe": [],
+      "must-include-object-types": [
+        "codeunit",
+        "permissionset"
+      ],
+      "must-cover-lifecycle": [
+        "permissions"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Who approves and on what limits is not stated; the design must ask or rely on standard approver setup.",
+          "any": [
+            {
+              "open-question-contains": "approver"
+            },
+            {
+              "open-question-contains": "approval limit"
+            },
+            {
+              "lifecycle-concern": "setup"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "contracts-api-and-nightly-sync",
+      "request": "Our customer portal needs to read maintenance contracts and their lines through an API. In addition, every night Business Central must send the contracts that changed during the day to the portal's REST endpoint.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md",
+        "microsoft/knowledge/web-services/set-required-api-page-properties.md",
+        "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+        "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+        "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md"
+      ],
+      "must-extend": [],
+      "must-subscribe": [],
+      "must-not-subscribe": [],
+      "must-include-object-types": [
+        "page",
+        "codeunit",
+        "permissionset"
+      ],
+      "must-cover-lifecycle": [
+        "background",
+        "permissions"
+      ],
+      "must-cover-any": [
+        {
+          "why": "How Business Central authenticates to the portal is not stated; the design must ask or plan secret storage.",
+          "any": [
+            {
+              "open-question-contains": "authentication"
+            },
+            {
+              "open-question-contains": "credential"
+            },
+            {
+              "lifecycle-concern": "setup"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "batch-ref-through-production",
+      "request": "Released production orders get a Customer Batch Reference on each order line. Operators post output and consumption from the production journal, from the output journal using Explode Routing, and with Calc. Consumption. The reference must be stored on the capacity ledger entries and on the item ledger entries for output and consumption, and it must stay on the order when it is finished.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/manufacturing/carry-production-order-fields-to-output-and-consumption-journal-lines.md",
+        "microsoft/knowledge/manufacturing/carry-production-journal-fields-to-capacity-and-item-ledger.md",
+        "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.md"
+      ],
+      "must-extend": [
+        "Prod. Order Line",
+        "Item Journal Line",
+        "Capacity Ledger Entry",
+        "Item Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnBeforeInsertOutputJnlLine",
+        "OnBeforeInsertConsumptionJnlLine",
+        "OnBeforeOutputItemJnlLineInsert",
+        "OnBeforeInsertItemJnlLine",
+        "OnBeforeInsertCapLedgEntry",
+        "OnAfterInitItemLedgEntry"
+      ],
+      "must-not-subscribe": [
+        "OnAfterTransProdOrder"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Lines typed directly in the output or consumption journal are a fifth path; the design must cover it or ask.",
+          "any": [
+            {
+              "object-target": "Item Journal Line"
+            },
+            {
+              "open-question-contains": "typed"
+            },
+            {
+              "open-question-contains": "manual"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "engraving-text-assemble-to-order",
+      "request": "For assemble-to-order items, the sales order taker types an Engraving Text on the sales line. The text must appear on the linked assembly order, stay up to date when the sales line text is changed later, and be kept on the posted assembly order. Component consumption entries must record which engraving they were used for.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md",
+        "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md"
+      ],
+      "must-extend": [
+        "Sales Line",
+        "Assembly Header",
+        "Posted Assembly Header",
+        "Item Journal Line",
+        "Item Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnBeforeAsmHeaderModify",
+        "OnBeforeNeedsSynchronization",
+        "OnBeforePostItemConsumption",
+        "OnAfterInitItemLedgEntry"
+      ],
+      "must-not-subscribe": [
+        "OnAfterCreateItemJnlLineFromAssemblyLine"
+      ],
+      "must-cover-any": [],
+      "min-tests": 3
+    },
+    {
+      "id": "supplier-lot-ref-on-tracking",
+      "request": "When we receive lot-tracked items, the warehouse clerk types the supplier's own lot reference next to each lot on the item tracking lines. That supplier lot reference must be stored on the item ledger entries created for each lot, so quality can trace complaints back to the supplier's lot.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/inventory/carry-item-tracking-line-fields-to-item-ledger-entries.md"
+      ],
+      "must-extend": [
+        "Tracking Specification",
+        "Reservation Entry",
+        "Item Journal Line",
+        "Item Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnCreateReservEntryExtraFields",
+        "OnAfterMoveFields",
+        "OnAfterCopyTrackingFromSpec",
+        "OnAfterCopyTrackingFromItemJnlLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPostPurchaseDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Posting sums reservation entries per lot; the design must say whether the value is per lot (Lot No. Information) or per entry, or ask.",
+          "any": [
+            {
+              "object-target": "Lot No. Information"
+            },
+            {
+              "open-question-contains": "lot"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "freight-factor-item-charge",
+      "request": "Freight invoices are entered as item charges on purchase invoices. Buyers want a new way to distribute a freight charge across the received items, proportional to a Freight Factor maintained on each item, offered next to Equally, By Amount, By Weight and By Volume.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/inventory/add-a-custom-item-charge-distribution-method.md"
+      ],
+      "must-extend": [
+        "Item"
+      ],
+      "must-subscribe": [
+        "OnBeforeShowSuggestItemChargeAssignStrMenu",
+        "OnAssignItemCharges"
+      ],
+      "must-not-subscribe": [
+        "OnBeforeSuggestAssgnt"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Sales item charges use a separate codeunit; the design must cover it or ask.",
+          "any": [
+            {
+              "open-question-contains": "sales"
+            },
+            {
+              "object-target": "Item Charge Assgnt. (Sales)"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "payment-priority-to-payment-file",
+      "request": "Vendor ledger entries carry a Payment Priority Code. When we run Suggest Vendor Payments, each payment journal line must get that code, and our bank's payment file needs it in an extra column. When payments are matched in the payment reconciliation journal, the bank batch reference from the statement line must reach the resulting bank and vendor ledger entries.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md",
+        "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.md",
+        "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md"
+      ],
+      "must-extend": [
+        "Vendor Payment Buffer",
+        "Gen. Journal Line",
+        "Payment Export Data"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyFieldsFromVendorLedgerEntry",
+        "OnAfterCopyFieldsToGenJournalLine",
+        "OnBeforeInsertPaymentExoprtData",
+        "OnPostPaymentApplicationsOnAfterInitGenJnlLine"
+      ],
+      "must-not-subscribe": [
+        "OnBeforeInsertPaymentExportData",
+        "OnBeforeInsertPmtExportDataJnlFromGenJnlLine"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Summarized payment lines merge several entries; the design must say what the code means there or ask.",
+          "any": [
+            {
+              "open-question-contains": "summar"
+            },
+            {
+              "open-question-contains": "per vendor"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "collection-agent-on-reminders",
+      "request": "Customers are assigned a Collection Agent. Reminders and finance charge memos must show the agent, the issued documents must keep it, and the customer ledger entries created when they are issued must carry it so we can track each agent's collections.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md"
+      ],
+      "must-extend": [
+        "Reminder Header",
+        "Issued Reminder Header",
+        "Finance Charge Memo Header",
+        "Issued Fin. Charge Memo Header",
+        "Gen. Journal Line",
+        "Cust. Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterInitGenJnlLine",
+        "OnAfterCopyCustLedgerEntryFromGenJnlLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterIssueReminder"
+      ],
+      "must-cover-any": [
+        {
+          "why": "How the agent gets onto a reminder is not stated; the design must default it from the customer or ask.",
+          "any": [
+            {
+              "object-target": "Customer"
+            },
+            {
+              "open-question-contains": "default"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "asset-project-code-to-fa-ledger",
+      "request": "Fixed asset postings need an Asset Project Code so controllers can group acquisition and depreciation costs by investment project. Users enter it on FA journal and FA G/L journal lines and on purchase invoice lines that acquire a fixed asset, and depreciation calculated by the Calculate Depreciation batch must carry the project from the asset's setup. The code must be stored on the FA ledger entries.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+        "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+      ],
+      "must-extend": [
+        "FA Journal Line",
+        "Gen. Journal Line",
+        "FA Ledger Entry",
+        "Purchase Line"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyFromFAJnlLine",
+        "OnAfterCopyFromGenJnlLine",
+        "OnBeforeFAJnlLineInsert",
+        "OnBeforeGenJnlLineInsert"
+      ],
+      "must-not-subscribe": [],
+      "must-cover-any": [
+        {
+          "why": "Purchase line values reach FA entries only through the Invoice Posting Buffer; the design must carry the value through it or ask.",
+          "any": [
+            {
+              "object-target": "Invoice Posting Buffer"
+            },
+            {
+              "open-question-contains": "buffer"
+            },
+            {
+              "open-question-contains": "purchase"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "service-region-to-service-ledger",
+      "request": "Service orders and service contracts need a Region Code. Contract invoices must take it from the contract. The code must appear on posted service invoices and on all service ledger entries, including those from credit memos, and after a service invoice is posted our field-planning system must be notified.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+        "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md"
+      ],
+      "must-extend": [
+        "Service Header",
+        "Service Invoice Header",
+        "Service Ledger Entry",
+        "Service Contract Header"
+      ],
+      "must-subscribe": [
+        "OnBeforeServLedgerEntryInsert",
+        "OnBeforeServLedgerEntrySaleInsert",
+        "OnInsertServLedgEntryCrMemoOnBeforeServLedgEntryInsert",
+        "OnBeforeServHeaderModify",
+        "OnAfterPostServiceDoc"
+      ],
+      "must-not-subscribe": [],
+      "must-cover-any": [
+        {
+          "why": "The notification must leave the posting path.",
+          "any": [
+            {
+              "lifecycle-concern": "background"
+            },
+            {
+              "object-target": "Job Queue Entry"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "shopify-gift-message-to-sales-order",
+      "request": "Our Shopify checkout collects a gift message as an order note attribute called gift-message. When the Shopify connector creates the sales order in Business Central, the gift message must be on the sales order and on the posted sales invoice.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.md",
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+      ],
+      "must-extend": [
+        "Sales Header",
+        "Sales Invoice Header"
+      ],
+      "must-subscribe": [
+        "OnAfterCreateSalesHeader"
+      ],
+      "must-not-subscribe": [
+        "OnBeforeMapCustomer",
+        "OnAfterImportShopifyOrderHeader"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Order processing can run as a job queue entry; the subscriber must not need UI and must handle a missing attribute.",
+          "any": [
+            {
+              "lifecycle-concern": "background"
+            },
+            {
+              "open-question-contains": "attribute"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "subscription-cost-center-to-contract-invoice-lines",
+      "request": "Each customer subscription contract line gets a Cost Center Reference. When recurring billing creates the invoices, every invoice line must show the reference, and it must still be visible on the posted invoice lines and archived billing lines.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+      ],
+      "must-extend": [
+        "Cust. Sub. Contract Line",
+        "Billing Line",
+        "Sales Line",
+        "Sales Invoice Line"
+      ],
+      "must-subscribe": [
+        "OnAfterUpdateBillingLineFromSubscriptionLine",
+        "OnBeforeInsertTempBillingLine",
+        "OnBeforeInsertSalesLineFromContractLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterInsertSalesLineFromBillingLine",
+        "OnAfterPostSalesDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Archived billing lines are created by TransferFields; the design must mirror the field there or ask.",
+          "any": [
+            {
+              "object-target": "Billing Line Archive"
+            },
+            {
+              "open-question-contains": "archive"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "e-document-format-and-connector",
+      "request": "We must send our posted sales invoices to the Contoso e-invoicing network in Contoso's own XML format, and pull supplier invoices from the same network into Business Central. The network confirms delivery a few minutes after upload.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/e-documents/add-an-e-document-format-through-the-format-enum.md",
+        "microsoft/knowledge/e-documents/connect-an-e-document-service-through-the-v2-integration-interfaces.md",
+        "microsoft/knowledge/e-documents/e-document-creation-runs-after-the-posting-commit.md"
+      ],
+      "must-extend": [
+        "E-Document Format",
+        "Service Integration"
+      ],
+      "must-subscribe": [],
+      "must-not-subscribe": [
+        "OnAfterPostSalesDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Delivery is confirmed asynchronously; the sender must implement IDocumentResponseHandler instead of a custom polling job.",
+          "any": [
+            {
+              "object-target": "IDocumentResponseHandler"
+            },
+            {
+              "open-question-contains": "asynchron"
+            }
+          ]
+        },
+        {
+          "why": "The service exports only document types listed as supported for the outgoing direction.",
+          "any": [
+            {
+              "object-target": "E-Doc. Service Supported Type"
+            },
+            {
+              "open-question-contains": "supported"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "project-code-through-e-documents",
+      "request": "Sales orders carry a Project Code. It must appear in the PEPPOL invoice we send through E-Documents, and when a supplier sends us an e-invoice containing a project code, that code must land on the purchase invoice created from the e-document.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/e-documents/carry-custom-fields-through-e-document-export-and-import.md",
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+      ],
+      "must-extend": [
+        "Sales Header",
+        "Sales Invoice Header",
+        "E-Document Purchase Header",
+        "Purchase Header"
+      ],
+      "must-subscribe": [
+        "OnAfterCreatePEPPOLXMLDocument",
+        "OnAfterProcessIncomingEDocument"
+      ],
+      "must-not-subscribe": [
+        "OnCreateNewPurchHdrOnBeforeRecRefInsert",
+        "OnAfterPostSalesDoc"
+      ],
+      "required-guards": {
+        "OnAfterProcessIncomingEDocument": "DesiredEndState"
+      },
+      "must-cover-any": [
+        {
+          "why": "The built-in PEPPOL reader is internal and raises no event, so reading the extra element needs an own reader or an explicit open question.",
+          "any": [
+            {
+              "object-target": "E-Doc. Read into Draft"
+            },
+            {
+              "open-question-contains": "reader"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "receivables-dunning-contact-and-collection-channel",
+      "request": "Customers get a Dunning Contact Code that must default onto reminders and finance charge memos, both when a user creates them and when they are created by the Create Reminders and Create Finance Charge Memos batch jobs. Separately, cash receipt journal lines get a Collection Channel. It must appear on the customer ledger entry and on the detailed customer ledger entries, including application entries when a payment is applied later from Customer Ledger Entries.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md",
+        "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md"
+      ],
+      "must-extend": [
+        "Customer",
+        "Reminder Header",
+        "Finance Charge Memo Header",
+        "Gen. Journal Line",
+        "Cust. Ledger Entry",
+        "Detailed Cust. Ledg. Entry"
+      ],
+      "must-subscribe": [
+        "OnValidateCustomerNoOnAfterAssignCustomerValues",
+        "OnAfterCopyCustLedgerEntryFromGenJnlLine",
+        "OnBeforeInsertDtldCustLedgEntry",
+        "OnAfterCopyGenJnlLineFromCustLedgEntry"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPostSalesDoc",
+        "OnAfterCopySellToCustomerAddressFieldsFromCustomer"
+      ],
+      "must-cover-any": [],
+      "min-tests": 2
+    },
+    {
+      "id": "project-ref-through-allocations-and-intercompany",
+      "request": "General journal lines, sales lines and purchase lines get a Project Ref. When a line uses an allocation account, every allocated line must keep the Project Ref., and recurring journal allocations must also post it from the recurring line. When we send an intercompany sales order to a partner company in the same database, the partner's purchase order header and lines must get the Project Ref.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/finance-extensions/carry-fields-through-allocation-account-lines.md",
+        "microsoft/knowledge/finance-extensions/carry-fields-through-recurring-journal-allocations.md",
+        "microsoft/knowledge/finance-extensions/carry-intercompany-document-fields-to-the-partner-document.md"
+      ],
+      "must-extend": [
+        "Gen. Journal Line",
+        "Sales Header",
+        "Sales Line",
+        "Purchase Header",
+        "Purchase Line",
+        "IC Outbox Sales Header",
+        "IC Outbox Sales Line",
+        "IC Inbox Purchase Header",
+        "IC Inbox Purchase Line"
+      ],
+      "must-subscribe": [
+        "OnBeforeCreateSalesLine",
+        "OnBeforeCreatePurchaseLine",
+        "OnPostAllocationsOnBeforeCopyFromGenJnlAlloc",
+        "OnBeforeICInboxPurchHeaderInsert",
+        "OnBeforeICInboxPurchLineInsert",
+        "OnCreatePurchDocumentOnBeforePurchHeaderModify",
+        "OnCreatePurchLinesOnBeforeModify"
+      ],
+      "must-not-subscribe": [
+        "OnCreatePurchLinesOnAfterTransferFields",
+        "OnAfterPostSalesDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "File-based IC partners exchange a fixed XMLport that cannot carry the field.",
+          "any": [
+            {
+              "open-question-contains": "file"
+            },
+            {
+              "object-target": "IC Outbox Imp/Exp"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "project-billing-milestone-invoice-and-wip",
+      "request": "Project planning lines get a Billing Milestone code. When we create sales invoices from the project, each invoice line must show the milestone of the planning line it came from. Finance also wants a new WIP method that recognizes sales as the milestone value reached on each project task.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md",
+        "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md"
+      ],
+      "must-extend": [
+        "Job Planning Line",
+        "Sales Line"
+      ],
+      "must-subscribe": [
+        "OnBeforeInsertSalesLine",
+        "OnBeforeCalcRecognizedSales"
+      ],
+      "must-not-subscribe": [
+        "OnAfterCreateSalesInvoiceLines",
+        "OnAfterJobTaskCalcWIP"
+      ],
+      "must-cover-any": [
+        {
+          "why": "The milestone may also be needed on posted invoice lines or the project ledger Sale entry; the design must include it or ask.",
+          "any": [
+            {
+              "object-target": "Job Ledger Entry"
+            },
+            {
+              "object-target": "Sales Invoice Line"
+            },
+            {
+              "open-question-contains": "ledger"
+            },
+            {
+              "open-question-contains": "posted"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "routing-coating-spec-to-orders-and-subcontracting",
+      "request": "Routing operations get a Coating Spec code. It must appear on production order routing lines, whether the order is created and refreshed by hand or created from the planning worksheet, and on the subcontracting purchase order line created for that operation.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+        "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.md"
+      ],
+      "must-extend": [
+        "Routing Line",
+        "Planning Routing Line",
+        "Prod. Order Routing Line",
+        "Purchase Line"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyFromRoutingLine",
+        "OnAfterTransferFromRoutingLine",
+        "OnAfterCopyFromPlanningRoutingLine",
+        "OnInsertPurchOrderLineOnAfterTransferFromReqLineToPurchLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterTransferProdOrderRoutingLine"
+      ],
+      "must-cover-any": [],
+      "min-tests": 2
+    },
+    {
+      "id": "maintenance-order-dimensions-from-several-sources",
+      "request": "Our new Maintenance Order document has a customer, an item, an equipment record (our own master table) and a maintenance contract. Its dimensions must come from the default dimensions of all four. Service contracts must also pick up the equipment's default dimensions when an equipment number is entered.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-the-dimension-sources-of-a-custom-document.md",
+        "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md"
+      ],
+      "must-extend": [
+        "Service Contract Header"
+      ],
+      "must-subscribe": [
+        "OnAfterInitDefaultDimensionSources"
+      ],
+      "must-not-subscribe": [],
+      "must-cover-any": [
+        {
+          "why": "When sources disagree on a dimension, the winner must be decided by Default Dimension Priority or asked.",
+          "any": [
+            {
+              "open-question-contains": "priority"
+            },
+            {
+              "open-question-contains": "conflict"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "custom-line-field-through-copy-archive-and-correction",
+      "request": "Sales orders get a Packing Note on each line and an Export Status on the header that our EDI job sets once the invoice is sent. Both must be on posted invoices. When users copy documents, restore an archived order version, or cancel/correct a posted invoice, the packing notes must come along but the credit memo must not appear as already exported.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/copy-document-recalculate-lines-drops-custom-line-fields.md",
+        "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+        "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+      ],
+      "must-extend": [
+        "Sales Line",
+        "Sales Invoice Line",
+        "Sales Line Archive",
+        "Sales Header",
+        "Sales Invoice Header",
+        "Sales Cr.Memo Header"
+      ],
+      "must-subscribe": [
+        "OnAfterRecalculateSalesLine",
+        "OnAfterCopySalesHeaderDone"
+      ],
+      "must-not-subscribe": [
+        "OnAfterInsertToSalesLine",
+        "OnAfterRestoreSalesDocument"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Archive restore re-validates the customer and item; a defaulted field needs the restore events or an explicit decision.",
+          "any": [
+            {
+              "object-target": "Sales Header Archive"
+            },
+            {
+              "open-question-contains": "restore"
+            },
+            {
+              "open-question-contains": "archive"
+            }
+          ]
+        },
+        {
+          "why": "Purchase documents use the same copy paths with their own events.",
+          "any": [
+            {
+              "open-question-contains": "purchase"
+            },
+            {
+              "object-target": "Purchase Line"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "customer-po-ref-through-prepayment-and-drop-shipment",
+      "request": "Sales order lines carry the customer's PO reference. When we buy the goods as a drop shipment or special order, the reference must be on the vendor purchase lines, whether buyers use Get Sales Order on the purchase order or the requisition worksheet. The header Delivery Window must also show on customer ledger entries for prepayment invoices, not just normal invoices.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-drop-shipment-and-special-order-purchase-lines.md",
+        "microsoft/knowledge/sales-purchase/prepayment-posting-uses-its-own-copy-events.md",
+        "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+      ],
+      "must-extend": [
+        "Sales Line",
+        "Purchase Line",
+        "Requisition Line",
+        "Gen. Journal Line",
+        "Cust. Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterTransfldsFromSalesToPurchLine",
+        "OnBeforeInsertReqWkshLine",
+        "OnAfterInitPurchOrderLine",
+        "OnAfterCopyGenJnlLineFromSalesHeaderPrepmtPost",
+        "OnAfterCopyCustLedgerEntryFromGenJnlLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPurchaseLineInsert",
+        "OnAfterPostSalesDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Normal invoices use OnAfterCopyGenJnlLineFromSalesHeader; the design must keep both invoice kinds covered.",
+          "any": [
+            {
+              "open-question-contains": "prepayment"
+            },
+            {
+              "open-question-contains": "normal invoice"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "time-sheet-activity-code-to-ledgers",
+      "request": "Our consultants record hours on time sheets and pick an Activity Code on each time sheet line. When approved hours are suggested into the project journal and posted, the Activity Code must appear on the project journal line, the project ledger entries and the resource ledger entries. It must also be kept when old time sheets are moved to the archive.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/projects/carry-time-sheet-fields-to-job-journal-through-suggest-lines.md",
+        "microsoft/knowledge/projects/time-sheet-posting-runs-in-res-jnl-post-line.md",
+        "microsoft/knowledge/projects/time-sheet-archive-copies-fields-by-field-number.md",
+        "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+      ],
+      "must-extend": [
+        "Time Sheet Line",
+        "Job Journal Line",
+        "Job Ledger Entry",
+        "Res. Journal Line",
+        "Res. Ledger Entry",
+        "Time Sheet Line Archive"
+      ],
+      "must-subscribe": [
+        "OnAfterTransferTimeSheetDetailToJobJnlLine",
+        "OnAfterFromJnlLineToLedgEntry",
+        "OnAfterCopyResJnlLineFromJobJnlLine",
+        "OnAfterCopyFromResJnlLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterJobLedgEntryInsert",
+        "OnAfterResLedgEntryInsert"
+      ],
+      "must-cover-any": [],
+      "min-tests": 2
+    },
+    {
+      "id": "handling-class-through-warehouse-activities",
+      "request": "Sales lines get a Handling Class. Warehouse staff must see it on picks created from warehouse shipments and on inventory picks at our basic-warehouse locations. It must stay on registered picks, posted inventory picks, warehouse entries and the item ledger entries of the shipment. Bin-to-bin internal movements also need a Move Reason that is kept on the registered inventory movement.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/warehouse/carry-fields-to-warehouse-picks-put-aways-and-registered-activities.md",
+        "microsoft/knowledge/warehouse/inventory-picks-and-put-aways-post-through-the-source-document.md",
+        "microsoft/knowledge/warehouse/carry-fields-through-warehouse-movements-and-internal-movements.md"
+      ],
+      "must-extend": [
+        "Sales Line",
+        "Warehouse Shipment Line",
+        "Warehouse Activity Line",
+        "Registered Whse. Activity Line",
+        "Posted Invt. Pick Line",
+        "Warehouse Journal Line",
+        "Warehouse Entry",
+        "Item Journal Line",
+        "Item Ledger Entry",
+        "Internal Movement Line",
+        "Registered Invt. Movement Line"
+      ],
+      "must-subscribe": [
+        "OnBeforeCreateShptLineFromSalesLine",
+        "OnAfterTransferFromShptLine",
+        "OnBeforeNewWhseActivLineInsertFromSales",
+        "OnBeforeWhseJnlRegisterLine",
+        "OnBeforeInsertWhseEntry",
+        "OnAfterCopyItemJnlLineFromSalesLine",
+        "OnAfterInitItemLedgEntry",
+        "OnCreateInvtMvntWithoutSourceOnAfterTransferFields"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPostSalesDoc",
+        "OnAfterRegisterWhseActivity"
+      ],
+      "must-cover-any": [],
+      "min-tests": 3
+    },
+    {
+      "id": "storage-zone-on-item-reclassification",
+      "request": "Our item reclassification journal must record a Storage Zone and a New Storage Zone. The outbound item ledger entry keeps the old zone and the inbound entry or entries get the new zone. Lines imported from our scanner app must refuse items that need a variant when none is given, following the Business Central setup.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/inventory/item-reclassification-posts-two-entries-from-one-journal-line.md",
+        "microsoft/knowledge/inventory/check-variant-requirements-through-item-is-variant-mandatory.md"
+      ],
+      "must-extend": [
+        "Item Journal Line",
+        "Item Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterInitItemLedgEntry",
+        "OnBeforeInsertTransferEntry"
+      ],
+      "must-not-subscribe": [
+        "OnAfterInsertTransferEntry"
+      ],
+      "must-cover-any": [],
+      "min-tests": 2
+    },
+    {
+      "id": "quarantine-lots-in-warehouse-picks",
+      "request": "Our main warehouse uses directed put-away and pick with Pick According to FEFO. Quality wants a Quarantine status per lot: quarantined lots must never be proposed on warehouse picks, and pickers must not be able to scan a quarantined lot onto a pick line. Scanners also assign lots to warehouse journal lines during adjustments. Please design it.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/warehouse/exclude-lots-from-warehouse-picks-through-lot-no-information.md",
+        "microsoft/knowledge/warehouse/enable-lot-warehouse-tracking-before-relying-on-lots-in-wms-locations.md",
+        "microsoft/knowledge/warehouse/lot-and-serial-on-warehouse-picks-come-from-whse-tracking-and-reach-warehouse-entries.md",
+        "microsoft/knowledge/warehouse/assign-lots-on-warehouse-documents-through-the-table-each-document-reads.md"
+      ],
+      "must-extend": [
+        "Lot No. Information"
+      ],
+      "must-subscribe": [
+        "OnAfterIsItemTrackingBlocked",
+        "OnCheckWhseItemTrkgLineOnBeforeTestTracking"
+      ],
+      "must-not-subscribe": [
+        "OnBeforeInsertWhseEntry",
+        "OnAfterRegisterWhseActivity"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Lots on picks and warehouse journals only exist when the item tracking code has Lot Warehouse Tracking; the design must check or require it.",
+          "any": [
+            {
+              "object-target": "Item Tracking Code"
+            },
+            {
+              "open-question-contains": "warehouse tracking"
+            },
+            {
+              "lifecycle-concern": "setup"
+            }
+          ]
+        },
+        {
+          "why": "Scanner assignment on warehouse journal lines must write Whse. Item Tracking Line rows, not the journal line's Lot No.",
+          "any": [
+            {
+              "object-target": "Whse. Item Tracking Line"
+            },
+            {
+              "open-question-contains": "journal"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "sales-channel-prices-with-agreement-on-line",
+      "request": "We sell through the web shop and through field sales, and sales prices for an item must be able to differ per sales channel. A price list line without a channel applies to every channel. The order taker picks the channel on each sales order line and the price must follow when the channel changes. The sales line must also show the price agreement number of the price list line that set its price. Pricing staff maintain these prices in the price worksheet.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+        "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md",
+        "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md",
+        "microsoft/knowledge/pricing/document-line-price-selection-runs-by-source-level-then-best-price.md"
+      ],
+      "must-extend": [
+        "Price List Line",
+        "Price Worksheet Line",
+        "Price Calculation Buffer",
+        "Sales Line"
+      ],
+      "must-subscribe": [
+        "OnAfterFillBuffer",
+        "OnAfterSetFilters",
+        "OnAfterSetAssetFilters",
+        "OnAfterSetPrice"
+      ],
+      "must-not-subscribe": [
+        "OnUpdateUnitPriceOnBeforeFindPrice",
+        "OnAfterApplyPrice"
+      ],
+      "required-guards": {
+        "OnAfterSetPrice": "AmountType"
+      },
+      "must-cover-any": [
+        {
+          "why": "Inside one source level the cheapest line wins; the design must make a channel-specific line beat a cheaper generic one or ask which should win.",
+          "any": [
+            {
+              "open-question-contains": "generic"
+            },
+            {
+              "open-question-contains": "cheaper"
+            },
+            {
+              "open-question-contains": "without a channel"
+            }
+          ]
+        },
+        {
+          "why": "Purchase and project lines use their own Line With Price codeunits; the design must include them or ask whether channels apply there.",
+          "any": [
+            {
+              "object-target": "Purchase Line"
+            },
+            {
+              "open-question-contains": "purchase"
+            },
+            {
+              "open-question-contains": "project"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "import-vendor-and-project-cost-price-lists",
+      "request": "A nightly job imports vendor purchase prices and project resource cost rates from a partner file into Business Central price lists and makes them effective the same night. Each imported line carries the vendor's agreement number, which must appear on purchase lines and on project planning lines whenever that price is used. Purchasers sometimes adjust the imported prices in the price worksheet before they are implemented.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/pricing/create-price-lists-from-code-through-header-defaults-and-status-validation.md",
+        "microsoft/knowledge/pricing/purchase-and-project-prices-use-their-own-price-type-sources-and-fields.md",
+        "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md",
+        "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md"
+      ],
+      "must-extend": [
+        "Price List Line",
+        "Price Worksheet Line",
+        "Purchase Line",
+        "Job Planning Line"
+      ],
+      "must-subscribe": [
+        "OnAfterSetPrice"
+      ],
+      "must-not-subscribe": [
+        "OnUpdateDirectUnitCostOnBeforeFindPrice",
+        "OnBeforeFindPriceAndDiscount"
+      ],
+      "required-guards": {
+        "OnAfterSetPrice": "AmountType"
+      },
+      "must-cover-any": [
+        {
+          "why": "The import runs without a user; activation opens the Duplicate Price Lines page when duplicates exist, so the design must handle duplicates and the background run.",
+          "any": [
+            {
+              "lifecycle-concern": "background"
+            },
+            {
+              "open-question-contains": "duplicate"
+            }
+          ]
+        },
+        {
+          "why": "Updating an active line with Allow Editing Active Price on turns it back to Draft; the design must re-activate or ask how updates are applied.",
+          "any": [
+            {
+              "open-question-contains": "active"
+            },
+            {
+              "open-question-contains": "draft"
+            },
+            {
+              "lifecycle-concern": "setup"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "shopify-master-customer-and-item-stamps",
+      "request": "Shopify is the master for our customer and product data. When the Shopify Connector creates or updates a customer from Shopify, we want the Shopify customer id stored on the Business Central customer. When it creates or updates an item from a Shopify product, the Shopify product type must be stored in a new item field so purchasing can filter on it. The sync runs every hour in the background.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/shopify/decide-the-master-side-before-extending-shopify-customer-and-item-sync.md",
+        "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md"
+      ],
+      "must-extend": [
+        "Customer",
+        "Item"
+      ],
+      "must-subscribe": [
+        "OnAfterCreateCustomer",
+        "OnAfterUpdateCustomer",
+        "OnAfterCreateItem",
+        "OnDoUpdateItemBeforeModify"
+      ],
+      "must-not-subscribe": [
+        "OnAfterFindMapping",
+        "OnBeforeFindCustomerTemplate"
+      ],
+      "must-cover-any": [
+        {
+          "why": "The update events only run when the shop lets Shopify update customers and items; the design must name those settings.",
+          "any": [
+            {
+              "open-question-contains": "Shopify Can Update"
+            },
+            {
+              "lifecycle-concern": "setup"
+            }
+          ]
+        },
+        {
+          "why": "The hourly sync runs as a job queue entry, so subscribers must not need UI.",
+          "any": [
+            {
+              "lifecycle-concern": "background"
+            },
+            {
+              "object-target": "Job Queue Entry"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "usage-region-on-invoices-and-renewed-support-level",
+      "request": "We resell cloud services with usage-based subscription billing. The monthly usage file from our supplier has a data center region column, and the region must be shown on the customer contract invoice lines and on the posted invoices. Each subscription line also has a support level that customers can change when the contract is renewed. The new support level must apply to the renewed term.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md",
+        "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md",
+        "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md"
+      ],
+      "must-extend": [
+        "Usage Data Billing",
+        "Sales Line",
+        "Sales Invoice Line",
+        "Subscription Line",
+        "Sales Subscription Line",
+        "Planned Subscription Line"
+      ],
+      "must-subscribe": [
+        "OnBeforInsertUsageDataBilling",
+        "OnBeforeInsertSalesLineFromContractLine",
+        "OnAfterCopyFromSalesSubscriptionLine",
+        "OnBeforeUpdateSubscriptionLineFromPlannedSubscriptionLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterCreateUsageDataBillingFromTempSubscriptionLine",
+        "OnAfterInsertSalesLineFromBillingLine"
+      ],
+      "must-cover-any": [
+        {
+          "why": "One invoice line can cover several usage data billing rows; the design must say which region wins.",
+          "any": [
+            {
+              "open-question-contains": "region"
+            },
+            {
+              "open-question-contains": "several"
+            }
+          ]
+        },
+        {
+          "why": "The column reaches Business Central only through the supplier's data exchange definition mapping.",
+          "any": [
+            {
+              "open-question-contains": "data exchange"
+            },
+            {
+              "lifecycle-concern": "setup"
+            }
+          ]
+        },
+        {
+          "why": "The renewed value takes effect when the planned subscription line is applied, which can be after later invoices are posted.",
+          "any": [
+            {
+              "open-question-contains": "planned"
+            },
+            {
+              "object-target": "Planned Subscription Line"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "capex-request-approval-with-limits-and-template",
+      "request": "Capital expenditure requests are a new custom document with an amount in a foreign currency. They must go through an approval workflow where each approver can approve up to their own capex limit in local currency, and above that the request goes to the next approver in the chain. Approvers must see the request number and amount in Requests to Approve, and administrators want a ready-made workflow template they can enable in every company where the app is installed.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+        "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md",
+        "microsoft/knowledge/feature-design/ship-a-workflow-template-for-a-custom-record-approval.md",
+        "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+      ],
+      "must-extend": [
+        "User Setup"
+      ],
+      "must-subscribe": [
+        "OnPopulateApprovalEntryArgument",
+        "OnSufficientApproverElseCase",
+        "OnAfterInitWorkflowTemplates",
+        "OnAddWorkflowEventsToLibrary",
+        "OnSetStatusToPendingApproval",
+        "OnReleaseDocument",
+        "OnOpenDocument"
+      ],
+      "must-not-subscribe": [
+        "OnAddWorkflowTemplatesToLibrary"
+      ],
+      "required-guards": {
+        "OnPopulateApprovalEntryArgument": "RecRef.Number",
+        "OnSufficientApproverElseCase": "Table ID"
+      },
+      "must-cover-any": [
+        {
+          "why": "Templates built only in OnInsertWorkflowTemplates never reach companies that already have templates.",
+          "any": [
+            {
+              "lifecycle-concern": "install"
+            },
+            {
+              "lifecycle-concern": "setup"
+            },
+            {
+              "open-question-contains": "template"
+            }
+          ]
+        },
+        {
+          "why": "Approvers and capex limits must be set up in User Setup before the chain works.",
+          "any": [
+            {
+              "object-target": "User Setup"
+            },
+            {
+              "open-question-contains": "limit"
+            }
+          ]
+        }
+      ],
+      "min-tests": 4
+    },
+    {
+      "id": "contract-ref-on-deferral-gl-entries",
+      "request": "We defer subscription revenue on sales invoices with deferral templates. Finance wants every G/L entry of the invoice, including each monthly deferral release, to carry the Contract No. from the sales header and a Recognition Month (YYYY-MM) showing the month the amount is recognised. Some contracts need their own number of months, so sales lines created by our contract import must get a schedule with the contract's period count.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md"
+      ],
+      "must-extend": [
+        "Gen. Journal Line",
+        "G/L Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyGLEntryFromGenJnlLine",
+        "OnPostDeferralPostBufferOnBeforeInsertGLEntryForGLAccount",
+        "OnPostDeferralPostBufferOnBeforeInsertGLEntryForDeferralAccount"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPostSalesDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "The schedule must be created through Deferral Utilities after validating Deferral Code, not by inserting Deferral Line rows.",
+          "any": [
+            {
+              "object-target": "Deferral Utilities"
+            },
+            {
+              "open-question-contains": "CreateDeferralSchedule"
+            },
+            {
+              "design-contains": "CreateDeferralSchedule"
+            }
+          ]
+        },
+        {
+          "why": "General journal deferrals have their own per-period events; the design must include them or ask.",
+          "any": [
+            {
+              "open-question-contains": "journal"
+            },
+            {
+              "object-target": "Gen. Jnl.-Post Line"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "ic-settlement-journal-with-reference",
+      "request": "Our holding company posts monthly management-fee settlements to each subsidiary in the same database. Build a function that posts the settlement from the holding company with a Settlement Ref. code, so the subsidiary gets a matching journal line with the same Settlement Ref. to post on its side.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/finance-extensions/send-intercompany-journals-through-the-ic-outbox-not-changecompany.md"
+      ],
+      "must-extend": [
+        "Gen. Journal Line",
+        "IC Outbox Jnl. Line",
+        "IC Inbox Jnl. Line",
+        "Handled IC Inbox Jnl. Line"
+      ],
+      "must-subscribe": [
+        "OnInsertOutboxJnlLineOnBeforeICOutboxJnlLineInsert",
+        "OnOutboxJnlLineToInboxOnBeforeICInboxJnlLineInsert",
+        "OnCreateJournalLinesOnBeforeModify"
+      ],
+      "must-not-subscribe": [],
+      "must-cover-any": [
+        {
+          "why": "The outbox transaction exists only when an Intercompany-type journal batch is posted through Gen. Jnl.-Post Batch.",
+          "any": [
+            {
+              "object-target": "Gen. Jnl.-Post Batch"
+            },
+            {
+              "open-question-contains": "Intercompany"
+            },
+            {
+              "design-contains": "Gen. Jnl.-Post Batch"
+            }
+          ]
+        },
+        {
+          "why": "The subsidiary accepts the inbox transaction in its own company, by hand, through Complete IC Inbox Action, or by auto-accept.",
+          "any": [
+            {
+              "open-question-contains": "accept"
+            },
+            {
+              "open-question-contains": "inbox"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "equipment-request-attachments-and-late-warning",
+      "request": "Our app has an Equipment Request table with a card page, and posting creates a Posted Equipment Request with the same No. Users must attach photos and supplier quotes to a request, see them in a factbox, and still find them on the posted request after posting. When the Needed-By date is before the work date, warn the user on the card without blocking them, and let each user turn that warning off.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+        "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md"
+      ],
+      "must-extend": [],
+      "must-subscribe": [
+        "OnAfterTableHasNumberFieldPrimaryKey",
+        "OnAfterGetRefTable",
+        "OnCopyAttachmentsOnAfterSetFromParameters",
+        "OnCopyAttachmentsOnAfterSetToParameters",
+        "OnInitializingNotificationWithDefaultState"
+      ],
+      "must-not-subscribe": [],
+      "must-cover-any": [
+        {
+          "why": "Base App deletes and moves attachments only for its own tables; the custom table must call DeleteAttachedDocuments on delete and MoveAttachmentsWithinSameRecordType on rename (with OnAfterTableIsEntity), or the design must ask.",
+          "any": [
+            {
+              "open-question-contains": "rename"
+            },
+            {
+              "open-question-contains": "delete"
+            },
+            {
+              "object-target": "Equipment Request"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "approval-business-event-and-price-file-import",
+      "request": "When a Service Request in our app is approved, a Power Automate flow must start so the warehouse is told. Integrators already use version 1 of that trigger, and we now need to add the warehouse code to it. Separately, a supplier sends a weekly CSV of item prices whose column layout changes now and then; the rows must land in our Price Import Line staging table. Customers also load their initial Site Contract records with configuration packages.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/web-services/raise-external-business-events-for-power-automate.md",
+        "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md",
+        "microsoft/knowledge/data-modeling/config-packages-insert-key-fields-first-then-validate-by-field-order.md"
+      ],
+      "must-extend": [
+        "EventCategory"
+      ],
+      "must-subscribe": [],
+      "must-not-subscribe": [],
+      "must-cover-any": [
+        {
+          "why": "The shipped 1.0 event must stay; the new payload is a new event version and the old one is obsoleted.",
+          "any": [
+            {
+              "open-question-contains": "version"
+            },
+            {
+              "object-target": "EventCategory"
+            }
+          ]
+        },
+        {
+          "why": "The CSV must be imported through a data exchange definition and mapped into a temporary record, because Process Data Exch. inserts without OnInsert.",
+          "any": [
+            {
+              "object-target": "Data Exch. Def"
+            },
+            {
+              "open-question-contains": "data exchange"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "delivery-window-from-templates-through-quote-to-order",
+      "request": "Customers need a default Delivery Window code. New customers are created from customer templates or from contacts, and the code should come from the template. Sales quotes take the code from the customer, and when a quote or blanket order becomes an order the order must keep the code the quote or blanket order had, even if it was changed by hand.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+        "microsoft/knowledge/sales-purchase/quote-and-blanket-order-conversion-copies-custom-fields-by-assignment.md"
+      ],
+      "must-extend": [
+        "Customer",
+        "Customer Templ.",
+        "Sales Header"
+      ],
+      "must-subscribe": [
+        "OnAfterCopySellToCustomerAddressFieldsFromCustomer"
+      ],
+      "must-not-subscribe": [
+        "OnAfterInsertSalesOrderLine",
+        "OnAfterOnRun"
+      ],
+      "must-cover-any": [
+        {
+          "why": "The template field must match the customer field, or the template silently skips it.",
+          "any": [
+            {
+              "object-target": "Customer Templ."
+            },
+            {
+              "open-question-contains": "template"
+            }
+          ]
+        },
+        {
+          "why": "Any default in InitRecord must not overwrite the value copied from the quote or blanket order.",
+          "any": [
+            {
+              "open-question-contains": "InitRecord"
+            },
+            {
+              "open-question-contains": "quote"
+            },
+            {
+              "open-question-contains": "blanket"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "return-inspection-result-to-credit-memo-and-notify",
+      "request": "When a sales return is received, the warehouse records an Inspection Result code on each return line. The credit memo lines created later with Get Return Receipt Lines must show the result recorded at receipt. After a bank reconciliation is posted, notify the treasury system that the statement was closed.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/sales-purchase/get-return-receipt-lines-copies-custom-fields-from-the-return-order-line.md",
+        "microsoft/knowledge/sales-purchase/choose-the-after-posting-hook-per-posting-routine.md"
+      ],
+      "must-extend": [
+        "Sales Line",
+        "Return Receipt Line"
+      ],
+      "must-subscribe": [
+        "OnAfterCopyFieldsFromReturnReceiptLine",
+        "OnAfterFinalizePost"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPostSalesDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "OnAfterFinalizePost runs inside the posting transaction before the commit; the external call must leave that path.",
+          "any": [
+            {
+              "lifecycle-concern": "background"
+            },
+            {
+              "open-question-contains": "job queue"
+            },
+            {
+              "open-question-contains": "outbox"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "service-contract-billing-category-to-invoice-lines",
+      "request": "Each service contract line gets a Billing Category. Contract invoices created by the Create Contract Invoices batch must show the category on every invoice line and on the posted service invoice lines, and finance wants to filter service ledger entries by it. Also, every service order line should show the Asset Class of the service item it belongs to, and we need the Asset Class on item ledger entries for parts consumed on service orders.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+        "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+        "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md"
+      ],
+      "must-extend": [
+        "Service Contract Line",
+        "Service Ledger Entry",
+        "Service Line",
+        "Service Invoice Line",
+        "Service Item",
+        "Service Item Line",
+        "Item Journal Line",
+        "Item Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnCreateServiceLedgerEntryOnBeforeServLedgEntryInsert",
+        "OnServLedgEntryToServiceLineOnBeforeServLineInsert",
+        "OnAfterSetServItemInfo",
+        "OnValidateServiceItemLineNoOnBeforeValidateContractNo",
+        "OnAfterCopyToItemJnlLine",
+        "OnAfterInitItemLedgEntry"
+      ],
+      "must-not-subscribe": [
+        "OnBeforeServLedgerEntrySaleInsert",
+        "OnAfterPostServiceDoc",
+        "OnAfterCreateInvoice"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Service invoices and credit memos have no service item lines, so the asset class must be taken from the service item there, or the design must ask.",
+          "any": [
+            {
+              "open-question-contains": "invoice"
+            },
+            {
+              "open-question-contains": "credit memo"
+            },
+            {
+              "object-target": "Service Item"
+            }
+          ]
+        },
+        {
+          "why": "Prepaid contracts create their ledger entries through two other insert events; the design must cover them or ask.",
+          "any": [
+            {
+              "subscribes-to": "OnInsertMultipleServLedgEntriesOnBeforeServLedgEntryInsert"
+            },
+            {
+              "open-question-contains": "prepaid"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "purchase-cost-reason-to-project-ledger",
+      "request": "Buyers set a Cost Reason on purchase invoice lines that are charged to a project. Project managers need to see the Cost Reason on project ledger entries for those purchases, including subcontractor hours we buy from vendors.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+        "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+        "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+      ],
+      "must-extend": [
+        "Purchase Line",
+        "Job Journal Line",
+        "Job Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnAfterFromPurchaseLineToJnlLine",
+        "OnAfterFromJnlLineToLedgEntry"
+      ],
+      "must-not-subscribe": [
+        "OnAfterJobLedgEntryInsert",
+        "OnAfterPostPurchaseDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Resource purchase lines post only a resource ledger entry and no project usage; the design must say how subcontractor hours reach the project, or ask.",
+          "any": [
+            {
+              "open-question-contains": "resource"
+            },
+            {
+              "open-question-contains": "subcontract"
+            },
+            {
+              "object-target": "Res. Ledger Entry"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "carry-customer-project-to-planned-supply-orders",
+      "request": "Sales order lines carry a customer project code. Planners run Calculate Plan in the planning worksheet and sometimes use Order Planning, then carry out the suggestions. The purchase order lines and production order lines created for that demand must show the customer project code so buyers and the shop floor know which project they serve.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md",
+        "microsoft/knowledge/scm/carry-out-requisition-actions-through-the-standard-workflow.md"
+      ],
+      "must-extend": [
+        "Sales Line",
+        "Inventory Profile",
+        "Requisition Line",
+        "Purchase Line",
+        "Prod. Order Line"
+      ],
+      "must-subscribe": [
+        "OnAfterTransferInventoryProfileFromSalesLine",
+        "OnMaintainPlanningLineOnBeforeReqLineInsert",
+        "OnAfterTransferFromUnplannedDemand",
+        "OnAfterInitPurchOrderLine",
+        "OnInsertProdOrderLineWithReqLine"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPurchOrderLineInsert"
+      ],
+      "required-guards": {
+        "OnMaintainPlanningLineOnBeforeReqLineInsert": "Source Type"
+      },
+      "must-cover-any": [
+        {
+          "why": "With Lot-for-Lot or reorder policies one planning line covers several sales lines, so the design must say which project wins or restrict to Order items.",
+          "any": [
+            {
+              "open-question-contains": "reordering"
+            },
+            {
+              "open-question-contains": "lot-for-lot"
+            },
+            {
+              "open-question-contains": "several demand"
+            }
+          ]
+        },
+        {
+          "why": "Purchase headers group lines by vendor; a header-level project needs a split rule.",
+          "any": [
+            {
+              "open-question-contains": "header"
+            },
+            {
+              "object-target": "Purchase Header"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "delivery-route-shipments-and-brand-on-substitutes",
+      "request": "Sales orders get a delivery route. Warehouse staff must be able to pull only the released sales orders for one route into a warehouse shipment through the source document filters. Items also get a brand code that must default onto sales lines, including when the salesperson picks a substitute or a catalog item, and a substitute line must remember the brand that was originally ordered.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md",
+        "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md",
+        "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+      ],
+      "must-extend": [
+        "Warehouse Request",
+        "Warehouse Source Filter",
+        "Sales Header",
+        "Sales Line",
+        "Item"
+      ],
+      "must-subscribe": [
+        "OnBeforeCreateWhseRequest",
+        "OnSetFiltersOnSourceTables",
+        "OnAfterAssignItemValues",
+        "OnItemSubstGetOnAfterSubstSalesLineItem"
+      ],
+      "must-not-subscribe": [
+        "OnAfterSalesHeaderOnAfterGetRecord"
+      ],
+      "must-cover-any": [
+        {
+          "why": "The route is copied to Warehouse Request at release; changing it on a released order needs reopen/release or an explicit update.",
+          "any": [
+            {
+              "open-question-contains": "release"
+            },
+            {
+              "open-question-contains": "reopen"
+            }
+          ]
+        },
+        {
+          "why": "Items created from catalog items skip Item OnInsert; the brand must come from the item template or OnCreateNewItemOnBeforeItemModify.",
+          "any": [
+            {
+              "open-question-contains": "catalog"
+            },
+            {
+              "open-question-contains": "template"
+            },
+            {
+              "object-target": "Item Templ."
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "packing-instruction-to-warehouse-shipment-and-item-ledger",
+      "request": "Sales order lines get a Packing Instruction code chosen by the order taker. Warehouse workers must see it on the warehouse shipment lines and on posted warehouse shipment lines, and quality wants it on the item ledger entries after the shipment is posted.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+        "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+        "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+      ],
+      "must-extend": [
+        "Sales Line",
+        "Warehouse Shipment Line",
+        "Posted Whse. Shipment Line",
+        "Item Journal Line",
+        "Item Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnBeforeCreateShptLineFromSalesLine",
+        "OnAfterCopyItemJnlLineFromSalesLine",
+        "OnAfterInitItemLedgEntry"
+      ],
+      "must-not-subscribe": [],
+      "must-cover-any": [
+        {
+          "why": "Posted sales shipment lines and archives also receive the sales line by TransferFields; the design must mirror the field there or ask.",
+          "any": [
+            {
+              "object-target": "Sales Shipment Line"
+            },
+            {
+              "open-question-contains": "archive"
+            },
+            {
+              "open-question-contains": "posted sales shipment"
+            }
+          ]
+        },
+        {
+          "why": "Other warehouse sources (return orders, transfers) build shipment lines in their own codeunits; the design must cover them or ask.",
+          "any": [
+            {
+              "open-question-contains": "transfer"
+            },
+            {
+              "open-question-contains": "return"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "nightly-customer-csv-import",
+      "request": "Every night our web shop exports a CSV file of newly registered customers. Import them as customers in the background, report rows that fail without stopping the rest of the file, let the administrator change the column layout without a new release, and keep the import log for 90 days.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-a-data-import-or-migration-feature.md",
+        "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md",
+        "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md"
+      ],
+      "must-extend": [],
+      "must-subscribe": [],
+      "must-not-subscribe": [],
+      "must-cover-lifecycle": [
+        "permissions",
+        "privacy"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Re-importing a file or a customer that already exists has no BCQuality rule; the design must ask how duplicates are detected.",
+          "any": [
+            {
+              "open-question-contains": "duplicate"
+            },
+            {
+              "open-question-contains": "already exist"
+            },
+            {
+              "open-question-contains": "already imported"
+            }
+          ]
+        },
+        {
+          "why": "In SaaS no server file path is readable; how the file reaches Business Central must be designed or asked.",
+          "any": [
+            {
+              "open-question-contains": "file"
+            },
+            {
+              "open-question-contains": "storage"
+            }
+          ]
+        },
+        {
+          "why": "Row errors must be collected instead of stopping at the first, through ErrorBehavior or a per-row run that keeps GetLastErrorText.",
+          "any": [
+            {
+              "cites": "microsoft/knowledge/error-handling/collect-validation-errors-with-errorbehavior.md"
+            },
+            {
+              "design-contains": "GetLastErrorText"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "posted-equipment-rental-document",
+      "request": "We rent equipment to customers. Add a Rental Order document with a header and lines, numbered from its own series. When the rental ends the user posts it: the order becomes a Posted Rental Order with a number from a separate posting series, and the rental amount is posted to the G/L. Users must find posted rentals with Find entries, print and email them, and attach signed delivery forms.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md",
+        "microsoft/knowledge/data-modeling/check-post-line-batch-pattern.md",
+        "microsoft/knowledge/data-modeling/extend-find-entries-navigate-for-new-document-types.md",
+        "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+        "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+      ],
+      "must-extend": [
+        "Report Selection Usage"
+      ],
+      "must-subscribe": [
+        "OnAfterFindRecords",
+        "OnBeforeShowRecords",
+        "OnAfterTableHasNumberFieldPrimaryKey"
+      ],
+      "must-cover-any": [
+        {
+          "why": "Approval, archive and preview are not settled by the request; the design must include them or ask.",
+          "any": [
+            {
+              "open-question-contains": "approval"
+            },
+            {
+              "open-question-contains": "archive"
+            },
+            {
+              "open-question-contains": "preview"
+            }
+          ]
+        },
+        {
+          "why": "Dimensions on the rental and on the G/L posting are not mentioned; the design must plan the sources or ask.",
+          "any": [
+            {
+              "object-target": "Dimension Management"
+            },
+            {
+              "open-question-contains": "dimension"
+            }
+          ]
+        }
+      ],
+      "min-tests": 3
+    },
+    {
+      "id": "print-and-email-inspection-certificate",
+      "request": "Quality wants an Inspection Certificate printed from our custom Inspection document and emailed to the customer. Some customers want their own certificate layout, and the certificate must show the item's GTIN as a barcode.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-a-printable-document-and-its-delivery.md",
+        "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+        "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+        "microsoft/knowledge/data-modeling/report-barcodes-must-use-barcode-module-and-production-font-name.md"
+      ],
+      "must-extend": [
+        "Report Selection Usage",
+        "Custom Report Selection Sales"
+      ],
+      "must-subscribe": [
+        "OnAfterOnMapTableUsageValueToPageValue",
+        "OnValidateUsage2OnCaseElse"
+      ],
+      "must-cover-any": [
+        {
+          "why": "The email account, body and attachments are not specified; the design must route through the Email module and Report Selections or ask.",
+          "any": [
+            {
+              "object-target": "Email Scenario"
+            },
+            {
+              "open-question-contains": "email"
+            }
+          ]
+        },
+        {
+          "why": "Printing in the customer's language is not settled by any article; the design should ask.",
+          "any": [
+            {
+              "open-question-contains": "language"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "replace-shipped-priority-option-with-code",
+      "request": "Our AppSource app has a Priority option field (Low, Normal, High) on its Service Contract table, used in an integration event, an API page and a Power Automate business event. Replace it with a Priority Level code that points to a new setup table, and keep existing contracts' priorities.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/feature-design/plan-a-change-to-a-shipped-feature.md",
+        "microsoft/knowledge/breaking-changes/obsolete-table-fields-instead-of-deleting-them.md",
+        "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+        "microsoft/knowledge/web-services/version-apis-by-adding-not-mutating-published-versions.md",
+        "microsoft/knowledge/web-services/raise-external-business-events-for-power-automate.md"
+      ],
+      "must-subscribe": [
+        "OnGetPerCompanyUpgradeTags"
+      ],
+      "must-cover-any": [
+        {
+          "why": "The release that removes the obsolete field and event is a requester decision.",
+          "any": [
+            {
+              "open-question-contains": "release"
+            },
+            {
+              "open-question-contains": "remov"
+            }
+          ]
+        },
+        {
+          "why": "The setup table must have Priority Level rows before the back-fill can point to them, in existing and new companies.",
+          "any": [
+            {
+              "open-question-contains": "new compan"
+            },
+            {
+              "object-target": "Upgrade Tag"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    },
+    {
+      "id": "carry-carrier-seal-from-warehouse-shipment-to-posted-sales-shipment",
+      "request": "Warehouse staff enter a Carrier Seal No. on the warehouse shipment before posting it. The seal number must appear on the posted sales shipment and on the item ledger entries created by that shipment, including when the shipment is previewed.",
+      "expected-outcomes": [
+        "completed",
+        "partial"
+      ],
+      "must-cite": [
+        "microsoft/knowledge/warehouse/carry-warehouse-shipment-and-receipt-values-to-the-source-document-before-posting.md",
+        "microsoft/knowledge/warehouse/warehouse-shipment-and-receipt-posting-commits-per-source-document.md",
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+      ],
+      "must-extend": [
+        "Warehouse Shipment Header",
+        "Sales Header",
+        "Sales Shipment Header",
+        "Item Journal Line",
+        "Item Ledger Entry"
+      ],
+      "must-subscribe": [
+        "OnInitSourceDocumentHeaderOnBeforeSalesHeaderModify",
+        "OnAfterInitItemLedgEntry"
+      ],
+      "must-not-subscribe": [
+        "OnAfterPostWhseShipment",
+        "OnAfterPostSalesDoc"
+      ],
+      "must-cover-any": [
+        {
+          "why": "The value can reach the item journal line either from the sales header or from the warehouse shipment header passed to Sales-Post.",
+          "any": [
+            {
+              "subscribes-to": "OnAfterCopyItemJnlLineFromSalesHeader"
+            },
+            {
+              "subscribes-to": "OnPostItemJnlLineOnAfterCopyDocumentFields"
+            }
+          ]
+        },
+        {
+          "why": "A shipment can hold several orders and an order can be shipped in several shipments; the design must cover that or ask.",
+          "any": [
+            {
+              "open-question-contains": "partial"
+            },
+            {
+              "open-question-contains": "several"
+            },
+            {
+              "open-question-contains": "multiple"
+            }
+          ]
+        }
+      ],
+      "min-tests": 2
+    }
+  ]
+}

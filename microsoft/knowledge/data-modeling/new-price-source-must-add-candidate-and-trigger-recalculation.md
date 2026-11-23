@@ -60,6 +60,8 @@ both calls, in the correct order, in one step.
 
 See sample: [`new-price-source-must-add-candidate-and-trigger-recalculation.good.al`](new-price-source-must-add-candidate-and-trigger-recalculation.good.al).
 
+For designing a pricing feature end to end, start from [plan a custom pricing rule](../feature-design/plan-a-custom-pricing-rule.md).
+
 ## Anti Pattern
 
 Subscribing to `OnAfterAddSources` to register a custom field as a price

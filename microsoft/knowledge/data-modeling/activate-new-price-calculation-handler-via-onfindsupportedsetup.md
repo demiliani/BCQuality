@@ -55,6 +55,8 @@ Calculation Setup"` row; `FindSetup` resolves that before it ever checks
 
 See sample: [`activate-new-price-calculation-handler-via-onfindsupportedsetup.good.al`](activate-new-price-calculation-handler-via-onfindsupportedsetup.good.al).
 
+For designing a pricing feature end to end, start from [plan a custom pricing rule](../feature-design/plan-a-custom-pricing-rule.md).
+
 ## Anti Pattern
 
 Extending `Price Calculation Handler` and implementing the `Price

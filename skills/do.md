@@ -63,7 +63,7 @@ application-area: [all]
 
 `inputs` is a list of abstract input types the skill **accepts**. Standard values:
 `pr-diff`, `object-list`, `file-path`, `folder-path`, `repository`,
-`telemetry-query`, `development-plan`, and `knowledge-query` (a question without source-code scope). Semantics are any-of: the
+`telemetry-query`, `development-plan`, `knowledge-query` (a question without source-code scope), and `feature-request` (a plain-language description of a feature to design; experimental). Semantics are any-of: the
 orchestrator supplies whichever listed input types it has, and the skill is
 invoked with a non-empty subset of its declared `inputs`. A skill that cannot
 proceed with the supplied subset MUST return `outcome: "not-applicable"`.
@@ -73,6 +73,7 @@ proceed with the supplied subset MUST return `outcome: "not-applicable"`.
 - `findings-report` — evaluates an input and reports defects or observations.
 - `knowledge-response` — answers a bound development question with cited knowledge, without a code review.
 - `development-guidance-report` — selects and summarizes applicable BCQuality knowledge for an existing development plan without changing the target repository.
+- `feature-design-report` — designs a new feature from a `feature-request` before code exists: objects, data flow, event subscriptions, lifecycle steps and tests, each citing the knowledge it rests on. Experimental; its structural schema is [`schemas/feature-design-report.schema.json`](../schemas/feature-design-report.schema.json).
 
 `development-plan` and `development-guidance-report` are preview contract
 extensions. The standalone plugin exposes them through the preview

@@ -1,0 +1,676 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Quality wants an Inspection Certificate printed from our custom Inspection document and emailed to the customer. Some customers want their own certificate layout, and the certificate must show the item's GTIN as a barcode.",
+    "business-process": "Print and email an Inspection Certificate from the custom Inspection document to the customer, through the standard Report Selections / Document Layouts printing and the Email module, with the item's GTIN as a barcode.",
+    "candidates": 19,
+    "selected": 18
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "usage-enum-ext",
+        "action": "create",
+        "object-type": "enumextension",
+        "target": "Report Selection Usage",
+        "purpose": "Add an 'Inspection Certificate' usage value so the certificate is registered in Report Selections like every standard document, instead of a hardcoded report.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+          "microsoft/knowledge/feature-design/plan-a-printable-document-and-its-delivery.md"
+        ]
+      },
+      {
+        "id": "cust-usage-enum-ext",
+        "action": "create",
+        "object-type": "enumextension",
+        "target": "Custom Report Selection Sales",
+        "purpose": "Add the same 'Inspection Certificate' value to the customer-side page enum so the usage can be shown and picked on Document Layouts (Customer Report Selections) for customers who want their own certificate layout. Customer side only: the certificate goes to customers, so the vendor-side enum 'Report Selection Usage Vendor' is deliberately not extended.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/feature-design/plan-a-printable-document-and-its-delivery.md"
+        ]
+      },
+      {
+        "id": "certificate-report",
+        "action": "create",
+        "object-type": "report",
+        "target": "Inspection Certificate",
+        "purpose": "Document report built on the custom Inspection header (and lines, if the Inspection has lines). Includes the item's GTIN as a column and a barcode-encoded GTIN column produced through the Barcode module (1D: ValidateInput then EncodeFont; 2D: EncodeFont only). Layouts declared in a rendering section with DefaultRenderingLayout set by name, each with Caption and Summary; the default is a Word layout. The 1D barcode text box in the layout names the purchased IDAutomation font (never a 'Demo' font name); a 2D barcode uses IDAutomation2D. Fields read only in triggers (for example the Item GTIN when it is looked up from the Inspection's item in OnAfterGetRecord rather than via an Item dataitem column) are added with AddLoadFields in OnPreDataItem. Dataset column names are a contract for customer-designed layouts once released.",
+        "fields": [
+          {
+            "name": "GTIN",
+            "type": "column (Code)",
+            "note": "Item.GTIN of the inspected item, human-readable."
+          },
+          {
+            "name": "GTINBarcode",
+            "type": "column (Text)",
+            "note": "Barcode Font Provider encoded GTIN; symbology is an open question."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-printable-document-and-its-delivery.md",
+          "microsoft/knowledge/data-modeling/report-barcodes-must-use-barcode-module-and-production-font-name.md",
+          "microsoft/knowledge/reporting/declare-report-layouts-in-the-rendering-section.md",
+          "microsoft/knowledge/performance/document-report-word-layout.md",
+          "microsoft/knowledge/reporting/do-not-rename-or-remove-shipped-report-dataset-columns.md",
+          "microsoft/knowledge/performance/addloadfields-in-report-onpredataitem.md"
+        ]
+      },
+      {
+        "id": "report-selection-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Inspection Cert. Rep. Sel. Subscribers",
+        "purpose": "Subscribers on page Customer Report Selections that map, validate and filter the new usage so it is visible, selectable and copyable in Document Layouts; the filter subscriber appends to the existing Usage filter, never overwrites it.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "id": "certificate-dispatch",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Inspection Certificate Mgt.",
+        "purpose": "Print and Email procedures for the certificate. Inspection-specific checks (for example that the inspection has a customer and is in a printable state) run before the call, then dispatch goes through Report Selections: PrintWithDialogForCust for Print and SendEmailToCust for Email, with the new usage, the filtered Inspection record and the customer number. No hardcoded Report.Run/RunModal and no hand-built email; email sending is therefore done by the Email module through Report Selections, never Codeunit Mail. The customer's assigned Document Sending Profile is not read (no Get/GetDefaultForCustomer + Send).",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+          "microsoft/knowledge/breaking-changes/prefer-email-module.md",
+          "microsoft/knowledge/feature-design/plan-a-printable-document-and-its-delivery.md"
+        ]
+      },
+      {
+        "id": "inspection-page-actions",
+        "action": "modify",
+        "object-type": "page",
+        "target": "Inspection Card",
+        "purpose": "Add 'Print Certificate' and 'Email Certificate' actions to the custom Inspection document page(s) in the caller's app; each action sets the selection filter and calls the dispatch codeunit. Whether the Inspection list page also gets the actions is an open question.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md"
+        ]
+      },
+      {
+        "id": "install-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Inspection Certificate Install",
+        "purpose": "Subtype = Install. OnInstallAppPerCompany registers the tenant-wide default with ReportSelections.InsertRecord(usage, sequence, Report::\"Inspection Certificate\") and seeds the certificate upgrade tag with SetUpgradeTag so the upgrade step does not run again. Reuse the app's existing install codeunit if it has one.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md",
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "id": "upgrade-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Inspection Certificate Upgrade",
+        "purpose": "Subtype = Upgrade. Because the Inspection app is already installed at customers, OnUpgradePerCompany registers the default Report Selections row for existing companies, guarded by HasUpgradeTag and ending with SetUpgradeTag; never a DataVersion check. Reuse the app's existing upgrade codeunit if it has one.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md"
+        ]
+      },
+      {
+        "id": "upgrade-tag-definitions",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Inspection Upgrade Tag Definitions",
+        "purpose": "Holds the certificate upgrade tag value shared by install and upgrade code and registers it in OnGetPerCompanyUpgradeTags so new companies get it marked complete by SetAllUpgradeTags.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "id": "permission-set",
+        "action": "modify",
+        "object-type": "permissionset",
+        "target": "Inspection permission set",
+        "purpose": "Grant execute (X) on the Inspection Certificate report and the dispatch codeunit, plus read on any tabledata the report reads that the set does not yet cover, in the app's focused non-assignable building-block set so every role set that includes it inherits the grant; no wildcards, no reliance on SUPER.",
+        "knowledge": [
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Inspection header (Item No.)",
+        "to": "Item.GTIN",
+        "mechanism": "other",
+        "note": "Report reads the inspected item's GTIN (dataitem link or lookup in OnAfterGetRecord; trigger-only reads use AddLoadFields).",
+        "knowledge": [
+          "microsoft/knowledge/performance/addloadfields-in-report-onpredataitem.md"
+        ]
+      },
+      {
+        "from": "Item.GTIN",
+        "to": "Inspection Certificate dataset column GTINBarcode",
+        "mechanism": "other",
+        "note": "Barcode Font Provider ValidateInput + EncodeFont (1D) or Barcode Font Provider 2D EncodeFont (2D); layout names the production font.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/report-barcodes-must-use-barcode-module-and-production-font-name.md"
+        ]
+      },
+      {
+        "from": "Install / upgrade code",
+        "to": "Report Selections (Inspection Certificate usage)",
+        "mechanism": "other",
+        "note": "ReportSelections.InsertRecord registers the tenant-wide default report.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "from": "Customer card > Document Layouts",
+        "to": "Custom Report Selection (Inspection Certificate usage, per customer)",
+        "mechanism": "user-entry",
+        "note": "Users pick the usage and a customer-specific report/layout; enabled by the customer-side page enum and the map/validate/filter subscribers.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md"
+        ]
+      },
+      {
+        "from": "Inspection Card Print Certificate action",
+        "to": "Report Selections.PrintWithDialogForCust",
+        "mechanism": "other",
+        "note": "Resolves the report and layout for the inspection's customer, honoring Custom Report Selection overrides.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md"
+        ]
+      },
+      {
+        "from": "Inspection Card Email Certificate action",
+        "to": "Report Selections.SendEmailToCust -> Email module",
+        "mechanism": "other",
+        "note": "Report Selections renders the certificate per the customer's selection and sends it through the Email module to the customer.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+          "microsoft/knowledge/breaking-changes/prefer-email-module.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Customer Report Selections",
+        "event": "OnAfterOnMapTableUsageValueToPageValue",
+        "purpose": "Map the Inspection Certificate table usage to the page enum value so existing rows display in the Usage column.",
+        "guards": [
+          "Act only when CustomReportSelection.Usage is the Inspection Certificate usage."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "publisher": "Customer Report Selections",
+        "event": "OnValidateUsage2OnCaseElse",
+        "purpose": "Set CustomReportSelection.Usage to the Inspection Certificate usage when the user picks it from the Usage dropdown.",
+        "guards": [
+          "Act only when ReportUsage equals the page enum value's ordinal."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "publisher": "Customer Report Selections",
+        "event": "OnAfterFilterCustomerUsageReportSelections",
+        "purpose": "Include the Inspection Certificate usage in the filter used by 'Copy from Report Selection'.",
+        "guards": [
+          "Append with StrSubstNo('%1|%2', ReportSelections.GetFilter(Usage), UsageFilter); never overwrite the existing filter."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "publisher": "Upgrade Tag",
+        "event": "OnGetPerCompanyUpgradeTags",
+        "purpose": "Register the certificate upgrade tag so SetAllUpgradeTags marks it complete for new companies.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "install",
+        "step": "On first install per company, insert the default Report Selections row for the Inspection Certificate usage and seed the certificate upgrade tag.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md",
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "In the upgrade codeunit, register the default Report Selections row for companies that already run the Inspection app, guarded by HasUpgradeTag/SetUpgradeTag; register the tag with OnGetPerCompanyUpgradeTags.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Customer-specific certificate layouts are configured by users on the customer's Document Layouts page (Custom Report Selection); additional layouts are added on Report Layouts. No new setup table.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+          "microsoft/knowledge/reporting/declare-report-layouts-in-the-rendering-section.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Barcode fonts need no setup on Business Central online; on-premises the IDAutomation fonts must be purchased and installed. The layout must name the production font.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/report-barcodes-must-use-barcode-module-and-production-font-name.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Add X on the report and dispatch codeunit to the app's focused building-block permission set; verify print and email as a user holding only the app's roles.",
+        "knowledge": [
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "No new table fields are designed, so no new DataClassification decisions; if an open question adds a field to the Inspection (for example a customer number), classify it then.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "print-uses-registered-report",
+        "given": "A customer, an item with a GTIN and an Inspection for that customer and item, created with Library codeunits and the app's own fixture helpers, and the default Report Selections row installed",
+        "when": "The Print Certificate action runs",
+        "then": "The Inspection Certificate report runs through Report Selections; a request-page handler captures the run and the saved dataset contains the inspection number and the item's GTIN",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "gtin-barcode-column-encoded",
+        "given": "An item whose GTIN is valid for the chosen symbology and an Inspection for it",
+        "when": "The certificate report is run and its dataset is read",
+        "then": "GTINBarcode equals the Barcode Font Provider EncodeFont result for that GTIN and symbology",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/report-barcodes-must-use-barcode-module-and-production-font-name.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "invalid-gtin-rejected",
+        "given": "An item whose GTIN contains characters outside the chosen 1D symbology's character set",
+        "when": "The certificate report is run",
+        "then": "ValidateInput raises its error (or the agreed handling for an invalid/blank GTIN applies) instead of an unscannable barcode being printed",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/report-barcodes-must-use-barcode-module-and-production-font-name.md"
+        ]
+      },
+      {
+        "id": "customer-specific-selection-wins",
+        "given": "A Custom Report Selection row for customer A with the Inspection Certificate usage pointing to a different report or layout, and Inspections for customers A and B",
+        "when": "The certificate is printed for each inspection",
+        "then": "Customer A's inspection uses the customer-specific selection and customer B's uses the tenant default",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "document-layouts-map-and-validate",
+        "given": "A customer and the Customer Report Selections test page opened for it",
+        "when": "The user picks Inspection Certificate in Usage and the page is reopened",
+        "then": "The stored Custom Report Selection.Usage is the Inspection Certificate usage (validate subscriber) and the row shows Inspection Certificate in the Usage column (map subscriber)",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "id": "copy-from-report-selection-appends",
+        "given": "The default Report Selections row for the Inspection Certificate usage and the existing standard customer usages",
+        "when": "Copy from Report Selection runs on Customer Report Selections",
+        "then": "The Inspection Certificate row is copied and the standard customer usages are still copied (filter appended, not overwritten)",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "id": "email-sends-through-report-selections",
+        "given": "A customer with an e-mail address, an Inspection for that customer and an email account set up for the test",
+        "when": "The Email Certificate action runs",
+        "then": "An email message addressed to the customer is created through the Email module with the certificate attached; the email editor modal page is handled by a handler that captures the recipient and the test asserts it",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+          "microsoft/knowledge/breaking-changes/prefer-email-module.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "email-ignores-sending-profile",
+        "given": "A customer whose assigned Document Sending Profile has E-Mail = No",
+        "when": "The Email Certificate action runs",
+        "then": "The certificate email is still created, because the action does not read the assigned profile",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md"
+        ]
+      },
+      {
+        "id": "install-registers-default",
+        "given": "A company without a Report Selections row for the Inspection Certificate usage",
+        "when": "The install code runs",
+        "then": "A Report Selections row for the usage points to the Inspection Certificate report and the certificate upgrade tag is set",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md",
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "id": "upgrade-runs-once",
+        "given": "A company upgraded from the previous app version without the certificate upgrade tag",
+        "when": "The upgrade codeunit runs twice",
+        "then": "Exactly one default Report Selections row exists and the tag is set after the first run",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md"
+        ]
+      },
+      {
+        "id": "non-super-user-can-print",
+        "given": "A user with only the app's assignable permission sets",
+        "when": "The certificate is printed and emailed",
+        "then": "Both succeed without SUPER",
+        "knowledge": [
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-printable-document-and-its-delivery.md",
+      "used-for": "Process map for the printable, emailed certificate: decides the report, layouts, Report Selections usage, Document Layouts, email and barcode rows, and the open questions for requester decisions.",
+      "constraints": [
+        "Plan one decision per row and open the linked articles before designing that part.",
+        "Whether a new layout replaces the company default, whether customers get their own layouts and whether the document is also sent electronically are requester decisions; raise open questions when not settled.",
+        "Do not add an action that calls Report.RunModal on a new report with an RDLC layout and builds the email by hand.",
+        "Sending attachments with the email and printing in the customer's language have no BCQuality article and rest on judgment."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md",
+      "used-for": "Followed for the Printing row of the custom Inspection document and to raise whether the Inspection is posted (which decides whether the certificate prints from the open or the posted Inspection).",
+      "constraints": [
+        "A custom document is registered in Report Selections and printed and emailed through it.",
+        "Whether the document needs posting, archive, approvals or ledger entries is for the requester; raise open questions instead of building or omitting silently."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+      "used-for": "Registering the Inspection Certificate usage, its tenant-wide default and the customer-side Document Layouts wiring.",
+      "constraints": [
+        "Add the usage via enumextension of 'Report Selection Usage' and register the default with ReportSelections.InsertRecord(Usage, Sequence, ReportID).",
+        "For each applicable counterparty, extend the page enum ('Custom Report Selection Sales' for customers) and subscribe to the map, validate and filter events of that page.",
+        "Append to the Usage filter with StrSubstNo('%1|%2', ReportSelections.GetFilter(Usage), UsageFilter); never overwrite.",
+        "Do not subscribe the vendor side for a customer-only document."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.good.al",
+        "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+      "used-for": "Dispatch codeunit and the requirement that per-customer layouts work through Custom Report Selection.",
+      "constraints": [
+        "Dispatch through Report Selections' own Print/Email procedures; custom logic goes around the call, not instead of it.",
+        "A hardcoded report ID is a defect on its own; a hand-built email is a defect on its own."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.good.al",
+        "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+      "used-for": "Print and Email actions on the Inspection page and the Post-and-Send boundary.",
+      "constraints": [
+        "Ordinary Print/Email actions call PrintForCust/PrintWithDialogForCust/SendEmailToCust for a customer-facing document, or Document Sending Profile's stateless TrySendToPrinter/TrySendToEMail helpers.",
+        "Never Get/GetDefaultForCustomer the assigned profile and call Send from a plain Email button; reserve that for Post and Send."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.good.al",
+        "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/report-barcodes-must-use-barcode-module-and-production-font-name.md",
+      "used-for": "GTIN barcode on the certificate.",
+      "constraints": [
+        "Encode through the Barcode module: 1D declares Interface 'Barcode Font Provider' and calls ValidateInput and EncodeFont; 2D declares 'Barcode Font Provider 2D' and calls EncodeFont only.",
+        "Name the purchased production font in the layout (e.g. IDAutomationHC39M for Code 39; IDAutomation2D for 2D other than Maxicode), never a name containing 'Demo'.",
+        "On-premises the fonts must be purchased and installed; online they are available automatically."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/report-barcodes-must-use-barcode-module-and-production-font-name.good.al",
+        "microsoft/knowledge/data-modeling/report-barcodes-must-use-barcode-module-and-production-font-name.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/reporting/declare-report-layouts-in-the-rendering-section.md",
+      "used-for": "Layout declaration of the new report. Applies from BC20 (runtime 9.0).",
+      "constraints": [
+        "Declare every layout in a rendering section, set DefaultRenderingLayout by name, give each layout a Caption and Summary.",
+        "Do not use DefaultLayout/RDLCLayout/WordLayout/ExcelLayout in a new report."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/reporting/declare-report-layouts-in-the-rendering-section.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/document-report-word-layout.md",
+      "used-for": "Default layout type of the certificate.",
+      "constraints": [
+        "Prefer a Word layout over RDLC for a document report unless specific layout requirements favor RDLC."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/performance/document-report-word-layout.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/reporting/do-not-rename-or-remove-shipped-report-dataset-columns.md",
+      "used-for": "Dataset naming, because customers will build their own certificate layouts on it.",
+      "constraints": [
+        "Once released, keep existing column names and columns layouts may use; add new columns instead of renaming."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/addloadfields-in-report-onpredataitem.md",
+      "used-for": "Fields read only in report triggers, such as the item GTIN looked up for encoding.",
+      "constraints": [
+        "Add trigger-only fields with AddLoadFields in OnPreDataItem; do not list every dataset column."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/performance/addloadfields-in-report-onpredataitem.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/breaking-changes/prefer-email-module.md",
+      "used-for": "Email delivery of the certificate.",
+      "constraints": [
+        "Send through Codeunit Email / 'Email Message' and an Email Scenario so documents can use different accounts; never Codeunit Mail."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+      "used-for": "Request-page and email-editor handling in tests.",
+      "constraints": [
+        "Every UI call on the executed path needs a listed handler; every nonoptional listed handler must execute.",
+        "Handlers contribute meaningful evidence; assert a captured value after the action."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/ui-handlers-in-tests.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for customers and items.",
+      "constraints": [
+        "Build prerequisite records with Library codeunits (LibrarySales.CreateCustomer, LibraryInventory.CreateItem), parents first, validating foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+      "used-for": "Install versus upgrade path for registering the default Report Selections row.",
+      "constraints": [
+        "Install code runs only on first install or reinstall, not on version upgrade; put version migration in a Subtype = Upgrade codeunit."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md",
+      "used-for": "Seeding and registering the certificate upgrade tag.",
+      "constraints": [
+        "Guard upgrade work with HasUpgradeTag and SetUpgradeTag after completion; seed the tag explicitly from OnInstallAppPerCompany; register it in OnGetPerCompanyUpgradeTags for new companies; share one tag definition."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+      "used-for": "Run-once control of the upgrade step.",
+      "constraints": [
+        "Every upgrade procedure starts with HasUpgradeTag and ends with SetUpgradeTag; never branch on DataVersion; one tag per feature."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+      "used-for": "Permission coverage for the new report and codeunits.",
+      "constraints": [
+        "Cover every page, report, codeunit and tabledata the feature uses through assignable roles composed from non-assignable sets; validate as a non-SUPER user; no wildcards."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Where to add the new grants.",
+      "constraints": [
+        "Add the objects to a focused Assignable = false building block that role sets include via IncludedPermissionSets; do not re-enumerate objects in several role sets."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "inspection-customer-source",
+      "question": "Which field on the Inspection identifies the customer the certificate is sent to (and whose Document Layouts apply)? If the Inspection has no customer, a field must be added and classified.",
+      "affects": [
+        "certificate-dispatch",
+        "certificate-report",
+        "inspection-page-actions"
+      ]
+    },
+    {
+      "id": "open-or-posted-inspection",
+      "question": "Is the Inspection document posted? Should the certificate print from the open Inspection, the posted Inspection, or both (and should a posted inspection support Post and Send via Document Sending Profile)?",
+      "affects": [
+        "certificate-report",
+        "certificate-dispatch",
+        "inspection-page-actions"
+      ]
+    },
+    {
+      "id": "gtin-symbology",
+      "question": "Which barcode symbology should encode the GTIN (for example EAN-13, Code 128, or a 2D code such as QR), and what should happen when the item has no GTIN or a GTIN invalid for that symbology: error, or print without a barcode?",
+      "affects": [
+        "certificate-report",
+        "gtin-barcode-column-encoded",
+        "invalid-gtin-rejected"
+      ]
+    },
+    {
+      "id": "default-layout-and-customer-layouts",
+      "question": "Which layout is the company default, and will customer-specific layouts be supplied by us as additional rendering layouts in the report or designed by users on Report Layouts and assigned in Document Layouts?",
+      "affects": [
+        "certificate-report",
+        "report-selection-subscribers"
+      ]
+    },
+    {
+      "id": "email-body-and-account",
+      "question": "Should the email use a report-based email body (Report Selections 'Use for Email Body') and a dedicated email account/Email Scenario for certificates, or the default scenario?",
+      "affects": [
+        "certificate-dispatch",
+        "email-sends-through-report-selections"
+      ]
+    },
+    {
+      "id": "attachments-language-edocs",
+      "question": "Must the certificate email carry the Inspection's attachments, print in the customer's language, or also be sent as an electronic document?",
+      "affects": [
+        "certificate-dispatch",
+        "certificate-report"
+      ]
+    },
+    {
+      "id": "inspection-lines-and-pages",
+      "question": "Does the Inspection have lines (several items per inspection, each with a GTIN), and should the Inspection list page also get the Print/Email actions?",
+      "affects": [
+        "certificate-report",
+        "inspection-page-actions"
+      ]
+    },
+    {
+      "id": "target-version",
+      "question": "Which Business Central version and runtime does the Inspection app target? The rendering-section layout declaration applies from BC20.",
+      "affects": [
+        "certificate-report"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "No repository was supplied: the Inspection table, page, existing install/upgrade codeunits and permission sets are named generically and must be mapped to the caller's app.",
+    "bc-version is unknown; the rendering-section rule applies from BC20.",
+    "Sending the Inspection's attachments with the certificate email is not covered by BCQuality knowledge; rests on judgment.",
+    "Printing the certificate in the customer's language is not covered by BCQuality knowledge; rests on judgment.",
+    "Mapping the Inspection Certificate usage to a dedicated Email Scenario when sending through Report Selections.SendEmailToCust is not covered by an opened article; no event for it is designed.",
+    "Privacy lifecycle step rests on judgment (no new fields designed).",
+    "Email test infrastructure (email account fixture and email editor handler) is not covered by an opened article beyond the general UI-handler rule."
+  ]
+}

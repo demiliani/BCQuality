@@ -46,9 +46,9 @@ HOST_SKILL_REQUIRED_KEYS = {"name", "description"}
 
 STANDARD_INPUTS = {
     "pr-diff", "object-list", "file-path", "folder-path", "repository", "telemetry-query",
-    "development-plan", "knowledge-query",
+    "development-plan", "knowledge-query", "feature-request",
 }
-ALLOWED_OUTPUTS = {"findings-report", "development-guidance-report", "knowledge-response"}
+ALLOWED_OUTPUTS = {"findings-report", "development-guidance-report", "knowledge-response", "feature-design-report"}
 VALID_SAMPLE_KINDS = {"good", "bad"}
 
 ACTION_SKILL_SECTIONS = ["Source", "Relevance", "Worklist", "Action", "Output"]

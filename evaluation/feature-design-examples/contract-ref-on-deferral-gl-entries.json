@@ -1,0 +1,663 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "We defer subscription revenue on sales invoices with deferral templates. Finance wants every G/L entry of the invoice, including each monthly deferral release, to carry the Contract No. from the sales header and a Recognition Month (YYYY-MM) showing the month the amount is recognised. Some contracts need their own number of months, so sales lines created by our contract import must get a schedule with the contract's period count.",
+    "business-process": "Carry a sales header Contract No. and a per-period Recognition Month to every G/L entry of a sales invoice, including deferral releases posted by Gen. Jnl.-Post Line, and give contract-imported sales lines a deferral schedule with the contract's period count (sales posting, invoice posting buffer, deferrals).",
+    "candidates": 14,
+    "selected": 12
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "sales-header-contract-no",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header",
+        "purpose": "Holds the Contract No. that every G/L entry of the invoice must carry. Needed only if the contract import app does not already define it (see open question).",
+        "fields": [
+          {
+            "name": "Contract No.",
+            "type": "Code[20]",
+            "note": "Same field number, type and length on every table that carries it."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "posted-sales-headers-contract-no",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Header",
+        "purpose": "Mirror of Contract No. so TransferFields carries it to the posted invoice. The same mirror is needed on Sales Cr.Memo Header, Sales Shipment Header, Return Receipt Header and Sales Header Archive (one tableextension each, same field number), non-editable on posted tables.",
+        "fields": [
+          {
+            "name": "Contract No.",
+            "type": "Code[20]",
+            "note": "Same field number, type and length on every table that carries it."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-line-contract-periods",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Stores the contract's period count set by the contract import, so the schedule can be checked before posting.",
+        "fields": [
+          {
+            "name": "Contract No. of Periods",
+            "type": "Integer",
+            "note": "0 = use the deferral template's period count. Local to Sales Line; not mirrored."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md"
+        ]
+      },
+      {
+        "id": "invoice-posting-buffer-contract-no",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Invoice Posting Buffer",
+        "purpose": "Carries Contract No. from the sales line posting to the G/L journal line of each buffer group. Not added to Group ID because the value is the same for every line of one invoice.",
+        "fields": [
+          {
+            "name": "Contract No.",
+            "type": "Code[20]",
+            "note": "Same field number, type and length on every table that carries it."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-contract-no",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Carries Contract No. to G/L entries, including the deferral entries Gen. Jnl.-Post Line builds from the same journal line.",
+        "fields": [
+          {
+            "name": "Contract No.",
+            "type": "Code[20]",
+            "note": "Same field number, type and length on every table that carries it."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md"
+        ]
+      },
+      {
+        "id": "gl-entry-contract-fields",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "G/L Entry",
+        "purpose": "Stores Contract No. and Recognition Month on every G/L entry, filled during posting. Stored fields are chosen because Finance needs them on every entry; the related-table alternative is an open question.",
+        "fields": [
+          {
+            "name": "Contract No.",
+            "type": "Code[20]",
+            "note": "Editable = false."
+          },
+          {
+            "name": "Recognition Month",
+            "type": "Code[7]",
+            "note": "Format YYYY-MM. Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "contract-gl-posting-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Contract G/L Posting",
+        "purpose": "Event subscribers that carry Contract No. through the invoice posting buffer and the customer journal line to the G/L entries, and set Recognition Month on each deferral entry.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "id": "contract-deferral-schedule-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Contract Deferral Schedule",
+        "purpose": "SetContractSchedule(SalesLine, DeferralCode, StartDate, NoOfPeriods): validates Deferral Code, then calls Deferral Utilities.CreateDeferralSchedule with the line's GetDeferralAmount() and the contract's period count; plus the pre-posting check of the schedule.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md"
+        ]
+      },
+      {
+        "id": "contract-import-modify",
+        "action": "modify",
+        "object-type": "codeunit",
+        "target": "Contract Import",
+        "purpose": "The caller's existing contract import calls SetContractSchedule for each sales line it creates, after the line's amounts are set, and fills Contract No. of Periods. Object name to be confirmed.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md"
+        ]
+      },
+      {
+        "id": "gl-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "General Ledger Entries",
+        "purpose": "Shows Contract No. and Recognition Month so Finance can see and filter them.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Invoice",
+        "purpose": "Shows Contract No. on the invoice, and Contract No. of Periods on the invoice subform lines (Sales Invoice Subform), if not already shown by the contract app.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "contract-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Contract Deferral",
+        "purpose": "Execute permission on the two new codeunits for users who post sales invoices and run the contract import.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Contract import",
+        "to": "Sales Header.Contract No.",
+        "mechanism": "other",
+        "note": "Existing import sets the header value (to be confirmed).",
+        "knowledge": []
+      },
+      {
+        "from": "Contract import",
+        "to": "Sales Line deferral schedule (Deferral Header / Deferral Line)",
+        "mechanism": "validate",
+        "note": "Validate Deferral Code, then DeferralUtilities.CreateDeferralSchedule with the contract's No. of Periods; amounts changed later only through Validate so UpdateDeferralAmounts keeps the period count.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Sales Invoice Header, Sales Cr.Memo Header, Sales Shipment Header, Return Receipt Header, Sales Header Archive",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Header (via Sales Line)",
+        "to": "Invoice Posting Buffer",
+        "mechanism": "event-copy",
+        "note": "OnPrepareLineOnAfterFillInvoicePostingBuffer on Sales Post Invoice Events; the confirmed parameters give the Sales Line, so the header's Contract No. is read from the line's document (judgment, see unresolved).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "from": "Invoice Posting Buffer",
+        "to": "Gen. Journal Line",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyToGenJnlLine on Invoice Posting Buffer (revenue, deferral-source and other line-based G/L lines).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Gen. Journal Line (customer/receivables line)",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyGenJnlLineFromSalesHeader on Gen. Journal Line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line",
+        "to": "G/L Entry (main and every deferral entry)",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyGLEntryFromGenJnlLine copies Contract No. only; it also runs for every deferral entry built from the journal line. It does not read the entry's account, amount or posting date.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "from": "Deferral posting (period posting date)",
+        "to": "G/L Entry.Recognition Month",
+        "mechanism": "event-copy",
+        "note": "Set from the period posting date in OnPostDeferralPostBufferOnBeforeInsertGLEntryForGLAccount and ...ForDeferralAccount, raised after the period posting date is set.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line.Posting Date",
+        "to": "G/L Entry.Recognition Month (non-deferred entries)",
+        "mechanism": "event-copy",
+        "note": "Default for entries that are not deferral releases: month of the journal line posting date, set in OnAfterCopyGLEntryFromGenJnlLine; overwritten by the deferral events for deferral entries. Proposed value pending the open question.",
+        "knowledge": []
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Sales Post Invoice Events",
+        "event": "OnPrepareLineOnAfterFillInvoicePostingBuffer",
+        "purpose": "Copy the invoice's Contract No. into the Invoice Posting Buffer.",
+        "guards": [
+          "Subscribe on Sales Post Invoice Events, not Sales Post Invoice.",
+          "Contract No. not added to Group ID: constant per invoice."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "publisher": "Invoice Posting Buffer",
+        "event": "OnAfterCopyToGenJnlLine",
+        "purpose": "Copy Contract No. from the buffer to the Gen. Journal Line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "publisher": "Gen. Journal Line",
+        "event": "OnAfterCopyGenJnlLineFromSalesHeader",
+        "purpose": "Copy Contract No. from the sales header to the customer journal line so the receivables G/L entry carries it.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "publisher": "G/L Entry",
+        "event": "OnAfterCopyGLEntryFromGenJnlLine",
+        "purpose": "Copy Contract No. to every G/L entry built from the journal line, deferral entries included; set the default Recognition Month for non-deferred entries from the journal line posting date.",
+        "guards": [
+          "Do not read GLEntry G/L Account No., Amount or Posting Date here: they are not final.",
+          "Fill during posting; never find and modify G/L entries after posting."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Gen. Jnl.-Post Line",
+        "event": "OnPostDeferralPostBufferOnBeforeInsertGLEntryForGLAccount",
+        "purpose": "Set Recognition Month (YYYY-MM) from the period posting date on the G/L account side of each sales deferral entry.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md"
+        ]
+      },
+      {
+        "publisher": "Gen. Jnl.-Post Line",
+        "event": "OnPostDeferralPostBufferOnBeforeInsertGLEntryForDeferralAccount",
+        "purpose": "Set Recognition Month on the deferral account side, so reports that read the deferral account see it too.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md"
+        ]
+      },
+      {
+        "publisher": "Sales-Post",
+        "event": "OnAfterCheckSalesDoc",
+        "purpose": "Stop posting (preview included) when a line with Contract No. of Periods > 0 has a deferral schedule whose No. of Periods differs, e.g. after a header Posting Date change re-validated Deferral Code with the template's period count.",
+        "guards": [
+          "Raise an actionable error naming the line and telling the user to re-apply the contract schedule."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Classify Contract No. as CustomerContent on every table that holds it; Recognition Month as CustomerContent on G/L Entry; Contract No. of Periods as CustomerContent.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship permission set Contract Deferral with execute on Contract G/L Posting and Contract Deferral Schedule.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "No back-fill: G/L entries posted before installation keep blank Contract No. and Recognition Month unless the open question decides otherwise. Posted entries are never modified to fill them.",
+        "knowledge": [
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "deferral-entries-carry-contract-and-month",
+        "given": "Customer, G/L accounts and a 3-period straight-line deferral template created with Library codeunits; sales invoice with Contract No. and one line using the template.",
+        "when": "The invoice is posted.",
+        "then": "Every G/L entry with the posted Document No. (revenue, receivables, VAT, deferral transfer and each release) has the Contract No.; each deferral release entry, on both the G/L account and deferral account side, has Recognition Month equal to the YYYY-MM of its own posting date, and the three months differ.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "receivables-entry-carries-contract-no",
+        "given": "Sales invoice with Contract No. and no deferral.",
+        "when": "The invoice is posted.",
+        "then": "The receivables G/L entry and the revenue G/L entry carry Contract No.; Recognition Month equals the posting month.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "multi-line-invoice-keeps-contract-no",
+        "given": "Sales invoice with Contract No. and two lines on different G/L accounts, one deferred and one not.",
+        "when": "The invoice is posted.",
+        "then": "All G/L entries of both buffer groups carry the same Contract No.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "posted-header-mirror",
+        "given": "Sales invoice with Contract No.",
+        "when": "The invoice is posted, and separately the document is archived.",
+        "then": "Sales Invoice Header and Sales Header Archive carry the Contract No.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "contract-schedule-period-count",
+        "given": "Deferral template with 12 periods; sales line created by the contract import procedure with a contract period count of 5.",
+        "when": "SetContractSchedule runs, then Quantity is validated to a new value.",
+        "then": "Deferral Header No. of Periods is 5 after both steps, and the Deferral Line total equals the new Amount to Defer.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "contract-schedule-posts-five-releases",
+        "given": "Sales invoice line with a contract schedule of 5 periods.",
+        "when": "The invoice is posted.",
+        "then": "Five deferral release pairs are posted, each with Contract No. and its own Recognition Month.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "posting-date-change-blocked",
+        "given": "Sales line with Contract No. of Periods = 5 and a contract schedule; header Posting Date then changed so Deferral Code is re-validated with the template's 12 periods.",
+        "when": "Posting preview and posting are run.",
+        "then": "Both stop with the schedule-mismatch error and no G/L entries exist; after re-running SetContractSchedule posting succeeds.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Process map: chose the Sales and Finance (deferrals) rows and the cross-cutting rows (mirroring, posted entries, upgrade, privacy, tests).",
+      "constraints": [
+        "A field reaches only the stages the plan names; plan one row group per process.",
+        "Fill posted entries during posting, never by modifying them afterwards.",
+        "Whether a field reaches stages the request does not name is a question for the requester, one per group."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.md",
+      "used-for": "Deferral G/L entries, Recognition Month events, and the contract-specific deferral schedule.",
+      "constraints": [
+        "Carry a document-level value to the Gen. Journal Line and copy it in OnAfterCopyGLEntryFromGenJnlLine; do not read the entry's account, amount or posting date there.",
+        "Set a period-dependent value in the deferral insert events, on both sides if reports read the deferral account.",
+        "Create a schedule from code by validating Deferral Code, then calling DeferralUtilities.CreateDeferralSchedule with GetDeferralAmount(); never insert or modify Deferral Line rows directly.",
+        "Change amounts only through Validate so UpdateDeferralAmounts keeps the method, period count and start date.",
+        "A header Posting Date change re-validates Deferral Code on every line with the template's period count; posting fails when the schedule total differs from Amount to Defer."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.good.al",
+        "microsoft/knowledge/finance-extensions/carry-fields-to-deferral-gl-entries-and-maintain-deferral-schedules.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+      "used-for": "Carrying Contract No. from sales line posting through the Invoice Posting Buffer to the G/L journal line and G/L Entry.",
+      "constraints": [
+        "Add the field to Invoice Posting Buffer, Gen. Journal Line and G/L Entry.",
+        "Subscribe to OnPrepareLineOnAfterFillInvoicePostingBuffer on Sales Post Invoice Events, not Sales Post Invoice.",
+        "Add the field to Group ID only when lines with different values must post separately.",
+        "Copy with OnAfterCopyToGenJnlLine and OnAfterCopyGLEntryFromGenJnlLine."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Stages of a custom sales header field, page extensions and permission entries in the plan.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage.",
+        "Name the page extensions that show the field, permission set entries for new objects, and a test that posts and reads the value back from every target.",
+        "Do not fill ledger entries after posting by finding and modifying them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+      "used-for": "Carrying Contract No. to the customer journal line so the receivables G/L entry carries it.",
+      "constraints": [
+        "Copy from Sales Header to Gen. Journal Line in OnAfterCopyGenJnlLineFromSalesHeader.",
+        "The journal-line field reaches G/L entries through OnAfterCopyGLEntryFromGenJnlLine.",
+        "Do not modify posted entries in OnAfterPostSalesDoc."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choice between stored G/L Entry fields and a related table.",
+      "constraints": [
+        "Use a stored tableextension field on G/L Entry only when the value must appear as a native list column and is read on almost every access.",
+        "Otherwise put the attribute in a related table keyed by Entry No."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring Contract No. on posted sales headers and the archive.",
+      "constraints": [
+        "Same field number, name, type and length on Sales Header and on every posted header and archive table the plan needs.",
+        "No subscriber is needed for these stages; keep mirrored fields non-editable on posted tables."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definitions across the TransferFields cascade.",
+      "constraints": [
+        "Define mirrored fields with the exact same number, data type and length on every table in the cascade."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Guard against filling G/L entries after posting.",
+      "constraints": [
+        "Do not persist changes to posted financial entries outside supported posting or correction workflows."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+      "used-for": "Pre-posting check of the contract schedule.",
+      "constraints": [
+        "A rule that must stop every posting, including preview, goes in OnAfterCheckSalesDoc.",
+        "Do not check in the page action or after posting."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Build customers, items, G/L accounts and sales documents with Library codeunits and validate foreign keys; no hand-rolled Init/Insert."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of the new fields.",
+      "constraints": [
+        "Set DataClassification matching the data stored on every new table field."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "contract-no-exists",
+      "question": "Does the contract import app already define Contract No. on Sales Header (with which field number, type and length)? If so, the new tables must mirror that definition and the Sales Header extension is dropped.",
+      "affects": [
+        "sales-header-contract-no",
+        "posted-sales-headers-contract-no",
+        "invoice-posting-buffer-contract-no",
+        "gen-journal-line-contract-no",
+        "gl-entry-contract-fields"
+      ]
+    },
+    {
+      "id": "mirror-targets",
+      "question": "Should Contract No. also be mirrored on the posted shipment, credit memo, return receipt and archive tables (designed by default), or only on the posted invoice?",
+      "affects": [
+        "posted-sales-headers-contract-no"
+      ]
+    },
+    {
+      "id": "cust-ledger-entry",
+      "question": "Should Contract No. also be stored on Cust. Ledger Entry (the journal line already carries it)?",
+      "affects": [
+        "gen-journal-line-contract-no"
+      ]
+    },
+    {
+      "id": "stored-vs-related-table",
+      "question": "Must Contract No. and Recognition Month appear as native filterable columns on General Ledger Entries (stored fields, designed), or is a related table keyed by Entry No. acceptable to avoid the G/L Entry extension cost?",
+      "affects": [
+        "gl-entry-contract-fields",
+        "gl-entries-page-ext"
+      ]
+    },
+    {
+      "id": "recognition-month-non-deferred",
+      "question": "Which Recognition Month should non-deferred entries carry (receivables, VAT, non-deferred revenue, and the initial transfer to the deferral account)? Designed: the month of the entry's posting date.",
+      "affects": [
+        "gl-entry-contract-fields",
+        "contract-gl-posting-codeunit"
+      ]
+    },
+    {
+      "id": "other-deferral-entry-points",
+      "question": "Do credit memos with deferrals and general journal deferrals also need Contract No. and Recognition Month? General journals use their own events (OnPostDeferralOnBeforeInsertGLEntryDeferralLineForGLAccount / ...ForDeferralAccount), not designed now.",
+      "affects": [
+        "contract-gl-posting-codeunit"
+      ]
+    },
+    {
+      "id": "contract-schedule-inputs",
+      "question": "Where does the import read the contract's period count, start date and calculation method (straight-line assumed), and which object performs the import?",
+      "affects": [
+        "contract-import-modify",
+        "contract-deferral-schedule-codeunit",
+        "sales-line-contract-periods"
+      ]
+    },
+    {
+      "id": "backfill-history",
+      "question": "Must already-posted invoices get Contract No. and Recognition Month? Only through a supported mechanism; otherwise history stays blank.",
+      "affects": [
+        "gl-entry-contract-fields"
+      ]
+    },
+    {
+      "id": "bal-account-entries",
+      "question": "Are invoices posted with a payment method that has a balancing account, creating an extra payment journal line whose G/L entries must also carry Contract No.?",
+      "affects": [
+        "contract-gl-posting-codeunit"
+      ]
+    },
+    {
+      "id": "subscription-billing",
+      "question": "Is this the base-application deferral feature only, or are some invoices created by the Subscription Billing app?",
+      "affects": [
+        "contract-gl-posting-codeunit"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Reading the header's Contract No. inside OnPrepareLineOnAfterFillInvoicePostingBuffer: the opened article confirms only the Sales Line parameter, so obtaining the header value (Get of the Sales Header per line, or a field copied to the lines) rests on judgment.",
+    "Default Recognition Month for non-deferred G/L entries (month of the journal line posting date) rests on judgment; no article states it.",
+    "Contract import changes and the Sales Header Contract No. source rest on judgment: no repository was supplied.",
+    "No opened article names an event to re-apply the contract schedule after a header Posting Date change; the design blocks posting instead (judgment).",
+    "Not covered: balancing-account (payment method) journal lines; no opened article confirms their copy event.",
+    "bc-version, countries and application-area are unknown (no repository)."
+  ]
+}

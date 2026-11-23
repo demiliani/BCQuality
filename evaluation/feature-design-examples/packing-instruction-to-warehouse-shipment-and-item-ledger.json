@@ -1,0 +1,824 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Sales order lines get a Packing Instruction code chosen by the order taker. Warehouse workers must see it on the warehouse shipment lines and on posted warehouse shipment lines, and quality wants it on the item ledger entries after the shipment is posted.",
+    "business-process": "Carry a user-chosen packing instruction from sales order lines through warehouse shipment handling (Sales Warehouse Mgt., Whse.-Post Shipment) and sales posting into item ledger entries.",
+    "candidates": 29,
+    "selected": 23
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "packing-instruction-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Packing Instruction",
+        "purpose": "Supplemental table holding the packing instruction codes order takers choose from. Primary key Code[10] named Code; plural list page set as LookupPageID and DrillDownPageID; table-level DataClassification = CustomerContent; delete and insert through triggers like any reference data.",
+        "fields": [
+          {
+            "name": "Code",
+            "type": "Code[10]",
+            "note": "Primary key; NotBlank."
+          },
+          {
+            "name": "Description",
+            "type": "Text[100]",
+            "note": "Shown in the lookup next to the code."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "packing-instructions-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Packing Instructions",
+        "purpose": "List page over Packing Instruction, named after its source table, used as the table's LookupPageID; tooltips defined on the table fields (inherited from runtime 13.0) or on the page for older targets.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Source of the value: the order taker chooses the packing instruction on the sales line. TableRelation to Packing Instruction with the exact length of its Code key.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "TableRelation = \"Packing Instruction\"; length exactly Code[10] to match Packing Instruction.Code; DataClassification = CustomerContent explicitly (table extensions inherit no classification); ToolTip on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "sales-order-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order Subform",
+        "purpose": "Lets the order taker enter the Packing Instruction Code on sales order lines.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "whse-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Warehouse Shipment Line",
+        "purpose": "Carries the value to warehouse shipment lines; filled by the OnBeforeCreateShptLineFromSalesLine subscriber before insert. Same field number as on Sales Line so the next hop to the posted line works by TransferFields.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "Same field number, type and length as on Sales Line; DataClassification = CustomerContent explicitly."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "whse-shipment-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Whse. Shipment Subform",
+        "purpose": "Shows the Packing Instruction Code to warehouse workers on warehouse shipment lines.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "posted-whse-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Posted Whse. Shipment Line",
+        "purpose": "Posted warehouse shipment line, filled by the standard TransferFields from Warehouse Shipment Line in Whse.-Post Shipment; no subscriber.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent set explicitly on the field; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "posted-whse-shipment-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Whse. Shipment Subform",
+        "purpose": "Shows the Packing Instruction Code on posted warehouse shipment lines.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "item-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Journal Line",
+        "purpose": "Intermediate carrier between Sales Line and Item Ledger Entry during sales posting; filled in OnAfterCopyItemJnlLineFromSalesLine.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "DataClassification = CustomerContent explicitly."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Ledger Entry",
+        "purpose": "Stored field on the item ledger entry, written as part of posting in OnAfterInitItemLedgEntry. Chosen as a stored field over a related table keyed by Entry No. because quality must see it on the item ledger entries, which the articles allow only when users must see or filter it as a native list column; see the open question on how quality uses it.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "DataClassification = CustomerContent explicitly; Editable = false; never modified after posting."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item Ledger Entries",
+        "purpose": "Shows the Packing Instruction Code as a column for quality.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "Mirror on Sales Shipment Line, a TransferFields target of Sales Line chosen by the mirroring article (pending the open question); filled by InitFromSalesLine with no subscriber. Keeping the field also lets Copy Document from posted lines carry it.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent set explicitly on the field; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/copy-document-recalculate-lines-drops-custom-line-fields.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "Mirror on Sales Invoice Line, a TransferFields target of Sales Line chosen by the mirroring article (pending the open question); filled by InitFromSalesLine with no subscriber. Keeping the field also lets Copy Document from posted lines carry it.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent set explicitly on the field; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/copy-document-recalculate-lines-drops-custom-line-fields.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "Mirror on Sales Cr.Memo Line, a TransferFields target of Sales Line chosen by the mirroring article (pending the open question); filled by InitFromSalesLine with no subscriber. Keeping the field also lets Copy Document from posted lines carry it.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent set explicitly on the field; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/copy-document-recalculate-lines-drops-custom-line-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "Mirror on Return Receipt Line, a TransferFields target of Sales Line chosen by the mirroring article (pending the open question); filled by InitFromSalesLine with no subscriber. Keeping the field also lets Copy Document from posted lines carry it.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent set explicitly on the field; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/copy-document-recalculate-lines-drops-custom-line-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "Mirror on the archive line table chosen by the article (pending the open question); archiving and restore copy it with TransferFields. No restore subscriber is needed because the field is not defaulted from master data.",
+        "fields": [
+          {
+            "name": "Packing Instruction Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent set explicitly on the field; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "event-subscribers-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Packing Instruction Events",
+        "purpose": "Holds the three subscribers that carry the value from Sales Line to Warehouse Shipment Line and from Sales Line through Item Journal Line to Item Ledger Entry; assigns only, never calls Modify.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+        ]
+      },
+      {
+        "id": "packing-instruction-permissions",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Packing Instr. Objects",
+        "purpose": "Non-assignable building block granting the new table data (RIMD for maintainers, R for readers), the Packing Instructions page and the subscriber codeunit, enumerated without wildcards; included through IncludedPermissionSets in role-shaped assignable sets (for example an order-taker/reader set and an administrator set).",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Packing Instruction.Code",
+        "to": "Sales Line.Packing Instruction Code",
+        "mechanism": "user-entry",
+        "note": "Order taker picks the code through the TableRelation lookup.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Warehouse Shipment Line",
+        "mechanism": "event-copy",
+        "note": "OnBeforeCreateShptLineFromSalesLine on Sales Warehouse Mgt. when a warehouse shipment is created from a released sales order, before the line is inserted.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md"
+        ]
+      },
+      {
+        "from": "Warehouse Shipment Line",
+        "to": "Posted Whse. Shipment Line",
+        "mechanism": "transferfields",
+        "note": "Whse.-Post Shipment copies the line with TransferFields; same field number on both tables.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Item Journal Line",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyItemJnlLineFromSalesLine on Item Journal Line when Sales-Post ships the line, whether posting starts from the warehouse shipment, an inventory pick or the sales order.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/warehouse/inventory-picks-and-put-aways-post-through-the-source-document.md"
+        ]
+      },
+      {
+        "from": "Item Journal Line",
+        "to": "Item Ledger Entry",
+        "mechanism": "event-copy",
+        "note": "OnAfterInitItemLedgEntry on Item Jnl.-Post Line, before the entry is inserted, so the value is written as part of posting.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine; same field number on each target (pending the open question on posted lines and archives).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Line Archive",
+        "mechanism": "transferfields",
+        "note": "Archiving copies the line with TransferFields; restore copies it back the same way.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Sales Warehouse Mgt.",
+        "event": "OnBeforeCreateShptLineFromSalesLine",
+        "purpose": "Copy Packing Instruction Code from the Sales Line to the Warehouse Shipment Line passed by var, before insert.",
+        "guards": [
+          "Assign only; no Modify (the line is inserted after the event).",
+          "Do not use OnAfterCreateShptLineFromSalesLine or OnBeforeWhseShptLineInsert."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md"
+        ]
+      },
+      {
+        "publisher": "Item Journal Line",
+        "event": "OnAfterCopyItemJnlLineFromSalesLine",
+        "purpose": "Copy Packing Instruction Code from the Sales Line to the Item Journal Line during sales posting.",
+        "guards": [
+          "Assign only; no Modify."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+        ]
+      },
+      {
+        "publisher": "Item Jnl.-Post Line",
+        "event": "OnAfterInitItemLedgEntry",
+        "purpose": "Copy Packing Instruction Code from the Item Journal Line to the new Item Ledger Entry before it is inserted.",
+        "guards": [
+          "No filter on the source document: other item postings leave the journal field empty, so their entries stay empty.",
+          "Never find and modify item ledger entries after posting."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "permissions",
+        "step": "Ship the non-assignable Packing Instr. Objects building block and include it in role-shaped assignable permission sets; no wildcard entries.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Table-level DataClassification = CustomerContent on Packing Instruction; explicit DataClassification = CustomerContent on every field added by a table extension; no ToBeClassified left at release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "No upgrade code: the new fields have no InitValue and empty is a valid state, so existing open lines and posted history stay blank (see the open question on back-fill).",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Users maintain packing instruction codes on the Packing Instructions list before order takers can choose them; no setup table or number series is needed for a Supplemental table.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "sales-line-accepts-only-existing-code",
+        "given": "A Packing Instruction record created in the test and a sales order line built with LibrarySales for an item from LibraryInventory",
+        "when": "Packing Instruction Code is validated with the existing code, then with a code that does not exist",
+        "then": "The existing code is stored; the non-existing code raises the TableRelation error",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "id": "whse-shipment-line-gets-code",
+        "given": "A released sales order at a location that requires shipment, whose line has a Packing Instruction Code",
+        "when": "A warehouse shipment is created from the sales order",
+        "then": "The Warehouse Shipment Line for that sales line carries the same Packing Instruction Code",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "posted-whse-shipment-line-gets-code",
+        "given": "The warehouse shipment from the previous scenario",
+        "when": "The warehouse shipment is posted (ship)",
+        "then": "The Posted Whse. Shipment Line carries the Packing Instruction Code",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entry-gets-code-from-whse-shipment",
+        "given": "A sales order line with a Packing Instruction Code shipped through a warehouse shipment",
+        "when": "The warehouse shipment is posted",
+        "then": "The Item Ledger Entry of the shipment carries the Packing Instruction Code, written at insert",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entry-gets-code-from-sales-posting",
+        "given": "A sales order line with a Packing Instruction Code at a location without warehouse shipments",
+        "when": "The sales order is posted (ship and invoice)",
+        "then": "The Item Ledger Entry carries the Packing Instruction Code, and Sales Shipment Line and Sales Invoice Line carry it too",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "item-journal-posting-leaves-code-empty",
+        "given": "An item journal line created with LibraryInventory, with no packing instruction",
+        "when": "The item journal is posted",
+        "then": "The resulting Item Ledger Entry has an empty Packing Instruction Code and posting succeeds (guard: no source-document filter)",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "archive-keeps-code",
+        "given": "A sales order line with a Packing Instruction Code",
+        "when": "The sales order is archived",
+        "then": "The Sales Line Archive record carries the Packing Instruction Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Process map: chose the Sales whole-path and item ledger rows, the Warehouse receipts/shipments and posted documents rows, and the cross-cutting rows (mirrored definitions, copy document, archive, posted entries, upgrade, privacy, tests).",
+      "constraints": [
+        "A field reaches only the stages the plan names; plan one row group per process the request touches.",
+        "Fill posted entries during posting, never by modifying them afterwards.",
+        "Whether a field should reach a stage the request does not name is a question for the requester, one question per group of stages.",
+        "Tests post through each chosen entry point and read the value back from every target."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Decisions for the new Packing Instruction reference table: table type, data rules, privacy, pages, permissions, tests.",
+      "constraints": [
+        "Every new object needs permissions and every field a data classification.",
+        "Ship permission sets for new tables and pages, composed from included sets and without wildcards.",
+        "A row the request does not settle is a question for the requester, not a default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Sales field path: posted lines and archive by TransferFields, item ledger through the item journal line, page extensions, permissions and read-back tests.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage.",
+        "Name the page extensions that show the field and a test that posts a document and reads the value back from every target.",
+        "Do not plan to fill ledger entries after posting by finding and modifying them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the line field on Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line and Sales Line Archive.",
+      "constraints": [
+        "Same field number, name, type and length on the source and every target table the plan needs.",
+        "No subscriber for these stages; the standard TransferFields does the copy.",
+        "Keep mirrored fields non-editable on posted tables."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+      "used-for": "Item ledger hop: Item Journal Line and Item Ledger Entry fields with two subscribers.",
+      "constraints": [
+        "Add the field to Item Journal Line and Item Ledger Entry and subscribe to OnAfterCopyItemJnlLineFromSalesLine and OnAfterInitItemLedgEntry.",
+        "Store the field on the ledger entry only when users must see or filter it as a native list column or it is read on almost every access; otherwise prefer a related table keyed by entry number.",
+        "No source-document filter is needed; other postings leave the field empty.",
+        "Value entries, warehouse entries and other inventory records are separate stages, extended only when the plan names them.",
+        "Never find item ledger entries after posting and Modify them."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+      "used-for": "Sales line to warehouse shipment line hop.",
+      "constraints": [
+        "Add the field to the warehouse line with the same number and type as on the source line.",
+        "Copy it in OnBeforeCreateShptLineFromSalesLine on Sales Warehouse Mgt., before insert.",
+        "Do not copy in OnAfterCreateShptLineFromSalesLine with Modify, nor re-read the source line in OnBeforeWhseShptLineInsert.",
+        "Other source types (return orders, transfers) need their own subscriber; plan one per source type the feature needs."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+      "used-for": "Warehouse shipment line to posted warehouse shipment line hop.",
+      "constraints": [
+        "Posted Whse. Shipment Line is filled with TransferFields from Warehouse Shipment Line; same number, name, type and length, no subscriber.",
+        "Posted Whse. Shipment Header is filled field by field and would need OnBeforePostedWhseShptHeaderInsert (not needed for a line field)."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/inventory-picks-and-put-aways-post-through-the-source-document.md",
+      "used-for": "Confirms that inventory-pick posting reaches the item ledger through sales posting, so the same item ledger subscribers cover that entry point; frames the open question on inventory pick lines.",
+      "constraints": [
+        "Treat the source line as the carrier of any value that must reach item ledger entries.",
+        "To show the value on an inventory pick, add it to Warehouse Activity Line and copy it in the creation event of each source the feature needs."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Classifying Packing Instruction as a Supplemental table.",
+      "constraints": [
+        "Supplemental: primary key Code[10] named Code; one List page, plural name, set as LookupPageID."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing the Packing Instruction Code relation field.",
+      "constraints": [
+        "For an unconditional relation, give the field the same type and exact length as the related field."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "All mirrored copies of the field across TransferFields targets.",
+      "constraints": [
+        "Define the mirrored field with the exact same field number, data type and length on every table in the cascade, at creation time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choosing a stored Item Ledger Entry field over a related table.",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by the ledger entry number.",
+        "Use a stored tableextension field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/scm/post-item-ledger-changes-through-item-journals.md",
+      "used-for": "Writing the value only within the owning sales/item posting workflow.",
+      "constraints": [
+        "Supported posting events enrich journal/source data within the owning workflow.",
+        "No independent inserts or overwrites of item ledger entries outside posting."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/copy-document-recalculate-lines-drops-custom-line-fields.md",
+      "used-for": "Copy Document open question and mirroring on posted lines.",
+      "constraints": [
+        "Decide per field whether it must survive a copy; if so, subscribe to OnAfterRecalculateSalesLine and assign without Modify.",
+        "Lines copied from posted documents or archives need the field with the same number on those tables."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+      "used-for": "Archive mirror and the decision that no restore subscriber is needed.",
+      "constraints": [
+        "Mirror the field on Sales Line Archive with the same number.",
+        "Reassign in OnAfterTransferFromArchToSalesLine only when the field is also defaulted from master data."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Classification on the new table and on every table extension field.",
+      "constraints": [
+        "A table-level classification covers fields of that table.",
+        "Every Normal field a tableextension adds must set its own DataClassification."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of the classification.",
+      "constraints": [
+        "No field may ship with DataClassification = ToBeClassified."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips on the new and extended fields shown on pages.",
+      "constraints": [
+        "From runtime 13.0 (BC24) define the tooltip on the table field and let bound page fields inherit it; before that, page-level tooltips are needed (applies from BC24; target version unknown).",
+        "Tooltip text answers what the value is used for, not just its name."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/page-name-must-match-source-table.md",
+      "used-for": "Naming the Packing Instructions page.",
+      "constraints": [
+        "The page name must describe the table it shows."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Permission set structure.",
+      "constraints": [
+        "Building blocks are Assignable = false and are included in role-shaped assignable sets through IncludedPermissionSets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Permission set entries.",
+      "constraints": [
+        "Enumerate each tabledata and table entry explicitly; grant only the letters required."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+      "used-for": "No upgrade code for the new fields.",
+      "constraints": [
+        "Upgrade code is needed only when existing rows must carry a non-default value; optional fields where empty is valid need none."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Build customers, items and sales documents with the Library codeunits, parents first, validating foreign keys."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "posted-sales-lines-and-archive",
+      "question": "Should the Packing Instruction Code also be kept on posted sales shipment, invoice, credit memo and return receipt lines and on sales line archives? The mirroring article designs them by default; answer no to drop them.",
+      "affects": [
+        "sales-shipment-line-ext",
+        "sales-invoice-line-ext",
+        "sales-cr-memo-line-ext",
+        "return-receipt-line-ext",
+        "sales-line-archive-ext",
+        "archive-keeps-code"
+      ]
+    },
+    {
+      "id": "copy-document",
+      "question": "When a user copies a sales document with Recalculate Lines on (always for posted shipments), must the Packing Instruction Code survive the copy (a subscriber to OnAfterRecalculateSalesLine) or be chosen again?",
+      "affects": [
+        "sales-line-ext",
+        "event-subscribers-codeunit"
+      ]
+    },
+    {
+      "id": "item-ledger-usage",
+      "question": "How does quality use the value on item ledger entries: as a column they filter and sort on the Item Ledger Entries list (stored field, as designed) or only occasionally per entry (a related table keyed by Entry No. shown in a FactBox)?",
+      "affects": [
+        "item-ledger-entry-ext",
+        "item-ledger-entries-page-ext"
+      ]
+    },
+    {
+      "id": "picks-and-other-warehouse-records",
+      "question": "Do warehouse workers also need the code on warehouse picks, inventory picks, value entries or warehouse entries? These are separate stages and are not designed.",
+      "affects": [
+        "whse-shipment-line-ext",
+        "event-subscribers-codeunit"
+      ]
+    },
+    {
+      "id": "change-after-shipment-created",
+      "question": "If the order taker changes the Packing Instruction Code on a sales line after the warehouse shipment exists, must the warehouse shipment line follow the change, or is the value at creation final?",
+      "affects": [
+        "whse-shipment-line-ext",
+        "event-subscribers-codeunit"
+      ]
+    },
+    {
+      "id": "mandatory-and-document-types",
+      "question": "Is the code mandatory before release or shipment, and on which sales document types (quotes, blanket orders, invoices, return orders) may users enter it besides orders?",
+      "affects": [
+        "sales-line-ext",
+        "sales-order-subform-ext"
+      ]
+    },
+    {
+      "id": "back-fill-history",
+      "question": "Must existing open sales lines, warehouse shipment lines or posted item ledger entries receive a value, or do they stay blank?",
+      "affects": [
+        "item-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "target-version",
+      "question": "Which Business Central version does the app target? It decides whether tooltips can be defined once on the table fields (runtime 13.0 / BC24 or later).",
+      "affects": [
+        "packing-instructions-page",
+        "sales-order-subform-ext",
+        "whse-shipment-subform-ext",
+        "posted-whse-shipment-subform-ext",
+        "item-ledger-entries-page-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown; tooltip placement depends on runtime 13.0 (BC24).",
+    "Keeping an existing warehouse shipment line in sync when the sales line value changes later is not covered by BCQuality knowledge; if required, it rests on the agent's judgment.",
+    "The page names Sales Order Subform, Whse. Shipment Subform, Posted Whse. Shipment Subform and Item Ledger Entries are not named by an opened article; confirm them in the target version's symbols."
+  ]
+}

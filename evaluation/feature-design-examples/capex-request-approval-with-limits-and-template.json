@@ -1,0 +1,943 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Capital expenditure requests are a new custom document with an amount in a foreign currency. They must go through an approval workflow where each approver can approve up to their own capex limit in local currency, and above that the request goes to the next approver in the chain. Approvers must see the request number and amount in Requests to Approve, and administrators want a ready-made workflow template they can enable in every company where the app is installed.",
+    "business-process": "Adds a new custom Capex Request document with a foreign-currency amount that goes through the standard approval workflow engine (Approvals Mgmt., Workflow Event/Response Handling, Workflow Setup), with per-approver capex limits in LCY escalating along the Approver Chain, approval entries shown in Requests to Approve, and a shipped workflow template.",
+    "candidates": 33,
+    "selected": 29
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "capex-request-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Capex Request",
+        "purpose": "Header of the custom capital expenditure document. Document table type: primary key No. Code[20] assigned from the Capex Request Nos. series in OnInsert through codeunit \"No. Series\" when blank, then InitRecord sets the remaining defaults for every creation path. Holds the amount in a foreign currency, its LCY equivalent for the limit check, and the approval Status. OnRename raises OnRenameRecordInApprovalRequest and OnDelete raises OnDeleteRecordInApprovalRequest on \"Approvals Mgmt.\" so approval entries follow a renamed request and go away with a deleted one. Status changes go through one procedure on the table (or the management codeunit) shared by page actions and workflow responses. The conversion of Amount to Amount (LCY) rests on judgment: no opened article covers currency conversion. Table-level DataClassification = CustomerContent.",
+        "fields": [
+          {
+            "name": "No.",
+            "type": "Code[20]",
+            "note": "Primary key; from Capex Setup.\"Capex Request Nos.\" in OnInsert via \"No. Series\".GetNextNo when blank; OnValidate guards manual entry with \"No. Series\".TestManual/IsManual."
+          },
+          {
+            "name": "No. Series",
+            "type": "Code[20]",
+            "note": "Non-editable; records the series that produced No.; TableRelation \"No. Series\"."
+          },
+          {
+            "name": "Description",
+            "type": "Text[100]",
+            "note": "In DataCaptionFields."
+          },
+          {
+            "name": "Request Date",
+            "type": "Date",
+            "note": "Default set in InitRecord; candidate date for the exchange rate (open question)."
+          },
+          {
+            "name": "Currency Code",
+            "type": "Code[10]",
+            "note": "TableRelation Currency; same type and exact length as Currency.Code. Blank means LCY."
+          },
+          {
+            "name": "Amount",
+            "type": "Decimal",
+            "note": "Requested amount in Currency Code; AutoFormatType/AutoFormatExpression on Currency Code. OnValidate recalculates Amount (LCY)."
+          },
+          {
+            "name": "Amount (LCY)",
+            "type": "Decimal",
+            "note": "Non-editable; Amount converted to local currency; the value compared with approver capex limits."
+          },
+          {
+            "name": "Currency Factor",
+            "type": "Decimal",
+            "note": "Non-editable; exchange factor used for Amount (LCY); kept so the LCY value is reproducible."
+          },
+          {
+            "name": "Status",
+            "type": "Enum \"Capex Request Status\"",
+            "note": "Open, Pending Approval, Released; non-editable; changed only by the status procedure and the workflow responses."
+          },
+          {
+            "name": "Requested By",
+            "type": "Code[50]",
+            "note": "User ID of the requester, default in InitRecord; field-level DataClassification EndUserIdentifiableInformation."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/initialize-document-defaults-in-initrecord.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "id": "capex-request-status-enum",
+        "action": "create",
+        "object-type": "enum",
+        "target": "Capex Request Status",
+        "purpose": "Open, Pending Approval and Released status values set by the page actions and by the standard workflow responses through the status subscribers.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "id": "capex-setup-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Capex Setup",
+        "purpose": "Singleton setup table (Primary Key Code[10], blank) holding the Capex Request Nos. number series; TestField on the series before a request number is assigned.",
+        "fields": [
+          {
+            "name": "Primary Key",
+            "type": "Code[10]",
+            "note": "Always blank."
+          },
+          {
+            "name": "Capex Request Nos.",
+            "type": "Code[20]",
+            "note": "TableRelation \"No. Series\"; TestField before use in Capex Request OnInsert."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "capex-setup-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Capex Setup",
+        "purpose": "Card page over Capex Setup with InsertAllowed = false and DeleteAllowed = false; OnOpenPage inserts the blank singleton row when missing.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md"
+        ]
+      },
+      {
+        "id": "capex-request-card-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Capex Request",
+        "purpose": "Card page for one request (Document page with a lines subpage only if lines are confirmed). Actions: Send Approval Request and Cancel Approval Request in the Request Approval promoted group, Approve/Reject/Delegate/Comment in the Approve group when the current user has an open approval entry, Approvals in the entity group; enabled from \"Approvals Mgmt.\" HasOpenApprovalEntries, CanCancelApprovalForRecord and HasOpenApprovalEntriesForCurrentUser. Promoted with area(Promoted)/actionref. Actions call the management codeunit; no business logic on the page. Fields are not editable unless Status is Open.",
+        "knowledge": [
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/ui/promoted-action-groups.md",
+          "microsoft/knowledge/ui/prefer-actionref-syntax-for-promoted-actions.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      },
+      {
+        "id": "capex-requests-list-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Capex Requests",
+        "purpose": "List page over Capex Request with CardPageID = Capex Request, primary key left-most, showing No., Description, Currency Code, Amount, Amount (LCY) and Status; searchable entry point (UsageCategory = Lists).",
+        "knowledge": [
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "capex-approval-mgt-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Capex Approval Mgt.",
+        "purpose": "Owns the workflow integration: registers the Send and Cancel workflow events and their predecessors, links the standard responses after them, registers the Capex Request to Approval Entry table relation, exposes RunWorkflowOnSendCapexForApprovalCode and RunWorkflowOnCancelCapexApprovalRequestCode, and implements Send/Cancel (check an enabled workflow with \"Workflow Management\".CanExecuteWorkflow, error if none, then HandleEvent). Hosts the status-response subscribers (each exits unless RecRef.Number is Capex Request) and the approval entry argument and capex limit subscribers.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md"
+        ]
+      },
+      {
+        "id": "capex-workflow-template-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Capex Workflow Template",
+        "purpose": "Ships a disabled Capex Request approval workflow template and its CAPEX workflow category so it appears in new companies and in every company where the app is installed later. Builds it from OnAfterInitWorkflowTemplates only when Workflow.Get(WorkflowSetup.GetWorkflowTemplateCode(code)) finds nothing, using InsertWorkflowTemplate, InitWorkflowStepArgument (Approver Type Approver, Approver Limit Type Approver Chain), InsertDocApprovalWorkflowSteps with the app's own send and cancel event codes and Capex Request conditions built with StrSubstNo of the request-page XML and Encode(CapexRequest.GetView(false)), then MarkWorkflowAsTemplate.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/ship-a-workflow-template-for-a-custom-record-approval.md",
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      },
+      {
+        "id": "user-setup-tableext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "User Setup",
+        "purpose": "Adds each approver's own capex approval limit in local currency, plus an unlimited flag, read by the OnSufficientApproverElseCase subscriber. Every added Normal field declares its own DataClassification.",
+        "fields": [
+          {
+            "name": "Capex Approval Limit",
+            "type": "Decimal",
+            "note": "In LCY; AutoFormatType = 1; DataClassification = CustomerContent. Meaning of 0 is an open question."
+          },
+          {
+            "name": "Unlimited Capex Approval",
+            "type": "Boolean",
+            "note": "DataClassification = CustomerContent; approver is sufficient for any amount."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "user-setup-pageext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Approval User Setup",
+        "purpose": "Shows Capex Approval Limit and Unlimited Capex Approval next to the standard approval limits so administrators maintain the chain in one place. The choice of page rests on judgment (open question whether User Setup is also extended).",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "capex-objects-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Capex - Objects",
+        "purpose": "Non-assignable building block: explicit entries for the Capex tables, pages and codeunits, no wildcards.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "id": "capex-request-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Capex - Request",
+        "purpose": "Assignable set for requesters and approvers: includes Capex - Objects; RIM on Capex Request, R on Capex Setup; approvers act through the standard approval permission sets.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      },
+      {
+        "id": "capex-admin-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Capex - Admin",
+        "purpose": "Assignable set for workflow administrators: includes Capex - Request plus RIMD on Capex Request and RIM on Capex Setup.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User (Capex Request page)",
+        "to": "Capex Request.Currency Code, Capex Request.Amount",
+        "mechanism": "user-entry",
+        "note": "Requester enters the amount in a foreign currency while Status is Open.",
+        "knowledge": [
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md"
+        ]
+      },
+      {
+        "from": "Capex Request.Amount, Currency Code, Request Date",
+        "to": "Capex Request.Amount (LCY), Currency Factor",
+        "mechanism": "validate",
+        "note": "OnValidate of Amount and Currency Code recalculates the LCY value; the exchange rate source and date rest on judgment (no opened article).",
+        "knowledge": []
+      },
+      {
+        "from": "Capex Setup.Capex Request Nos.",
+        "to": "Capex Request.No., No. Series",
+        "mechanism": "other",
+        "note": "OnInsert via \"No. Series\".GetNextNo after TestField of the series.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md"
+        ]
+      },
+      {
+        "from": "Capex Request (Send Approval Request action)",
+        "to": "Workflow engine (send event)",
+        "mechanism": "other",
+        "note": "CanExecuteWorkflow then HandleEvent with the app's send event code.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      },
+      {
+        "from": "Capex Request.No., Amount, Amount (LCY), Currency Code",
+        "to": "ApprovalEntryArgument",
+        "mechanism": "event-copy",
+        "note": "OnPopulateApprovalEntryArgument fills Document No., Amount, Amount (LCY) and Currency Code for Capex Request only.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md"
+        ]
+      },
+      {
+        "from": "ApprovalEntryArgument",
+        "to": "Approval Entry (shown in Requests to Approve)",
+        "mechanism": "other",
+        "note": "Standard MakeApprovalEntry copies Document No., Amount, Amount (LCY) and Currency Code to each approval entry, which approvers see in Requests to Approve.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md"
+        ]
+      },
+      {
+        "from": "User Setup.Capex Approval Limit, Unlimited Capex Approval",
+        "to": "Approver Chain sufficiency decision",
+        "mechanism": "other",
+        "note": "OnSufficientApproverElseCase compares ApprovalEntryArgument.Amount (LCY) with the approver's limit; insufficient sends the request to the next approver in the User Setup chain.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md"
+        ]
+      },
+      {
+        "from": "Workflow responses (Set Status to Pending Approval, Release Document, Open Document)",
+        "to": "Capex Request.Status",
+        "mechanism": "event-copy",
+        "note": "Status subscribers set Pending Approval, Released or Open for Capex Request only and set Handled.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Workflow Event Handling",
+        "event": "OnAddWorkflowEventsToLibrary",
+        "purpose": "Register the \"approval of a capex request is requested\" and \"approval of a capex request is canceled\" events with AddEventToLibrary.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      },
+      {
+        "publisher": "Workflow Event Handling",
+        "event": "OnAddWorkflowEventPredecessorsToLibrary",
+        "purpose": "Order the capex events with AddEventPredecessor (cancel, and approve/reject/delegate of the approval request, after send).",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      },
+      {
+        "publisher": "Workflow Response Handling",
+        "event": "OnAddWorkflowResponsePredecessorsToLibrary",
+        "purpose": "Allow the standard responses SetStatusToPendingApprovalCode, CreateApprovalRequestsCode, SendApprovalRequestForApprovalCode, ReleaseDocumentCode, OpenDocumentCode and CancelAllApprovalRequestsCode after the capex events with AddResponsePredecessor.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      },
+      {
+        "publisher": "Workflow Event Handling",
+        "event": "OnAddWorkflowTableRelationsToLibrary",
+        "purpose": "Link Capex Request to Approval Entry with \"Workflow Setup\".InsertTableRelation so the engine follows the record.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      },
+      {
+        "publisher": "Approvals Mgmt.",
+        "event": "OnSetStatusToPendingApproval",
+        "purpose": "Set Capex Request Status to Pending Approval, modify, return the record in Variant and set IsHandled.",
+        "guards": [
+          "Exit unless RecRef.Number = Database::\"Capex Request\""
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "publisher": "Workflow Response Handling",
+        "event": "OnReleaseDocument",
+        "purpose": "Set Capex Request Status to Released, modify and set Handled.",
+        "guards": [
+          "Exit unless RecRef.Number = Database::\"Capex Request\""
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "publisher": "Workflow Response Handling",
+        "event": "OnOpenDocument",
+        "purpose": "Set Capex Request Status back to Open (reject and cancel), modify and set Handled.",
+        "guards": [
+          "Exit unless RecRef.Number = Database::\"Capex Request\""
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "publisher": "Approvals Mgmt.",
+        "event": "OnPopulateApprovalEntryArgument",
+        "purpose": "Fill Document No., Amount, Amount (LCY) and Currency Code of the argument so approvers see the request number and amount in Requests to Approve and the limit check has the LCY amount.",
+        "guards": [
+          "Exit unless RecRef.Number = Database::\"Capex Request\""
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md"
+        ]
+      },
+      {
+        "publisher": "Approvals Mgmt.",
+        "event": "OnSufficientApproverElseCase",
+        "purpose": "Decide whether the approver may approve: sufficient when Unlimited Capex Approval, or when Amount (LCY) <= Capex Approval Limit; otherwise the Approver Chain escalates to the next approver.",
+        "guards": [
+          "Exit unless ApprovalEntryArgument.\"Table ID\" = Database::\"Capex Request\"",
+          "Treat a user who is their own approver (User ID = Approver ID) as sufficient, as the standard checks do"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md"
+        ]
+      },
+      {
+        "publisher": "Workflow Setup",
+        "event": "OnAddWorkflowCategoriesToLibrary",
+        "purpose": "Insert the CAPEX workflow category with InsertWorkflowCategory.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/ship-a-workflow-template-for-a-custom-record-approval.md"
+        ]
+      },
+      {
+        "publisher": "Workflow Setup",
+        "event": "OnAfterInitWorkflowTemplates",
+        "purpose": "Insert the disabled Capex Request approval template in every company, on every Workflow Templates initialization.",
+        "guards": [
+          "Exit when Workflow.Get(WorkflowSetup.GetWorkflowTemplateCode(CapexTemplateCode)) finds the template, so steps are never added twice"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/ship-a-workflow-template-for-a-custom-record-approval.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "Capex Setup singleton created on first open of the Capex Setup page; administrator assigns the Capex Request Nos. series before the first request (TestField enforces it).",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Administrators maintain Approver ID chains and the new Capex Approval Limit / Unlimited Capex Approval on the approval user setup, then create a workflow from the shipped template and enable it.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/ship-a-workflow-template-for-a-custom-record-approval.md"
+        ]
+      },
+      {
+        "concern": "install",
+        "step": "No install code inserts workflow, step, event, response or table-relation rows: events, responses and table relations are registered only through the library events (recreated on upgrade), and the template comes from OnAfterInitWorkflowTemplates, so it appears in new and existing companies without install code and is shipped disabled.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/ship-a-workflow-template-for-a-custom-record-approval.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship Capex - Objects (non-assignable), Capex - Request and Capex - Admin (assignable) composed with IncludedPermissionSets, explicit entries, no wildcards.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Table-level DataClassification = CustomerContent on Capex Request and Capex Setup, field-level override EndUserIdentifiableInformation on Requested By, explicit classification on every User Setup extension field; no ToBeClassified at release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "template-inserted-once-and-disabled",
+        "given": "A company where Microsoft templates already exist and the app is installed",
+        "when": "The Workflow Templates initialization (InitWorkflow) runs twice",
+        "then": "Exactly one Capex Request approval template exists, marked as template, not enabled, in the CAPEX category, with one set of steps",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/ship-a-workflow-template-for-a-custom-record-approval.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "send-sets-pending-and-fills-approval-entry",
+        "given": "An enabled workflow created from the capex template with \"Library - Workflow\" (codeunit 131101), a Capex Setup with a number series, a currency with an exchange rate, and a Capex Request in that currency created through the table (Insert(true))",
+        "when": "The requester sends the request for approval",
+        "then": "Status is Pending Approval and the open approval entry carries the request No. as Document No., Amount, Amount (LCY) and Currency Code equal to the request values",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "amount-lcy-from-currency",
+        "given": "A currency with an exchange rate valid on the request date",
+        "when": "Amount and Currency Code are validated on a Capex Request",
+        "then": "Amount (LCY) equals Amount converted at that rate (expected value per the answered exchange-rate question)",
+        "knowledge": []
+      },
+      {
+        "id": "approve-within-limit-releases",
+        "given": "An enabled capex workflow with Approver Chain; first approver Capex Approval Limit above the request Amount (LCY)",
+        "when": "The first approver approves",
+        "then": "No further approval entry is created and Status is Released",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md",
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "approve-above-limit-escalates",
+        "given": "An enabled capex workflow with Approver Chain; first approver limit below the request Amount (LCY) and the next approver in the chain with Unlimited Capex Approval",
+        "when": "The first approver approves",
+        "then": "An open approval entry is created for the next approver, Status stays Pending Approval; after that approver approves Status is Released",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "reject-reopens",
+        "given": "A Capex Request pending approval",
+        "when": "The approver rejects it",
+        "then": "Status is Open and approval entries are Rejected",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md"
+        ]
+      },
+      {
+        "id": "cancel-reopens",
+        "given": "A Capex Request pending approval",
+        "when": "The requester cancels the approval request (confirmation message handled by a MessageHandler that captures the text)",
+        "then": "Status is Open and the approval entries are Canceled",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "other-tables-unaffected",
+        "given": "An enabled standard purchase order approval workflow with Approver Chain and User Setup purchase limits, and the capex subscribers active",
+        "when": "A purchase order is sent for approval",
+        "then": "The purchase approval entries and sufficiency follow the standard purchase limits and the capex subscribers change nothing",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+          "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md"
+        ]
+      },
+      {
+        "id": "send-without-workflow-fails",
+        "given": "No enabled capex workflow",
+        "when": "The requester sends a Capex Request for approval",
+        "then": "The expected \"no approval workflow\" error is raised, pinned with Assert.ExpectedError on the full label text, and Status stays Open",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md"
+        ]
+      },
+      {
+        "id": "missing-number-series-fails",
+        "given": "Capex Setup with a blank Capex Request Nos.",
+        "when": "A Capex Request is inserted with a blank No.",
+        "then": "The TestField error is raised, verified with Assert.ExpectedTestFieldError",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md"
+        ]
+      },
+      {
+        "id": "rename-and-delete-follow-approval-entries",
+        "given": "A Capex Request with open approval entries",
+        "when": "The request is renamed, and in a second test deleted with Delete(true)",
+        "then": "The approval entries point to the new record ID, and after delete no approval entries for the request remain",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md"
+        ]
+      },
+      {
+        "id": "requester-permissions",
+        "given": "A test user lowered to Capex - Request with TestPermissions Restrictive",
+        "when": "The user creates a Capex Request and sends it for approval",
+        "then": "The request is created and pending approval without a permission error",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-an-approval-workflow-for-a-custom-record.md",
+      "used-for": "Map for the whole approval design: status, events, responses, status responses, approval entry details, table relation, rename/delete, template, page actions, permissions and tests.",
+      "constraints": [
+        "Register events with AddEventToLibrary in OnAddWorkflowEventsToLibrary and order them with OnAddWorkflowEventPredecessorsToLibrary.",
+        "Send and Cancel actions check an enabled workflow with \"Workflow Management\".CanExecuteWorkflow, then raise the event with HandleEvent.",
+        "Reuse the standard responses after the custom events through OnAddWorkflowResponsePredecessorsToLibrary.",
+        "Link the table to Approval Entry through OnAddWorkflowTableRelationsToLibrary and InsertTableRelation.",
+        "Raise OnRenameRecordInApprovalRequest and OnDeleteRecordInApprovalRequest on \"Approvals Mgmt.\" from the table triggers.",
+        "Register events, responses and table relations only through the library events; never insert those rows from install code, because the libraries are recreated on upgrade.",
+        "Do not handle only the Release response."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.md",
+      "used-for": "Status subscribers and the Status enum.",
+      "constraints": [
+        "Subscribe to OnSetStatusToPendingApproval (\"Approvals Mgmt.\"), OnReleaseDocument and OnOpenDocument (\"Workflow Response Handling\") for the custom table.",
+        "Check RecRef.Number first and exit for any other table; set the Handled/IsHandled flag only for the own table.",
+        "Keep the status change in a procedure on the table or a codeunit used by both page actions and the workflow."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/feature-design/custom-approval-records-must-handle-status-responses.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.md",
+      "used-for": "Showing request number and amount on approval entries and the per-approver capex limit with Approver Chain escalation.",
+      "constraints": [
+        "Subscribe to OnPopulateApprovalEntryArgument, exit unless RecRef.Number is the custom table, and fill Document No., Amount, Amount (LCY) and Currency Code.",
+        "For Approver Chain or First Qualified Approver, subscribe to OnSufficientApproverElseCase, check ApprovalEntryArgument.\"Table ID\", and compare Amount (LCY) with the chosen limit (an existing or new User Setup field, optionally with an unlimited flag).",
+        "Treat a user who is their own approver as sufficient.",
+        "Without these subscribers the first approver is always sufficient and an Approver Chain never escalates.",
+        "Do not write the amount into Approval Entry from its OnBeforeInsertEvent; use OnAfterPopulateApprovalEntryArgument only to adjust standard values."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/feature-design/fill-the-approval-entry-argument-for-a-custom-record.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/ship-a-workflow-template-for-a-custom-record-approval.md",
+      "used-for": "Ready-made workflow template available in every company where the app is installed.",
+      "constraints": [
+        "Subscribe to OnAfterInitWorkflowTemplates and exit when Workflow.Get(WorkflowSetup.GetWorkflowTemplateCode(code)) finds the template.",
+        "Build it with InsertWorkflowTemplate, InitWorkflowStepArgument, InsertDocApprovalWorkflowSteps and MarkWorkflowAsTemplate; add the category in OnAddWorkflowCategoriesToLibrary.",
+        "Build conditions as StrSubstNo of the request-page XML with Encode(Record.GetView(false)); condition text must not be empty.",
+        "Use the app's own event codes; ship the template disabled.",
+        "Do not insert the template only from OnInsertWorkflowTemplates, and do not insert Workflow/Workflow Step rows from install code."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/feature-design/ship-a-workflow-template-for-a-custom-record-approval.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Decisions the new Capex Request record needs: table type, numbering, setup, privacy, pages, permissions, tests.",
+      "constraints": [
+        "Plan table type, numbering, setup, data rules, privacy, pages, permissions, install/upgrade and tests, not only the table and its page.",
+        "A row the request does not settle is a question for the requester, not a default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md",
+      "used-for": "Stages a custom document may need (lines, posting, printing, attachments, archive, dimensions) raised as open questions because the request does not ask for them.",
+      "constraints": [
+        "Whether the document needs an archive, a preview, approvals or ledger entries is for the requester to say; raise unsettled rows as open questions.",
+        "Status and release for a custom release routine rest on judgment; approval-driven status changes follow the status-responses article."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Capex Request as a Document-type header and Capex Setup as a Setup table.",
+      "constraints": [
+        "Document header primary key Code[20] No.; Setup table key Code[10] Primary Key, always blank."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+      "used-for": "Numbering of Capex Request.",
+      "constraints": [
+        "No. Code[20] sole primary key with a non-editable No. Series Code[20] field.",
+        "OnInsert checks No. is blank, reads setup, TestFields the series, stores it in No. Series and assigns No."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+      "used-for": "Number assignment API.",
+      "constraints": [
+        "Use codeunit \"No. Series\" (GetNextNo, IsManual/TestManual); never NoSeriesManagement."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+      "used-for": "Capex Setup table and page.",
+      "constraints": [
+        "Single blank Primary Key Code[10] row; Card page with InsertAllowed = false, DeleteAllowed = false and an open-time insert of the missing row."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+      "used-for": "Guard on the request number series.",
+      "constraints": [
+        "TestField the required setup field before use; test that a blank value raises the error."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/initialize-document-defaults-in-initrecord.md",
+      "used-for": "Defaults of a new Capex Request (Request Date, Requested By).",
+      "constraints": [
+        "Assign the document number, then call InitRecord, which holds the defaults; do not set defaults in page triggers."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+      "used-for": "Capex Request OnDelete cleans up what it owns, including approval entries through OnDeleteRecordInApprovalRequest.",
+      "constraints": [
+        "The owning table deletes its dependents in OnDelete; there is no cascading delete."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Currency Code field length.",
+      "constraints": [
+        "A field with an unconditional TableRelation has the same type and exact length as the related field (Currency.Code)."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Classification of new tables and the User Setup extension fields.",
+      "constraints": [
+        "Use table-level classification where accurate, field-level overrides where different.",
+        "Every Normal field added by a tableextension needs an explicit DataClassification."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of classification.",
+      "constraints": [
+        "No ToBeClassified in shipped fields."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/page-name-must-match-source-table.md",
+      "used-for": "Page names.",
+      "constraints": [
+        "Page names describe the source table."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+      "used-for": "Page actions delegate to the codeunit; status changes not implemented in page triggers.",
+      "constraints": [
+        "Business operations and cross-entry-point rules live in a codeunit or the table, not only in a page trigger."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips on new and extended page fields.",
+      "constraints": [
+        "Every user-facing field has an explicit or inherited tooltip; on runtime 13.0 (BC24) or later define it on the table field (condition: applies from BC24 for inheritance)."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/promoted-action-groups.md",
+      "used-for": "Placement of approval actions.",
+      "constraints": [
+        "Use the standard Request Approval and Approve groups for approval actions, Home for card actions, entity-named group for record navigation such as Approvals."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+      "used-for": "Card, list and setup page shapes.",
+      "constraints": [
+        "Card named after the table with General first FastTab; List with CardPageID to the card and key fields left-most; Document page only with a lines subpage."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/prefer-actionref-syntax-for-promoted-actions.md",
+      "used-for": "Promotion syntax of the approval actions.",
+      "constraints": [
+        "Promote with area(Promoted) and actionref; never Promoted properties in new pages."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Permission set structure.",
+      "constraints": [
+        "Non-assignable building blocks composed into assignable role sets with IncludedPermissionSets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Permission set entries.",
+      "constraints": [
+        "Enumerate each tabledata and object explicitly with only the letters needed; no wildcards."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures (currency, users, requests, workflows).",
+      "constraints": [
+        "Build fixtures with the Library codeunits, parents first, validating foreign keys; no hand-rolled Init/Insert with invented keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+      "used-for": "Requester permission test.",
+      "constraints": [
+        "Use TestPermissions Restrictive and lower the user with the test libraries before the protected operation."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Structure of the test codeunits.",
+      "constraints": [
+        "[FEATURE] on the codeunit, [SCENARIO], [GIVEN], [WHEN], [THEN] in every test."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+      "used-for": "Negative tests (no workflow, missing number series).",
+      "constraints": [
+        "Follow every asserterror with ExpectedError on the full label text or ExpectedTestFieldError, not a bare asserterror or error code alone."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+      "used-for": "Cancel test, where the document chain shows a confirmation message.",
+      "constraints": [
+        "Every UI call on the path needs a listed handler, every listed nonoptional handler must run, and handlers contribute an assertion."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "exchange-rate-date-and-refresh",
+      "question": "Which exchange rate converts the foreign-currency Amount to Amount (LCY) for the limit check: the rate on the request date, on the send date, or a rate entered on the request? Is Amount (LCY) frozen when the request is sent, or recalculated if rates change?",
+      "affects": [
+        "capex-request-table",
+        "amount-lcy-from-currency"
+      ]
+    },
+    {
+      "id": "capex-limit-zero-meaning",
+      "question": "Does a Capex Approval Limit of 0 mean the approver cannot approve any amount (only escalate), or no limit? Is the comparison inclusive (amount equal to the limit is approvable)?",
+      "affects": [
+        "user-setup-tableext",
+        "approve-within-limit-releases",
+        "approve-above-limit-escalates"
+      ]
+    },
+    {
+      "id": "end-of-chain-behaviour",
+      "question": "What should happen when the last approver in the chain is still below the amount (no further Approver ID): is an approver with Unlimited Capex Approval required at the top of every chain?",
+      "affects": [
+        "user-setup-tableext",
+        "approve-above-limit-escalates"
+      ]
+    },
+    {
+      "id": "approver-types",
+      "question": "Should the template and design support only Approver Chain on the User Setup approver hierarchy, or also First Qualified Approver, Approver Limit Type Direct Approver, Salesperson/Purchaser (which needs a purchaser code on the request) or workflow user groups?",
+      "affects": [
+        "capex-workflow-template-codeunit",
+        "capex-request-table"
+      ]
+    },
+    {
+      "id": "document-lines",
+      "question": "Is a capex request a header-only document, or does it need lines (assets, amounts per line) with the total amount on the header?",
+      "affects": [
+        "capex-request-table",
+        "capex-request-card-page"
+      ]
+    },
+    {
+      "id": "after-release-process",
+      "question": "What happens after a request is released: is it posted, converted into a purchase order or fixed asset, printed, archived, given attachments or dimensions? None of these is designed because the request does not ask for them.",
+      "affects": [
+        "capex-request-table",
+        "capex-request-card-page"
+      ]
+    },
+    {
+      "id": "manual-release-reopen",
+      "question": "May a user release or reopen a request without a workflow (Release/Reopen actions), and may a released request be reopened and resent?",
+      "affects": [
+        "capex-request-card-page",
+        "capex-approval-mgt-codeunit"
+      ]
+    },
+    {
+      "id": "editable-fields-by-status",
+      "question": "Which fields stay editable in Pending Approval and Released status (proposed: none except Description)?",
+      "affects": [
+        "capex-request-table",
+        "capex-request-card-page"
+      ]
+    },
+    {
+      "id": "limit-maintenance-page",
+      "question": "Should the capex limit fields appear on the Approval User Setup page only, or also on User Setup?",
+      "affects": [
+        "user-setup-pageext"
+      ]
+    },
+    {
+      "id": "workflow-conditions",
+      "question": "Should the shipped template carry a default condition (for example only requests above a threshold), or apply to all Capex Requests?",
+      "affects": [
+        "capex-workflow-template-codeunit"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Currency conversion of Amount to Amount (LCY) (exchange rate lookup, currency factor, rounding) is not covered by BCQuality knowledge; the field design and the amount-lcy-from-currency test rest on judgment.",
+    "The choice of Approval User Setup as the page to extend with the capex limit fields is not covered by BCQuality knowledge; it rests on judgment.",
+    "Status-based editability of Capex Request fields and the custom release routine rest on judgment (no article for a custom release routine).",
+    "Context dimensions bc-version, countries and application-area are unknown: no repository or app.json was supplied. Tooltip inheritance on table fields applies from BC24 (runtime 13.0)."
+  ]
+}

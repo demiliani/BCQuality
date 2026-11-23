@@ -1,0 +1,858 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Each service contract line gets a Billing Category. Contract invoices created by the Create Contract Invoices batch must show the category on every invoice line and on the posted service invoice lines, and finance wants to filter service ledger entries by it. Also, every service order line should show the Asset Class of the service item it belongs to, and we need the Asset Class on item ledger entries for parts consumed on service orders.",
+    "business-process": "Adds a contract-line Billing Category carried by Create Contract Invoices (ServContractManagement) to contract service ledger entries, invoice service lines and posted service invoice lines, and an Asset Class carried from service items through service order lines and service posting to item ledger entries, in Service Management.",
+    "candidates": 19,
+    "selected": 15
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "service-contract-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Contract Line",
+        "purpose": "Holds the Billing Category the user enters per contract line; the source of every contract invoice value.",
+        "fields": [
+          {
+            "name": "Billing Category",
+            "type": "Code[20]",
+            "note": "Type, length and any TableRelation pending question billing-category-definition. DataClassification CustomerContent; ToolTip on the table field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "service-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Ledger Entry",
+        "purpose": "Carries the Billing Category on the contract service ledger entries created by Create Contract Invoices, so finance can filter Service Ledger Entries by it. Stored field rather than a related table: the value must be filtered as a native list column, which is the condition the hot-ledger article states for a stored field.",
+        "fields": [
+          {
+            "name": "Billing Category",
+            "type": "Code[20]",
+            "note": "Non-editable. Filled when the contract entries are created, never modified afterwards; posting closes the same rows and keeps the value."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "service-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Line",
+        "purpose": "Shows the Billing Category on contract invoice lines and the Asset Class of the serviced item on service order lines; both are the TransferFields source for posted service lines and the source of the item journal line copy.",
+        "fields": [
+          {
+            "name": "Billing Category",
+            "type": "Code[20]",
+            "note": "Same field number, type and length as on Service Invoice Line."
+          },
+          {
+            "name": "Asset Class",
+            "type": "Code[20]",
+            "note": "Same type and length as Service Item Line and Service Item. Mirrored to posted service lines only if question asset-class-posted-documents says so."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "service-invoice-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Invoice Line",
+        "purpose": "Receives the Billing Category from the service line by the standard TransferFields in Serv-Documents Mgt. when the contract invoice is posted.",
+        "fields": [
+          {
+            "name": "Billing Category",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Service Line; non-editable on the posted table."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "service-item-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Item",
+        "purpose": "Holds the Asset Class of a service item, the source of the service order line value. Designed as a new field pending question asset-class-source.",
+        "fields": [
+          {
+            "name": "Asset Class",
+            "type": "Code[20]",
+            "note": "Entered by the user unless the Asset Class already exists elsewhere (question asset-class-source)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "service-item-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Item Line",
+        "purpose": "Intermediate hop: the service item line copies the Asset Class from the service item so service lines can take it from the item line they belong to.",
+        "fields": [
+          {
+            "name": "Asset Class",
+            "type": "Code[20]",
+            "note": "Filled in OnAfterSetServItemInfo."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "item-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Journal Line",
+        "purpose": "Carries the Asset Class from the service line to the item ledger entry during service posting.",
+        "fields": [
+          {
+            "name": "Asset Class",
+            "type": "Code[20]",
+            "note": "Empty for item journals posted directly and for other documents."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Ledger Entry",
+        "purpose": "Stores the Asset Class on item ledger entries posted from service lines. Stored field because the request asks for it on the entry; the item ledger is a hot ledger, so the related-table alternative applies if users will not see or filter it as a list column (question asset-class-item-ledger-storage).",
+        "fields": [
+          {
+            "name": "Asset Class",
+            "type": "Code[20]",
+            "note": "Non-editable; filled in OnAfterInitItemLedgEntry, never by modifying entries after posting."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "contract-billing-category-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Contract Billing Category",
+        "purpose": "Event subscribers that copy the Billing Category from the contract line to each contract service ledger entry on all three insert points, then from the converted entry to the invoice service line.",
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md"
+        ]
+      },
+      {
+        "id": "service-asset-class-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Service Item Asset Class",
+        "purpose": "Event subscribers that copy the Asset Class service item -> service item line -> service line -> item journal line -> item ledger entry.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+        ]
+      },
+      {
+        "id": "service-contract-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Service Contract Subform",
+        "purpose": "Lets the user enter the Billing Category on contract lines. Page name rests on judgment.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "service-invoice-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Service Invoice Subform",
+        "purpose": "Shows the Billing Category on contract invoice lines. Page name rests on judgment.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "posted-service-invoice-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Serv. Invoice Subform",
+        "purpose": "Shows the Billing Category on posted service invoice lines. Page name rests on judgment.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "service-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Service Ledger Entries",
+        "purpose": "Shows the Billing Category as a list column finance can filter on.",
+        "knowledge": [
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "service-item-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Service Item Card",
+        "purpose": "Lets the user maintain the Asset Class on the service item (if question asset-class-source confirms it is a new field).",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "service-order-lines-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Service Lines",
+        "purpose": "Shows the Asset Class on service order lines (and on Service Order Subform for service item lines). Page names rest on judgment.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item Ledger Entries",
+        "purpose": "Shows the Asset Class on item ledger entries.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "Service Contract Line.Billing Category",
+        "mechanism": "user-entry",
+        "note": "Entered on the contract lines page.",
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "Service Contract Line.Billing Category",
+        "to": "Service Ledger Entry.Billing Category",
+        "mechanism": "event-copy",
+        "note": "At invoice creation by Create Contract Invoices (CreateAllServLines -> CreateServiceLedgEntry), on all three insert points: not prepaid, prepaid per month, prepaid partial period. Read the contract line parameter, not the header.",
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "Service Ledger Entry.Billing Category",
+        "to": "Service Line.Billing Category",
+        "mechanism": "event-copy",
+        "note": "In ServLedgEntryToServiceLine, copy from ServiceLedgerEntryParm (the entry being converted), never from the global ServiceLedgerEntry parameter. Lines, not the header, carry the value, so Combine Invoices keeps each contract's category.",
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "Service Line.Billing Category",
+        "to": "Service Invoice Line.Billing Category",
+        "mechanism": "transferfields",
+        "note": "Serv-Documents Mgt. at posting; same field number, type and length on both tables. No subscriber. Posting closes the existing contract service ledger entries with ModifyAll, so their Billing Category stays.",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Service Item.Asset Class",
+        "mechanism": "user-entry",
+        "note": "Pending question asset-class-source.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md"
+        ]
+      },
+      {
+        "from": "Service Item.Asset Class",
+        "to": "Service Item Line.Asset Class",
+        "mechanism": "event-copy",
+        "note": "SetServItemInfo, called when Service Item No. is validated.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md"
+        ]
+      },
+      {
+        "from": "Service Item Line.Asset Class",
+        "to": "Service Line.Asset Class",
+        "mechanism": "event-copy",
+        "note": "Validation of Service Item Line No. on the service line; validating Service Item No. on an order line goes through the same validation.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md"
+        ]
+      },
+      {
+        "from": "Service Line.Asset Class",
+        "to": "Item Journal Line.Asset Class",
+        "mechanism": "event-copy",
+        "note": "Serv-Posting Journals Mgt. builds the item journal line with Service Line.CopyToItemJnlLine for shipped and consumed items.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+        ]
+      },
+      {
+        "from": "Item Journal Line.Asset Class",
+        "to": "Item Ledger Entry.Asset Class",
+        "mechanism": "event-copy",
+        "note": "Item Jnl.-Post Line initializes the entry before insert; journal lines from other sources leave it empty.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "ServContractManagement",
+        "event": "OnCreateServiceLedgerEntryOnBeforeServLedgEntryInsert",
+        "purpose": "Copy Billing Category from the contract line to the contract service ledger entry for contracts that are not prepaid.",
+        "guards": [
+          "Copy from the ServiceContractLine parameter."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "ServContractManagement",
+        "event": "OnInsertMultipleServLedgEntriesOnBeforeServLedgEntryInsert",
+        "purpose": "Copy Billing Category to each monthly entry of a prepaid contract.",
+        "guards": [
+          "Read the contract line, not ServiceContractHeader, which is only filled for a partial month."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "ServContractManagement",
+        "event": "OnPostPartialServLedgEntryOnBeforeServLedgEntryInsert",
+        "purpose": "Copy Billing Category to the prepaid partial-period entry.",
+        "guards": [
+          "Copy from the ServContractLine parameter."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "ServContractManagement",
+        "event": "OnServLedgEntryToServiceLineOnBeforeServLineInsert",
+        "purpose": "Copy Billing Category from the converted contract service ledger entry to the contract invoice service line.",
+        "guards": [
+          "Read ServiceLedgerEntryParm, not the parameter named ServiceLedgerEntry (the codeunit's global, last-created entry)."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Service Item Line",
+        "event": "OnAfterSetServItemInfo",
+        "purpose": "Copy Asset Class from the service item to the service item line.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md"
+        ]
+      },
+      {
+        "publisher": "Service Line",
+        "event": "OnValidateServiceItemLineNoOnBeforeValidateContractNo",
+        "purpose": "Copy Asset Class from the service item line the service line belongs to.",
+        "guards": [
+          "Take the value from the ServItemLine parameter; never guess the service item from the order, which can service several items."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md"
+        ]
+      },
+      {
+        "publisher": "Service Line",
+        "event": "OnAfterCopyToItemJnlLine",
+        "purpose": "Copy Asset Class from the service line to the item journal line built at service posting.",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+        ]
+      },
+      {
+        "publisher": "Item Jnl.-Post Line",
+        "event": "OnAfterInitItemLedgEntry",
+        "purpose": "Copy Asset Class from the item journal line to the new item ledger entry before insert.",
+        "guards": [
+          "Copy from the item journal line only; do not re-read the service item or service order here."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification on every field the table extensions add (CustomerContent for the Billing Category and Asset Class codes); a tableextension has no table-level value to inherit.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "No InitValue is used, so no upgrade code is needed for new rows; existing contract lines, service items, open service lines and posted history stay blank. Back-fill only if question backfill-existing-data asks for it.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "If back-fill is chosen, run it once per company behind its own upgrade tag (HasUpgradeTag / SetUpgradeTag), not a version check.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Put the ToolTip on the table fields so bound page fields inherit it (applies from BC24 / runtime 13.0; on earlier runtimes add page-level ToolTips).",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "No new table is created, so no permission set change is needed for table extensions and subscriber codeunits; if Billing Category or Asset Class becomes a new master table (questions billing-category-definition, asset-class-source), add it with its pages to the app's permission sets.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "contract-invoice-not-prepaid",
+        "given": "A signed, not prepaid service contract (created with the Library codeunits) with two lines carrying different Billing Categories",
+        "when": "Create Contract Invoices runs for the contract (request page handled by a handler)",
+        "then": "Each contract service ledger entry and each invoice service line built from it carries its own contract line's Billing Category",
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "contract-invoice-prepaid-monthly",
+        "given": "A prepaid contract invoiced over several months with a Billing Category on its line",
+        "when": "Create Contract Invoices runs",
+        "then": "Every monthly contract service ledger entry and every resulting service line carries the Billing Category",
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "contract-invoice-prepaid-partial",
+        "given": "A prepaid contract whose invoice period produces a partial-period entry",
+        "when": "Create Contract Invoices runs",
+        "then": "The partial-period service ledger entry and its service line carry the Billing Category",
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "service-line-takes-converted-entry",
+        "given": "One contract with several lines and different Billing Categories, so several entries are converted into lines in one run",
+        "when": "Create Contract Invoices runs",
+        "then": "No line carries the value of the last-created entry; each line matches the entry in its Appl.-to Service Entry",
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "combine-invoices-keeps-line-values",
+        "given": "Two contracts for the same bill-to customer with different Billing Categories",
+        "when": "Create Contract Invoices runs with Combine Invoices",
+        "then": "The single invoice's lines carry each contract's own Billing Category",
+        "knowledge": [
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "post-contract-invoice",
+        "given": "A contract invoice created by Create Contract Invoices with Billing Category on its lines",
+        "when": "The service invoice is posted",
+        "then": "Each Service Invoice Line carries the Billing Category, and filtering Service Ledger Entry by Billing Category returns the closed contract entries of that invoice",
+        "knowledge": [
+          "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+          "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "service-order-line-asset-class",
+        "given": "A service item with an Asset Class and a service order with a service item line for it",
+        "when": "A service line is added under that service item line",
+        "then": "The service item line and the service line show the service item's Asset Class",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "two-service-items-one-order",
+        "given": "A service order servicing two service items with different Asset Classes",
+        "when": "Service lines are added under each service item line",
+        "then": "Each service line carries the Asset Class of its own service item line",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "consume-parts-to-item-ledger",
+        "given": "A service order line of type Item under a service item with an Asset Class",
+        "when": "The order is posted with Ship and Consume",
+        "then": "The item ledger entry for the consumed part carries the Asset Class",
+        "knowledge": [
+          "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "direct-item-journal-leaves-empty",
+        "given": "An item journal line not created from a service line",
+        "when": "It is posted",
+        "then": "The item ledger entry's Asset Class is empty",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Map of field paths: chose the service row (service item lines, posted documents, ledger entries, contracts) and the cross-cutting rows (mirrored definitions, posted entries, upgrade back-fill, privacy, tests).",
+      "constraints": [
+        "Plan one row group per process the request touches and open every linked article for the stages chosen.",
+        "Whether a field should reach a stage the request does not name is a question for the requester; raise one question per group of stages.",
+        "Do not fill other records with subscribers that find and modify them after posting."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.md",
+      "used-for": "Billing Category path from contract line through contract service ledger entries to invoice service lines and posted invoice lines.",
+      "constraints": [
+        "Put contract-line values on the contract service ledger entries when they are created, subscribing to the insert events the contracts in scope use (not prepaid, prepaid per month, prepaid partial period).",
+        "Copy to the service line in OnServLedgEntryToServiceLineOnBeforeServLineInsert from ServiceLedgerEntryParm, not from the parameter named ServiceLedgerEntry.",
+        "OnBeforeServLedgerEntrySaleInsert never runs for contract invoice lines; do not rely on it.",
+        "Do not look up the contract line from the finished service line; neither table stores the contract line number.",
+        "Keep values that differ per contract on the lines, because a combined invoice has one header.",
+        "Contract credit memos are a separate path through CreateCreditLine and OnBeforeServLineInsert.",
+        "OnBeforeCreateInvoice and OnAfterCreateInvoice do not run from the Create Contract Invoices report."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.good.al",
+        "microsoft/knowledge/service/service-contract-invoices-are-built-from-contract-service-ledger-entries.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.md",
+      "used-for": "Other Service Ledger Entry insert paths, used to scope open question non-contract-service-ledger-entries.",
+      "constraints": [
+        "A field that must appear on all service ledger entries needs subscribers on all four ServLedgEntries-Post insert events; the parameter order differs between them.",
+        "Do not find service ledger entries after posting and Modify them."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.good.al",
+        "microsoft/knowledge/service/carry-service-fields-to-service-and-warranty-ledger-entries.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.md",
+      "used-for": "Asset Class path service item -> service item line -> service line -> item journal line -> item ledger entry.",
+      "constraints": [
+        "Extend each hop on the path: OnAfterSetServItemInfo for the service item line, OnValidateServiceItemLineNoOnBeforeValidateContractNo for the service line.",
+        "Invoices and credit memos have no service item line step; copy from Service Item when Service Line.Service Item No. is validated if they need the value.",
+        "Copy to Item Journal Line in OnAfterCopyToItemJnlLine on Service Line, then to the entry in OnAfterInitItemLedgEntry.",
+        "Matching field numbers on Service Item and Item Ledger Entry do not fill the entry; no step copies the service item to journal lines.",
+        "Do not re-read the service item in OnAfterInitItemLedgEntry; one service order can service several items."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.good.al",
+        "microsoft/knowledge/service/carry-service-item-fields-through-service-item-lines-and-posting.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.md",
+      "used-for": "Service Line to Service Invoice Line by TransferFields in Serv-Documents Mgt.",
+      "constraints": [
+        "Give the field the same number, name, type and length on Service Line and on each posted table the plan needs; no subscriber is needed for that hop.",
+        "Posted service documents exist only in temporary tables until Finalize; do not Get them from subscribers that run during line posting.",
+        "OnAfterPostServiceDoc has no PreviewMode parameter and is not raised in preview."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.good.al",
+        "microsoft/knowledge/service/mirror-service-fields-and-follow-up-after-service-posting.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Stored field vs related table on Service Ledger Entry and Item Ledger Entry.",
+      "constraints": [
+        "Use a tableextension stored field on a ledger only when the value must appear as a native list column and is read on almost every access.",
+        "Put optional, sparse or integration attributes in a related table keyed by the entry number. Applies from BC23."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+      "used-for": "Item Journal Line to Item Ledger Entry hop and its storage condition.",
+      "constraints": [
+        "Add the field to Item Journal Line and Item Ledger Entry and copy in OnAfterInitItemLedgEntry so the value is written as part of posting.",
+        "Store it on the ledger entry only when users must see or filter it as a list column or it is read on almost every access; otherwise prefer a related table.",
+        "Journal lines from other sources leave the field empty; no source filter is needed unless the plan says otherwise.",
+        "Do not find item ledger entries after posting and Modify them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring rule for posted line tables, applied to Service Invoice Line.",
+      "constraints": [
+        "Same field number, name, type and length on the source and every target table the plan needs.",
+        "Keep the mirrored field non-editable on posted tables.",
+        "Do not copy with an OnAfter...Insert subscriber and Modify."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Exact type and length agreement between Service Line and Service Invoice Line.",
+      "constraints": [
+        "Define the mirrored field with the exact same number, data type and length on every table in the cascade, at creation time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "DataClassification on every added field.",
+      "constraints": [
+        "Every Normal field a tableextension adds must set its own DataClassification matching the data it stores; never leave ToBeClassified or under-classify as SystemMetadata."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+      "used-for": "Decides that no upgrade code is required unless back-fill is requested.",
+      "constraints": [
+        "InitValue does not back-fill existing rows; optional fields where empty is a valid state need no upgrade code.",
+        "If existing rows must carry a value, ship an upgrade procedure guarded by an upgrade tag."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+      "used-for": "Guarding an optional back-fill.",
+      "constraints": [
+        "Every upgrade procedure starts with HasUpgradeTag and ends with SetUpgradeTag; do not branch on version checks.",
+        "Give the feature its own tag."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for contracts, service items, service orders and item journals.",
+      "constraints": [
+        "Create fixtures with the test Library codeunits, parents first, validating foreign keys; no hand-rolled Init/Insert."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+      "used-for": "Running Create Contract Invoices from a test.",
+      "constraints": [
+        "Every UI call on the executed path (request page, confirms, messages) needs a listed handler, and every nonoptional listed handler must run.",
+        "Assert the semantic outcome, not only that the handler ran."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Where to put tooltips for the new fields.",
+      "constraints": [
+        "From BC24 (runtime 13.0) a bound page field inherits the table field's ToolTip; do not duplicate it on the page. Earlier runtimes need page-level ToolTips."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "billing-category-definition",
+      "question": "What is a Billing Category: a code from a new master table (with its own page and permissions), an enum, or free text? This sets the field type, length and TableRelation on every table that holds it.",
+      "affects": [
+        "service-contract-line-ext",
+        "service-ledger-entry-ext",
+        "service-line-ext",
+        "service-invoice-line-ext",
+        "lifecycle"
+      ]
+    },
+    {
+      "id": "asset-class-source",
+      "question": "Is the Asset Class an existing field (for example from another app or a fixed-asset class) or a new field on Service Item maintained by users? This sets its type, length and whether the Service Item Card extension is needed.",
+      "affects": [
+        "service-item-ext",
+        "service-item-card-ext",
+        "service-line-ext",
+        "item-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "contract-credit-memos",
+      "question": "Must contract credit memos (built by CreateCreditLine) and posted Service Cr.Memo Lines also carry the Billing Category? That needs a subscriber to OnBeforeServLineInsert and a mirrored field on Service Cr.Memo Line.",
+      "affects": [
+        "contract-billing-category-subscribers",
+        "service-line-ext"
+      ]
+    },
+    {
+      "id": "contract-text-lines",
+      "question": "Contract invoices also contain text lines (heading, detailed and last lines) that are not built from a service ledger entry. Should they stay blank, or does 'every invoice line' include them? No BCQuality article names an event for those lines.",
+      "affects": [
+        "service-line-ext",
+        "contract-billing-category-subscribers"
+      ]
+    },
+    {
+      "id": "non-contract-service-ledger-entries",
+      "question": "Only contract service ledger entries will carry the Billing Category. Should service ledger entries from service orders, invoices and credit memos posted against a contract (usage, sale, credit memo paths in ServLedgEntries-Post) carry one too, and from which source?",
+      "affects": [
+        "service-ledger-entry-ext",
+        "contract-billing-category-subscribers"
+      ]
+    },
+    {
+      "id": "contract-in-scope-types",
+      "question": "Are both prepaid and non-prepaid contracts in scope? The design covers all three entry insert points; any that never applies can be dropped.",
+      "affects": [
+        "contract-billing-category-subscribers"
+      ]
+    },
+    {
+      "id": "asset-class-invoices-and-credit-memos",
+      "question": "Should service invoices and credit memos entered directly (no service item line) also show the Asset Class? That needs a copy from Service Item when Service Line.Service Item No. is validated.",
+      "affects": [
+        "service-asset-class-subscribers",
+        "service-line-ext"
+      ]
+    },
+    {
+      "id": "asset-class-posted-documents",
+      "question": "Should the Asset Class also reach posted service shipment, invoice and credit memo lines? Each needs a mirrored field with the same number, type and length.",
+      "affects": [
+        "service-line-ext"
+      ]
+    },
+    {
+      "id": "asset-class-item-ledger-scope",
+      "question": "Service posting writes item ledger entries both when parts are shipped and when they are consumed. Should the Asset Class be on both, or only on consumption entries?",
+      "affects": [
+        "service-asset-class-subscribers",
+        "item-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "asset-class-item-ledger-storage",
+      "question": "Will users see or filter the Asset Class as a column on Item Ledger Entries? If not, a related table keyed by Entry No. is preferred over a stored field on this hot ledger.",
+      "affects": [
+        "item-ledger-entry-ext",
+        "item-ledger-entries-page-ext"
+      ]
+    },
+    {
+      "id": "backfill-existing-data",
+      "question": "Should existing contract lines, open contract service ledger entries, service items or open service orders be back-filled on upgrade, or is blank acceptable for history?",
+      "affects": [
+        "lifecycle"
+      ]
+    },
+    {
+      "id": "contract-quotes-and-filed-contracts",
+      "question": "Should the Billing Category carry from service contract quotes to the signed contract, and to filed (archived) contracts? No BCQuality article covers those copies.",
+      "affects": [
+        "service-contract-line-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Page names for the page extensions (Service Contract Subform, Service Invoice Subform, Posted Serv. Invoice Subform, Service Lines, Service Order Subform, Service Item Card, Service Ledger Entries, Item Ledger Entries) rest on the agent's judgment; confirm them in the Base Application symbols.",
+    "Permission set handling rests on the agent's judgment; no BCQuality article was selected for it because no new table is designed yet.",
+    "Billing Category carry-over from service contract quotes and to filed contracts is not covered by BCQuality knowledge.",
+    "No event for contract invoice text lines is covered by BCQuality knowledge.",
+    "Field numbers and the app ID range are unknown: no repository was supplied.",
+    "bc-version, countries and application-area could not be resolved from the request; the hot-ledger guidance applies from BC23 and table-field ToolTips from BC24."
+  ]
+}

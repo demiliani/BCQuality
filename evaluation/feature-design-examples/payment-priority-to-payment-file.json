@@ -1,0 +1,629 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Vendor ledger entries carry a Payment Priority Code. When we run Suggest Vendor Payments, each payment journal line must get that code, and our bank's payment file needs it in an extra column. When payments are matched in the payment reconciliation journal, the bank batch reference from the statement line must reach the resulting bank and vendor ledger entries.",
+    "business-process": "Vendor payments: Suggest Vendor Payments into the payment journal, payment file export through the data exchange framework, and payment reconciliation journal posting to bank and vendor ledger entries.",
+    "candidates": 19,
+    "selected": 14
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "vendor-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Vendor Ledger Entry",
+        "purpose": "Holds the Payment Priority Code that Suggest Vendor Payments reads, and receives the Bank Batch Ref. on payment entries posted from the payment reconciliation journal. Stored fields because the request requires the values on the entries; whether users need them as native list columns (otherwise a related table keyed by Entry No.) is open. Add Payment Priority Code only if no existing app already defines it. Fields are Editable = false; values arrive only through posting.",
+        "fields": [
+          {
+            "name": "Payment Priority Code",
+            "type": "Code[10]",
+            "note": "Length and any TableRelation are open; with a relation, match the related field's type and exact length. Skip this field if it already exists on Vendor Ledger Entry."
+          },
+          {
+            "name": "Bank Batch Ref.",
+            "type": "Code[35]",
+            "note": "Length is open; use the same field number, type and length as on Gen. Journal Line and Bank Acc. Reconciliation Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "vendor-payment-buffer-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Vendor Payment Buffer",
+        "purpose": "Carries Payment Priority Code from the vendor ledger entry to the payment journal line inside Suggest Vendor Payments. Cannot join the buffer's primary key, so a summarized line keeps the first entry's value.",
+        "fields": [
+          {
+            "name": "Payment Priority Code",
+            "type": "Code[10]",
+            "note": "Same type and length as on Vendor Ledger Entry."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Payment Priority Code on suggested payment lines (source for the payment file), and Bank Batch Ref. on the journal line that payment application builds and posts.",
+        "fields": [
+          {
+            "name": "Payment Priority Code",
+            "type": "Code[10]",
+            "note": "Same type and length as on Vendor Payment Buffer and Payment Export Data."
+          },
+          {
+            "name": "Bank Batch Ref.",
+            "type": "Code[35]",
+            "note": "Same type and length as on Bank Acc. Reconciliation Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "payment-export-data-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Payment Export Data",
+        "purpose": "Gives the data exchange definition a Payment Priority Code field to map to the extra file column; the export does not read Gen. Journal Line while writing the file.",
+        "fields": [
+          {
+            "name": "Payment Priority Code",
+            "type": "Code[10]"
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "bank-acc-recon-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Bank Acc. Reconciliation Line",
+        "purpose": "Holds the bank batch reference on the payment reconciliation journal (statement) line. How it is filled during statement import is an open question.",
+        "fields": [
+          {
+            "name": "Bank Batch Ref.",
+            "type": "Code[35]",
+            "note": "Length is open. If the posted payment reconciliation must keep it, mirror it with the same number and type on Posted Payment Recon. Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "bank-account-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Bank Account Ledger Entry",
+        "purpose": "Receives Bank Batch Ref. from the journal line when payment application posts. Editable = false; reversal copies the reference unchanged, which is correct for a code.",
+        "fields": [
+          {
+            "name": "Bank Batch Ref.",
+            "type": "Code[35]"
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "payment-priority-suggest-cu",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Payment Priority Suggest",
+        "purpose": "Subscribers that copy Payment Priority Code from Vendor Ledger Entry to Vendor Payment Buffer and from the buffer to Gen. Journal Line during Suggest Vendor Payments. Never fill lines afterwards by looking up a source entry.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md"
+        ]
+      },
+      {
+        "id": "payment-priority-export-cu",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Payment Priority Export",
+        "purpose": "Subscriber that sets Payment Export Data.Payment Priority Code from the journal line before each export row is inserted. Does not copy or replace the pre-mapping codeunit or rewrite the file afterwards.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.md"
+        ]
+      },
+      {
+        "id": "bank-batch-ref-posting-cu",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Bank Batch Ref. Posting",
+        "purpose": "Subscribers that copy Bank Batch Ref. from the reconciliation line to the payment-application journal line, and from the journal line to the bank account ledger entry and vendor ledger entry while posting initializes them. Never modifies posted entries afterwards (for example in OnAfterFinalizePost).",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+          "microsoft/knowledge/events/do-not-bypass-critical-operations-with-ishandled.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Vendor Ledger Entry.Payment Priority Code",
+        "to": "Vendor Payment Buffer.Payment Priority Code",
+        "mechanism": "event-copy",
+        "note": "Vendor Payment Buffer.OnAfterCopyFieldsFromVendorLedgerEntry, raised for each entry Suggest Vendor Payments processes. With Summarize per Vendor, the first entry's value is kept.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md"
+        ]
+      },
+      {
+        "from": "Vendor Payment Buffer.Payment Priority Code",
+        "to": "Gen. Journal Line.Payment Priority Code (payment journal)",
+        "mechanism": "event-copy",
+        "note": "Vendor Payment Buffer.OnAfterCopyFieldsToGenJournalLine, once per created payment line.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line.Payment Priority Code",
+        "to": "Payment Export Data.Payment Priority Code",
+        "mechanism": "event-copy",
+        "note": "Exp. Pre-Mapping Gen. Jnl. OnBeforeInsertPaymentExoprtData (exact misspelled name), before each row is inserted.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.md"
+        ]
+      },
+      {
+        "from": "Payment Export Data.Payment Priority Code",
+        "to": "Bank payment file extra column",
+        "mechanism": "other",
+        "note": "Field mapping in the bank's payment export Data Exchange Definition, like any standard column. Not available for fixed formats with their own XMLport, such as SEPA credit transfer.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.md"
+        ]
+      },
+      {
+        "from": "Bank Acc. Reconciliation Line.Bank Batch Ref.",
+        "to": "Gen. Journal Line.Bank Batch Ref. (payment application)",
+        "mechanism": "event-copy",
+        "note": "Bank Acc. Reconciliation Post OnPostPaymentApplicationsOnAfterInitGenJnlLine, with IsHandled left false.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line.Bank Batch Ref.",
+        "to": "Bank Account Ledger Entry.Bank Batch Ref.",
+        "mechanism": "event-copy",
+        "note": "Bank Account Ledger Entry OnAfterCopyFromGenJnlLine, raised by CopyFromGenJnlLine in Gen. Jnl.-Post Line.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line.Bank Batch Ref.",
+        "to": "Vendor Ledger Entry.Bank Batch Ref.",
+        "mechanism": "event-copy",
+        "note": "Vendor Ledger Entry OnAfterCopyVendLedgerEntryFromGenJnlLine, as the vendor payment entry is initialized.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Vendor Payment Buffer\"",
+        "event": "OnAfterCopyFieldsFromVendorLedgerEntry",
+        "purpose": "Copy Payment Priority Code from the vendor ledger entry into the buffer.",
+        "guards": [
+          "Behavior for summarized lines (Summarize per Vendor) follows the answer to the open question: carry only when summarizing is off, or rely on a value that is constant per vendor."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Vendor Payment Buffer\"",
+        "event": "OnAfterCopyFieldsToGenJournalLine",
+        "purpose": "Copy Payment Priority Code from the buffer to the new payment journal line.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Exp. Pre-Mapping Gen. Jnl.\"",
+        "event": "OnBeforeInsertPaymentExoprtData",
+        "purpose": "Set Payment Export Data.Payment Priority Code from the Gen. Journal Line.",
+        "guards": [
+          "Copy the publisher's misspelled event name exactly; a corrected spelling does not compile.",
+          "Do not subscribe to Pmt Export Mgt Gen. Jnl Line OnBeforeInsertPmtExportDataJnlFromGenJnlLine unless the app is on-premises and must support the older path; it is Scope OnPrem."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Bank Acc. Reconciliation Post\"",
+        "event": "OnPostPaymentApplicationsOnAfterInitGenJnlLine",
+        "purpose": "Copy Bank Batch Ref. from the reconciliation line to the journal line that payment application posts.",
+        "guards": [
+          "Leave IsHandled false so the standard application and posting of the line still run.",
+          "Do not post or apply the line in the subscriber."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/events/do-not-bypass-critical-operations-with-ishandled.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Bank Account Ledger Entry\"",
+        "event": "OnAfterCopyFromGenJnlLine",
+        "purpose": "Copy Bank Batch Ref. to the bank account ledger entry while it is initialized.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Vendor Ledger Entry\"",
+        "event": "OnAfterCopyVendLedgerEntryFromGenJnlLine",
+        "purpose": "Copy Bank Batch Ref. to the vendor ledger entry while it is initialized. The same subscriber point would also copy Payment Priority Code to payment entries if the requester wants that (open question).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "Before relying on the mapping, check which export the bank account's payment export setup uses. In that bank's payment export Data Exchange Definition, add a column definition for the extra column and a field mapping to Payment Export Data.Payment Priority Code. Fixed XMLport formats such as SEPA credit transfer cannot carry it this way.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Give every new field a real DataClassification (CustomerContent for these business references) and leave no ToBeClassified before release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "suggest-payments-copies-priority-code",
+        "given": "A vendor with an open posted invoice whose vendor ledger entry has a random Payment Priority Code, created with library codeunits including the full posting-group chain, and a payment journal batch; Summarize per Vendor is off.",
+        "when": "Suggest Vendor Payments runs for that vendor.",
+        "then": "The created payment journal line has the vendor ledger entry's Payment Priority Code.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "suggest-payments-summarized-priority-code",
+        "given": "A vendor with two open invoices whose entries have different Payment Priority Codes; Summarize per Vendor is on.",
+        "when": "Suggest Vendor Payments runs for that vendor.",
+        "then": "The single summarized payment line carries the value the requester chose for summarized lines (for example blank or the vendor-constant code), not an arbitrary entry's code.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "payment-export-carries-priority-code",
+        "given": "A bank account using a data exchange payment export definition with the Payment Priority Code column mapped, and a payment journal line with a Payment Priority Code.",
+        "when": "The payment journal line is exported to a payment file.",
+        "then": "The Payment Export Data row (and the file's extra column) contains the journal line's Payment Priority Code.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "recon-posting-carries-batch-ref-to-bank-ledger",
+        "given": "An open vendor invoice entry and a payment reconciliation journal line with a random Bank Batch Ref. matched to it, with full bank and vendor posting setup.",
+        "when": "The payment reconciliation journal is posted.",
+        "then": "The resulting bank account ledger entry has the line's Bank Batch Ref.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "recon-posting-carries-batch-ref-to-vendor-ledger-and-applies",
+        "given": "An open vendor invoice entry and a payment reconciliation journal line with a random Bank Batch Ref. applied to it in full.",
+        "when": "The payment reconciliation journal is posted.",
+        "then": "The vendor payment ledger entry has the Bank Batch Ref., and the invoice entry is closed by the application, proving IsHandled stayed false.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/events/do-not-bypass-critical-operations-with-ishandled.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "reversal-keeps-batch-ref",
+        "given": "A posted payment carrying a Bank Batch Ref. on its bank account and vendor ledger entries, unapplied so it can be reversed.",
+        "when": "The transaction is reversed.",
+        "then": "The reversing bank account and vendor ledger entries carry the same Bank Batch Ref. as the originals.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.md",
+      "used-for": "Path from Vendor Ledger Entry through Vendor Payment Buffer to the payment journal line during Suggest Vendor Payments.",
+      "constraints": [
+        "Add the field to Vendor Payment Buffer and Gen. Journal Line and subscribe to OnAfterCopyFieldsFromVendorLedgerEntry and OnAfterCopyFieldsToGenJournalLine.",
+        "With Summarize per Vendor, a custom field keeps the first entry's value and cannot be added to the buffer's primary key; decide what the value means on a summarized line (carry only when summarizing is off, or use a value constant per vendor).",
+        "Do not fill the field after the report runs by looking up a source vendor ledger entry for each journal line."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.good.al",
+        "microsoft/knowledge/finance-extensions/carry-vendor-ledger-fields-to-suggested-payment-lines.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.md",
+      "used-for": "Getting Payment Priority Code into the bank's payment file through Payment Export Data and the data exchange field mapping.",
+      "constraints": [
+        "Add the field to Payment Export Data, set it in a subscriber to OnBeforeInsertPaymentExoprtData, and map it in the data exchange definition's field mapping.",
+        "Copy the misspelled event name exactly; a corrected spelling names an event that does not exist.",
+        "OnBeforeInsertPmtExportDataJnlFromGenJnlLine is Scope OnPrem; subscribe to it only in an on-premises app that must support the older path.",
+        "Fixed formats with their own XMLport, such as SEPA credit transfer, do not use this mapping; check the bank account's export setup.",
+        "Do not rewrite the exported file afterwards or replace the pre-mapping codeunit with a copy."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.good.al",
+        "microsoft/knowledge/finance-extensions/add-custom-data-to-payment-export-files.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+      "used-for": "Carrying Bank Batch Ref. from the payment reconciliation line into the journal line that payment application posts.",
+      "constraints": [
+        "Add the field to Gen. Journal Line and set it in OnPostPaymentApplicationsOnAfterInitGenJnlLine, leaving IsHandled false; standard journal-line events take it to the entries.",
+        "To keep the value in the posted payment reconciliation, mirror the field with the same number and type on Posted Payment Recon. Line.",
+        "Do not set IsHandled to true to add a field, and do not modify posted bank or vendor ledger entries in OnAfterFinalizePost.",
+        "OnAfterFinalizePost runs before the codeunit's Commit and does not run in posting preview."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.good.al",
+        "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+      "used-for": "Copying Bank Batch Ref. from Gen. Journal Line to Bank Account Ledger Entry, and its behavior on reversal.",
+      "constraints": [
+        "A custom Gen. Journal Line field reaches Bank Account Ledger Entry only through a subscriber to its OnAfterCopyFromGenJnlLine event.",
+        "Do not store the field on a ledger entry only because it exists on the journal line.",
+        "Reversal copies custom fields unchanged; a reference or code can stay as copied, a custom amount must be negated. Add a test that reverses a posted transaction and checks the custom values."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+      "used-for": "Copying Bank Batch Ref. from Gen. Journal Line to Vendor Ledger Entry during posting.",
+      "constraints": [
+        "Add the field to Gen. Journal Line and Vendor Ledger Entry and subscribe to OnAfterCopyVendLedgerEntryFromGenJnlLine so the value is part of the posting itself.",
+        "Store the field on the ledger entry only when users must see or filter it as a native list column or it is read on almost every access; otherwise prefer a related table keyed by the entry number.",
+        "Do not find and modify the vendor entry after posting."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choice between stored fields on Vendor and Bank Account Ledger Entry and a related table (applies from BC23).",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by the ledger entry number, shown through a FactBox or FlowField.",
+        "Use a stored tableextension field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Rules out filling bank and vendor ledger entries after posting.",
+      "constraints": [
+        "Do not persist changes to posted financial content or repair it outside the supported posting and correction workflows; a subscriber inside a supported workflow is judged by the fields it changes."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/events/do-not-bypass-critical-operations-with-ishandled.md",
+      "used-for": "Guard on the payment-application subscriber.",
+      "constraints": [
+        "Do not use IsHandled to skip posting or ledger-entry creation; adjust values while the critical work runs unconditionally."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Data classification of every new field.",
+      "constraints": [
+        "Resolve every ToBeClassified to a real classification before release, decided from the data's content."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing Payment Priority Code if it gets a TableRelation.",
+      "constraints": [
+        "With an unconditional relation, the field must have the related field's type and exact length; a shorter field fails at runtime once a longer value is used."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for vendors, invoices, bank accounts and journals.",
+      "constraints": [
+        "Build fixtures with the test Library codeunits and random values, creating parents before dependents and validating foreign keys, instead of hand-rolled Init/Insert."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Structure of the test codeunit.",
+      "constraints": [
+        "Tag the codeunit with [FEATURE] and each test with [SCENARIO], [GIVEN], [WHEN] and [THEN] comments."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+      "used-for": "Preconditions of the posting and export tests.",
+      "constraints": [
+        "For a posting test, set up the full posting-group chain and the setup records the posting path reads."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-one-when-per-test.md",
+      "used-for": "Test granularity.",
+      "constraints": [
+        "Give each test one [WHEN] and one focused claim; preconditions such as posting the invoice belong in [GIVEN]."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "priority-code-source",
+      "question": "Does Payment Priority Code already exist on Vendor Ledger Entry in one of your apps, and how is it filled (for example from the purchase invoice or the vendor card)? The request does not say, so this design does not fill it.",
+      "affects": [
+        "vendor-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "priority-code-definition",
+      "question": "What are the type, length and allowed values of Payment Priority Code: free code, option/enum, or a relation to a priority table (which would need its own table, page and permissions)?",
+      "affects": [
+        "vendor-ledger-entry-ext",
+        "vendor-payment-buffer-ext",
+        "gen-journal-line-ext",
+        "payment-export-data-ext"
+      ]
+    },
+    {
+      "id": "summarize-per-vendor",
+      "question": "When Summarize per Vendor is on and the invoices have different priority codes, what should the summarized payment line carry: nothing, the code only when it is the same for all entries, or a code that is constant per vendor?",
+      "affects": [
+        "payment-priority-suggest-cu",
+        "suggest-payments-summarized-priority-code"
+      ]
+    },
+    {
+      "id": "bank-export-format",
+      "question": "Which payment export format does the bank account use, and what are the column position, name and format of the extra column? If it is a fixed XMLport format such as SEPA credit transfer, the data exchange mapping cannot carry the value.",
+      "affects": [
+        "payment-export-data-ext",
+        "payment-priority-export-cu",
+        "payment-export-carries-priority-code"
+      ]
+    },
+    {
+      "id": "batch-ref-on-statement-line",
+      "question": "How does the bank batch reference get onto the payment reconciliation journal line: from the imported bank statement file (which column in the statement import definition), or typed by the user? What is its maximum length?",
+      "affects": [
+        "bank-acc-recon-line-ext"
+      ]
+    },
+    {
+      "id": "posted-recon-history",
+      "question": "Must the posted payment reconciliation (Posted Payment Recon. Line) also keep the bank batch reference? If yes, mirror the field with the same number and type there.",
+      "affects": [
+        "bank-acc-recon-line-ext"
+      ]
+    },
+    {
+      "id": "ledger-storage-and-visibility",
+      "question": "Must users see or filter Bank Batch Ref. (and Payment Priority Code) as columns on the Vendor Ledger Entries and Bank Account Ledger Entries pages? If not, a related table keyed by Entry No. is preferred over stored fields on the ledgers.",
+      "affects": [
+        "vendor-ledger-entry-ext",
+        "bank-account-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "priority-on-payment-entries",
+      "question": "Should the Payment Priority Code also be copied from the payment journal line to the vendor payment ledger entry when the payment journal is posted, or is it needed only on the journal line and in the file?",
+      "affects": [
+        "bank-batch-ref-posting-cu",
+        "gen-journal-line-ext"
+      ]
+    },
+    {
+      "id": "journal-page-visibility",
+      "question": "Should Payment Priority Code be visible or editable on the Payment Journal page, and Bank Batch Ref. on the Payment Reconciliation Journal page?",
+      "affects": [
+        "gen-journal-line-ext",
+        "bank-acc-recon-line-ext"
+      ]
+    },
+    {
+      "id": "existing-open-entries",
+      "question": "Do open vendor ledger entries posted before this feature need a Payment Priority Code (a backfill through upgrade code), or does the feature apply only to new entries?",
+      "affects": [
+        "vendor-ledger-entry-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined (no repository, not stated in the request); prefer-related-table-over-extension-on-hot-ledgers applies from BC23.",
+    "Filling Bank Batch Ref. on the reconciliation line during bank statement import is not designed and is not covered by BCQuality knowledge; see open question batch-ref-on-statement-line.",
+    "The parameter list of Bank Account Ledger Entry OnAfterCopyFromGenJnlLine is not shown in the opened article or samples; confirm it against the target version's symbols when implementing."
+  ]
+}

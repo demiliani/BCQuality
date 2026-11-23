@@ -1,0 +1,756 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "For assemble-to-order items, the sales order taker types an Engraving Text on the sales line. The text must appear on the linked assembly order, stay up to date when the sales line text is changed later, and be kept on the posted assembly order. Component consumption entries must record which engraving they were used for.",
+    "business-process": "Assemble-to-order sales: sales line to linked assembly order synchronization, assembly posting and component consumption item ledger entries",
+    "candidates": 20,
+    "selected": 14
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "sales-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Holds the Engraving Text the order taker types on an assemble-to-order sales line. Its OnValidate calls the public AutoAsmToOrder() so that a change to the engraving alone reaches an existing linked assembly order.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "DataClassification = CustomerContent; ToolTip on the table field (inherited by bound page fields from BC24/runtime 13.0). OnValidate: AutoAsmToOrder(). Field number is reused on every TransferFields target of Sales Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "assembly-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Assembly Header",
+        "purpose": "Carries the engraving on the linked assemble-to-order assembly order; filled from the sales line on creation and on every synchronization. Uses the same field number, type and length as Posted Assembly Header so assembly posting (and the undo of a posted assembly) copies it by TransferFields.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "Same field number, type and length as on Posted Assembly Header; DataClassification = CustomerContent. Whether users may edit it here is an open question."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md",
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "posted-assembly-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Posted Assembly Header",
+        "purpose": "Keeps the engraving on the posted assembly order; filled by the standard TransferFields(AssemblyHeader) in Assembly-Post, no subscriber.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "Same field number, type and length as on Assembly Header; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "item-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Journal Line",
+        "purpose": "Carries the engraving on the consumption journal lines Assembly-Post builds field by field for item components, so it can reach the item ledger entry.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "DataClassification = CustomerContent. Empty for every journal line not built from an assembly component, so other postings leave the entry empty."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Ledger Entry",
+        "purpose": "Records on each component consumption entry which engraving it was used for, written when the entry is created during posting. A stored field on this hot ledger is justified only when users must see or filter it as a native list column or it is read on almost every access (applies from BC23); otherwise the articles prefer a related table keyed by Entry No. The choice is open question ledger-storage.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "Mirrors the Sales Line field so the standard TransferFields from Sales Line (posting through InitFromSalesLine, or archiving) carries the engraving to Sales Shipment Line. Chosen by the mirroring article, not by the request: see open question posted-sales-lines.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "Mirrors the Sales Line field so the standard TransferFields from Sales Line (posting through InitFromSalesLine, or archiving) carries the engraving to Sales Invoice Line. Chosen by the mirroring article, not by the request: see open question posted-sales-lines.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "Mirrors the Sales Line field so the standard TransferFields from Sales Line (posting through InitFromSalesLine, or archiving) carries the engraving to Sales Cr.Memo Line. Chosen by the mirroring article, not by the request: see open question posted-sales-lines.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "Mirrors the Sales Line field so the standard TransferFields from Sales Line (posting through InitFromSalesLine, or archiving) carries the engraving to Return Receipt Line. Chosen by the mirroring article, not by the request: see open question posted-sales-lines.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "Mirrors the Sales Line field so the standard TransferFields from Sales Line (posting through InitFromSalesLine, or archiving) carries the engraving to Sales Line Archive. Chosen by the mirroring article, not by the request: see open question posted-sales-lines.",
+        "fields": [
+          {
+            "name": "Engraving Text",
+            "type": "Text[length to confirm, see open question field-length]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "ato-engraving-sync",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "ATO Engraving Sync",
+        "purpose": "Subscribers on table Assemble-to-Order Link that copy the engraving to the assembly header on every synchronization and force a synchronization when only the engraving differs.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md"
+        ]
+      },
+      {
+        "id": "engraving-consumption-posting",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Engraving Consumption Posting",
+        "purpose": "Subscribers on Assembly-Post and Item Jnl.-Post Line that carry the engraving from the assembly header to each item component consumption journal line and from there to the new item ledger entry.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+        ]
+      },
+      {
+        "id": "sales-order-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order Subform",
+        "purpose": "Lets the order taker type the Engraving Text on the sales line. Bound field inherits the table-field tooltip from BC24/runtime 13.0; on earlier runtimes it needs a page-level tooltip.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "assembly-order-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Assembly Order",
+        "purpose": "Shows the engraving on the linked assembly order.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "posted-assembly-order-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Assembly Order",
+        "purpose": "Shows the engraving on the posted assembly order.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "item-ledger-entries-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item Ledger Entries",
+        "purpose": "Shows the engraving as a column on item ledger entries so consumption can be traced to its engraving; only if open question ledger-storage confirms a native list column.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Order taker",
+        "to": "Sales Line.Engraving Text",
+        "mechanism": "user-entry",
+        "note": "Typed on the Sales Order Subform for an assemble-to-order line.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Assembly Header (new or synchronized assemble-to-order link)",
+        "mechanism": "event-copy",
+        "note": "OnBeforeAsmHeaderModify on Assemble-to-Order Link, raised by SynchronizeAsmFromSalesLine just before Modify(true); covers first creation and every later synchronization.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md"
+        ]
+      },
+      {
+        "from": "Sales Line (engraving changed later)",
+        "to": "Existing Assembly Header",
+        "mechanism": "validate",
+        "note": "Engraving Text OnValidate calls AutoAsmToOrder(); OnBeforeNeedsSynchronization returns Result := true, IsHandled := true only when the engraving differs, so the synchronization (and OnBeforeAsmHeaderModify) runs.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md"
+        ]
+      },
+      {
+        "from": "Assembly Header",
+        "to": "Posted Assembly Header",
+        "mechanism": "transferfields",
+        "note": "Assembly-Post TransferFields(AssemblyHeader); the undo of a posted assembly copies back the same way.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Assembly Header",
+        "to": "Item Journal Line (item component consumption)",
+        "mechanism": "event-copy",
+        "note": "OnBeforePostItemConsumption(var AssemblyHeader; var AssemblyLine; var ItemJournalLine) on Assembly-Post, raised just before each item component line is posted. Not OnAfterCreateItemJnlLineFromAssemblyLine, which only resource lines raise.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md"
+        ]
+      },
+      {
+        "from": "Item Journal Line",
+        "to": "Item Ledger Entry (consumption)",
+        "mechanism": "event-copy",
+        "note": "OnAfterInitItemLedgEntry on Item Jnl.-Post Line, after the entry is initialized and before it is inserted.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine calls TransferFields(SalesLine); no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Line Archive",
+        "mechanism": "transferfields",
+        "note": "Archiving copies lines with TransferFields; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Assemble-to-Order Link\"",
+        "event": "OnBeforeAsmHeaderModify(var AssemblyHeader; var SalesLine)",
+        "purpose": "Copy Sales Line.Engraving Text to Assembly Header.Engraving Text on creation and on every synchronization.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Assemble-to-Order Link\"",
+        "event": "OnBeforeNeedsSynchronization(AssemblyHeader; SalesLine; var Result; var IsHandled)",
+        "purpose": "Force a synchronization when only the engraving changed, so the existing assembly order stays up to date.",
+        "guards": [
+          "Set Result := true and IsHandled := true only when SalesLine.Engraving Text differs from AssemblyHeader.Engraving Text",
+          "Leave Result and IsHandled untouched otherwise, so the standard comparison still decides for item, quantity, date and the other standard fields"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Assembly-Post\"",
+        "event": "OnBeforePostItemConsumption(var AssemblyHeader; var AssemblyLine; var ItemJournalLine)",
+        "purpose": "Copy AssemblyHeader.Engraving Text to the consumption Item Journal Line of each item component.",
+        "guards": [
+          "Do not use OnAfterCreateItemJnlLineFromAssemblyLine for component items: it is raised only for resource lines"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Item Jnl.-Post Line\"",
+        "event": "OnAfterInitItemLedgEntry(var NewItemLedgEntry; var ItemJournalLine)",
+        "purpose": "Copy ItemJournalLine.Engraving Text to the new Item Ledger Entry so the value is written as part of posting.",
+        "guards": [
+          "Never find and Modify item ledger entries after posting",
+          "No source-document filter: journal lines from other postings leave the field empty"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on Engraving Text in every table extension; a tableextension has no table-level value to inherit, and the text is data belonging to the tenant's customer.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Define the ToolTip on the table fields and let bound page fields inherit it (BC24/runtime 13.0 or later); on earlier runtimes add page-level tooltips on each page extension. Describe what the engraving is used for, not 'Specifies the Engraving Text'.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Assign one field number, type and length for Engraving Text and reuse it on Sales Line and all its TransferFields targets, and on Assembly Header and Posted Assembly Header, at creation time.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "concern": "install",
+        "step": "No install or upgrade code: the feature adds only new, empty fields and no setup data.",
+        "knowledge": []
+      },
+      {
+        "concern": "permissions",
+        "step": "No new permission set: the feature adds no tables and no exposed pages, queries or web-service codeunits.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "ato-line-copies-engraving-to-new-assembly-order",
+        "given": "an assemble-to-order item (components are items) created with the test library codeunits, the full posting-group chain for the customer and items, and component inventory; a sales order for a customer created with LibrarySales",
+        "when": "An assemble-to-order sales line is created and an engraving value from LibraryUtility is validated on it",
+        "then": "The linked Assembly Header (via Assemble-to-Order Link) has the same Engraving Text",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "engraving-change-updates-existing-assembly-order",
+        "given": "an assemble-to-order item (components are items) created with the test library codeunits, the full posting-group chain for the customer and items, and component inventory; an assemble-to-order sales line with an engraving and its linked assembly order already created",
+        "when": "Only the Engraving Text on the sales line is changed to a new value",
+        "then": "The linked Assembly Header carries the new value",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "standard-change-still-synchronizes",
+        "given": "an assemble-to-order item (components are items) created with the test library codeunits, the full posting-group chain for the customer and items, and component inventory; an assemble-to-order sales line with an engraving and its linked assembly order",
+        "when": "Only the sales line quantity is changed (engraving unchanged)",
+        "then": "The Assembly Header quantity follows the sales line and its Engraving Text is unchanged, proving OnBeforeNeedsSynchronization does not replace the standard comparison",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "posting-keeps-engraving-on-posted-assembly-order",
+        "given": "an assemble-to-order item (components are items) created with the test library codeunits, the full posting-group chain for the customer and items, and component inventory; an assemble-to-order sales order with an engraving",
+        "when": "The sales order is shipped",
+        "then": "The Posted Assembly Header for the linked assembly order carries the Engraving Text",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "component-consumption-entries-carry-engraving",
+        "given": "an assemble-to-order item (components are items) created with the test library codeunits, the full posting-group chain for the customer and items, and component inventory; an assemble-to-order sales order with an engraving",
+        "when": "The sales order is shipped",
+        "then": "Every Item Ledger Entry of entry type Assembly Consumption for the posted assembly order's item components carries the Engraving Text (fails if the value was copied in the resource-only event)",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md"
+        ]
+      },
+      {
+        "id": "posted-sales-lines-and-archive-carry-engraving",
+        "given": "an assemble-to-order item (components are items) created with the test library codeunits, the full posting-group chain for the customer and items, and component inventory; an assemble-to-order sales order with an engraving",
+        "when": "The sales order is shipped and invoiced",
+        "then": "The Sales Shipment Line and Sales Invoice Line for the line carry the Engraving Text; a separate test archives the order and reads it from Sales Line Archive",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md"
+        ]
+      },
+      {
+        "id": "maximum-length-engraving-posts-through-every-target",
+        "given": "an assemble-to-order item (components are items) created with the test library codeunits, the full posting-group chain for the customer and items, and component inventory; an assemble-to-order sales order whose engraving fills the full field length",
+        "when": "The sales order is shipped",
+        "then": "Posting succeeds and the Posted Assembly Header, Sales Shipment Line and consumption Item Ledger Entries hold the full value, proving the mirrored fields share type and length",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.md",
+      "used-for": "Copying the engraving from the sales line to the assemble-to-order assembly header and keeping it current on later changes.",
+      "constraints": [
+        "Add the field to Assembly Header and copy it from the sales line in OnBeforeAsmHeaderModify on table Assemble-to-Order Link; that covers first creation and every later synchronization.",
+        "For a change to the custom field alone to reach an existing assembly order, call AutoAsmToOrder() in the sales line field's OnValidate and subscribe to OnBeforeNeedsSynchronization.",
+        "In OnBeforeNeedsSynchronization set Result := true and IsHandled := true only when the custom field differs; leave both untouched otherwise.",
+        "Do not copy only in OnBeforeAsmHeaderModify and expect later edits to flow: NeedsSynchronization compares only standard fields.",
+        "Do not answer OnBeforeNeedsSynchronization with IsHandled := true on every call; it stops item, quantity and date changes from reaching the assembly order."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.good.al",
+        "microsoft/knowledge/manufacturing/carry-sales-line-fields-to-assemble-to-order-assembly-headers.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.md",
+      "used-for": "Carrying the engraving to the posted assembly order and to component consumption item ledger entries.",
+      "constraints": [
+        "Posted Assembly Header is created with TransferFields(AssemblyHeader): give the field the same number, type and length on both tables; the undo of a posted assembly copies back the same way.",
+        "For item ledger entries, add the field to Item Journal Line, copy it in the event of the line kind that must carry it, then to the entry with OnAfterInitItemLedgEntry.",
+        "Use OnBeforePostItemConsumption for component items.",
+        "Do not use OnAfterCreateItemJnlLineFromAssemblyLine for component consumption: it is raised only for resource lines."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.good.al",
+        "microsoft/knowledge/manufacturing/carry-assembly-fields-through-assembly-posting.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Deciding which sales posting stages the sales line field must reach and planning one step per stage, with pages and a posting test per target.",
+      "constraints": [
+        "Plan one extension step per stage the field must reach; posted lines and Sales Line Archive are reached by TransferFields from Sales Line.",
+        "Name the page extensions that show the field and a test that posts a document and reads the value back from every target.",
+        "Do not plan to fill ledger entries after posting by finding and modifying them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the Sales Line field on posted sales line tables and Sales Line Archive.",
+      "constraints": [
+        "Give the field the same number, name, type and length on the source and on every target table the plan needs; for a line field, on the posted line tables and the archive, unless the plan states a document type never needs it.",
+        "No subscriber is needed for TransferFields stages; keep mirrored fields non-editable on posted tables.",
+        "Do not use a different field number on a posted table and patch it with an OnAfter...Insert subscriber and Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+      "used-for": "The Item Journal Line to Item Ledger Entry hop and the choice of storing the field on the entry.",
+      "constraints": [
+        "Add the field to Item Journal Line and Item Ledger Entry and copy it to the new entry in OnAfterInitItemLedgEntry, so it is written as part of posting.",
+        "Store the field on the ledger entry only when users must see or filter it as a native list column, or it is read on almost every access; for optional or integration-only attributes prefer a related table keyed by the entry number.",
+        "Other postings reaching OnAfterInitItemLedgEntry leave the journal field empty, so no source-document filter is needed.",
+        "Do not find item ledger entries after posting and Modify them."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field type and length across every TransferFields cascade the engraving is mirrored on.",
+      "constraints": [
+        "Define a mirrored field with the exact same field number, data type and length on every table in the cascade, at creation time.",
+        "A shorter length on one side compiles and runs until a value exceeds it, then raises a runtime error."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Storage decision for the engraving on Item Ledger Entry (applies from BC23; bc-version unknown).",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by the ledger entry number, shown from a FactBox or FlowField.",
+        "Use a tableextension stored field on a hot ledger only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of every Engraving Text field.",
+      "constraints": [
+        "Every Normal field a tableextension adds must set its own DataClassification; do not leave ToBeClassified.",
+        "Data belonging to the tenant's customers is CustomerContent; do not classify it as SystemMetadata."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips for the engraving on the page extensions.",
+      "constraints": [
+        "On runtime 13.0 (BC24) or later define tooltip text on the table field and let bound page fields inherit it; before runtime 13.0 user-facing page fields need page-level tooltips.",
+        "Make the tooltip say what the value is used for; do not generate 'Specifies the <field name>.' or invent effects."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Building test fixtures.",
+      "constraints": [
+        "Create customers, items and sales documents with the test Library codeunits (LibrarySales, LibraryInventory, LibraryRandom), parents first, validating foreign keys.",
+        "Do not hand-roll Init/Insert fixtures with invented keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+      "used-for": "Test values.",
+      "constraints": [
+        "Create the records the test owns instead of assuming existing ones; fill every mandatory field.",
+        "Values that define the scenario, such as a value at the field's full length for a length test, stay explicit and deliberately chosen."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+      "used-for": "Preconditions of posting tests.",
+      "constraints": [
+        "A posting test sets up the full posting-group chain and the setup records the posting path reads, not just the primary document."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-one-when-per-test.md",
+      "used-for": "Test shape.",
+      "constraints": [
+        "Each test has exactly one WHEN; preconditions such as creating the linked assembly order belong in GIVEN."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Test codeunit structure.",
+      "constraints": [
+        "Tag the test codeunit with [FEATURE] and each test with [SCENARIO], [GIVEN], [WHEN] and [THEN] comments."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "field-length",
+      "question": "What is the maximum length of the Engraving Text? It must be the same Text length on every table that carries it.",
+      "affects": [
+        "sales-line-ext",
+        "assembly-header-ext",
+        "posted-assembly-header-ext",
+        "item-journal-line-ext",
+        "item-ledger-entry-ext",
+        "sales-shipment-line-ext",
+        "sales-invoice-line-ext",
+        "sales-cr-memo-line-ext",
+        "return-receipt-line-ext",
+        "sales-line-archive-ext",
+        "maximum-length-engraving-posts-through-every-target"
+      ]
+    },
+    {
+      "id": "ato-only",
+      "question": "Should Engraving Text be editable only on sales lines that are assemble-to-order, and what should happen to a value typed on a line that is not, or that stops being, assemble-to-order?",
+      "affects": [
+        "sales-line-ext",
+        "sales-order-subform-ext"
+      ]
+    },
+    {
+      "id": "assembly-header-editable",
+      "question": "May users edit the engraving directly on the assembly order? Every synchronization copies the sales line value over it, so the design keeps it read-only there unless you decide otherwise.",
+      "affects": [
+        "assembly-header-ext",
+        "assembly-order-ext"
+      ]
+    },
+    {
+      "id": "ledger-storage",
+      "question": "Must users see or filter the engraving as a column on item ledger entries, or is it read on almost every access? If not, BCQuality guidance prefers a related table keyed by Entry No. over a stored field on Item Ledger Entry.",
+      "affects": [
+        "item-ledger-entry-ext",
+        "item-ledger-entries-ext",
+        "engraving-consumption-posting",
+        "component-consumption-entries-carry-engraving"
+      ]
+    },
+    {
+      "id": "output-entry",
+      "question": "Should the assembly output entry of the assembled item also record the engraving, or only the component consumption entries the request names?",
+      "affects": [
+        "engraving-consumption-posting",
+        "item-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "posted-sales-lines",
+      "question": "The mirroring guidance puts a Sales Line field on Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line and Sales Line Archive. Do you want the engraving on all of them, or can some document types be excluded? Which posted sales pages should show it?",
+      "affects": [
+        "sales-shipment-line-ext",
+        "sales-invoice-line-ext",
+        "sales-cr-memo-line-ext",
+        "return-receipt-line-ext",
+        "sales-line-archive-ext",
+        "posted-sales-lines-and-archive-carry-engraving"
+      ]
+    },
+    {
+      "id": "object-ids",
+      "question": "Which object and field ID range should the extension use? No repository or app.json was supplied.",
+      "affects": [
+        "sales-line-ext",
+        "assembly-header-ext",
+        "posted-assembly-header-ext",
+        "item-journal-line-ext",
+        "item-ledger-entry-ext",
+        "sales-shipment-line-ext",
+        "sales-invoice-line-ext",
+        "sales-cr-memo-line-ext",
+        "return-receipt-line-ext",
+        "sales-line-archive-ext",
+        "ato-engraving-sync",
+        "engraving-consumption-posting",
+        "sales-order-subform-ext",
+        "assembly-order-ext",
+        "posted-assembly-order-ext",
+        "item-ledger-entries-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined (no repository or app.json); the hot-ledger guidance applies from BC23 and table-field tooltip inheritance from BC24/runtime 13.0.",
+    "Install/upgrade (none needed) and permissions (no new permission set) rest on agent judgment; no BCQuality article was cited for them.",
+    "The page extension targets (Sales Order Subform, Assembly Order, Posted Assembly Order, Item Ledger Entries) are agent judgment; BCQuality knowledge covers only their tooltips.",
+    "Whether Copy Document carries the engraving to sales lines of a new document is not covered by BCQuality knowledge (the opened article covers header copying only)."
+  ]
+}

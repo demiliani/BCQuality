@@ -1,0 +1,572 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Our Shopify checkout collects a gift message as an order note attribute called gift-message. When the Shopify connector creates the sales order in Business Central, the gift message must be on the sales order and on the posted sales invoice.",
+    "business-process": "Shopify order import into sales orders, then sales posting (Shopify Connector order processing feeding Sales-Post).",
+    "candidates": 15,
+    "selected": 11
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "sales-header-gift-message",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header",
+        "purpose": "Stores the gift message on the sales document the Shopify Connector creates. A stored field (not a FlowField to Shpfy Order Header) is chosen because the value must reach the posted sales invoice through TransferFields.",
+        "fields": [
+          {
+            "name": "Gift Message",
+            "type": "Text[250]",
+            "note": "Field number and length are reused unchanged on every TransferFields target. Length depends on open question gift-message-length. DataClassification = CustomerContent. ToolTip on the table field when the target is BC24 or later."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-header-gift-message",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Header",
+        "purpose": "Receives the gift message when the order is invoiced; required by the request.",
+        "fields": [
+          {
+            "name": "Gift Message",
+            "type": "Text[250]",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable on this posted or archive table."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-header-gift-message",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Header",
+        "purpose": "Receives the gift message on posted shipments. Chosen by the mirroring rule, not by the request; see open question other-posted-targets.",
+        "fields": [
+          {
+            "name": "Gift Message",
+            "type": "Text[250]",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable on this posted or archive table."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-header-gift-message",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Header",
+        "purpose": "Receives the gift message on posted credit memos, including corrective credit memos created by Cancel or Correct. Chosen by the mirroring rule, not by the request; see open question other-posted-targets.",
+        "fields": [
+          {
+            "name": "Gift Message",
+            "type": "Text[250]",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable on this posted or archive table."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-header-gift-message",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Header",
+        "purpose": "Receives the gift message on posted return receipts. Chosen by the mirroring rule, not by the request; see open question other-posted-targets.",
+        "fields": [
+          {
+            "name": "Gift Message",
+            "type": "Text[250]",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable on this posted or archive table."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-header-archive-gift-message",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header Archive",
+        "purpose": "Keeps the gift message when the order is archived. Chosen by the mirroring rule, not by the request; see open question other-posted-targets.",
+        "fields": [
+          {
+            "name": "Gift Message",
+            "type": "Text[250]",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable on this posted or archive table."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "shopify-gift-message-copy",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Shopify Gift Message",
+        "purpose": "Holds the subscriber to Shpfy Order Events OnAfterCreateSalesHeader that reads the gift-message order attribute and writes it to the created sales header. Requires an app.json dependency on the Shopify Connector app.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.md",
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "id": "sales-order-page-gift-message",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order",
+        "purpose": "Shows the gift message on the sales order. The field inherits the table-field ToolTip on BC24 or later; on earlier targets the page field needs its own ToolTip.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "posted-sales-invoice-page-gift-message",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Sales Invoice",
+        "purpose": "Shows the gift message, read-only, on the posted sales invoice. Same ToolTip rule as on the sales order page.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Shpfy Order Attribute (Key = 'gift-message', Attribute Value)",
+        "to": "Sales Header.Gift Message",
+        "mechanism": "event-copy",
+        "note": "Shpfy Import Order stores note attributes in Shpfy Order Attribute keyed by Order Id and Key. In OnAfterCreateSalesHeader, Get the attribute by OrderHeader.\"Shopify Order Id\" and 'gift-message', assign with CopyStr to the field length, and call Modify because the header already exists. Shpfy Process Order builds the sales header field by field, not with TransferFields.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Gift Message",
+        "to": "Sales Invoice Header.Gift Message",
+        "mechanism": "transferfields",
+        "note": "Sales-Post creates the posted invoice header with TransferFields; no subscriber needed.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Gift Message",
+        "to": "Sales Shipment Header.Gift Message",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Gift Message",
+        "to": "Sales Cr.Memo Header.Gift Message",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Gift Message",
+        "to": "Return Receipt Header.Gift Message",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Gift Message",
+        "to": "Sales Header Archive.Gift Message",
+        "mechanism": "transferfields",
+        "note": "ArchiveManagement archives the header with TransferFields.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Invoice Header.Gift Message",
+        "to": "Sales Header.Gift Message (corrective credit memo or copied document)",
+        "mechanism": "transferfields",
+        "note": "Copy Document Mgt. copies the posted invoice header back with TransferFields for Cancel, Correct and manual Copy Document. The gift message is treated as business data, so it stays mirrored with no code; if the requester does not want it copied back, clear it in OnAfterCopySalesHeaderDone (see open question copy-document-behavior).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Shpfy Order Events\" (30162)",
+        "event": "OnAfterCreateSalesHeader(OrderHeader: Record \"Shpfy Order Header\"; var SalesHeader: Record \"Sales Header\")",
+        "purpose": "Copy the gift-message order attribute to Sales Header.Gift Message after the connector has inserted and filled the header. Fires even when an OnBeforeCreateSalesHeader subscriber handled creation.",
+        "guards": [
+          "Exit without error when no Shpfy Order Attribute with Key 'gift-message' exists for the order.",
+          "Truncate with CopyStr to MaxStrLen of the field.",
+          "Call Modify on SalesHeader because the record already exists.",
+          "No Commit in the subscriber.",
+          "No Confirm, Message-based reporting, or pages: processing can run in a job queue session.",
+          "An error raised here marks the Shopify order Has Error and deletes the created sales document; raise one only deliberately."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.md",
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "other",
+        "step": "Add an app.json dependency on Shopify Connector (id ec255f57-31d0-4ca2-b751-f2fa7c745abb, publisher Microsoft). Use only its integration events; Shpfy Process Order and Shpfy Import Order are Access = Internal and cannot be called.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on Gift Message in every table extension; a tableextension field has no table-level value to inherit.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "Keep the subscriber non-interactive: Shopify order sync and sales-document creation can run as a job queue entry when Allow Background Syncs is on.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "gift-message-copied-on-order-creation",
+        "given": "A Shopify order header and a Shpfy Order Attribute with Key 'gift-message' and a random text value.",
+        "when": "The connector creates the sales order for that Shopify order (OnAfterCreateSalesHeader runs).",
+        "then": "Sales Header.Gift Message equals the attribute value.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.md"
+        ]
+      },
+      {
+        "id": "no-gift-message-attribute-leaves-field-blank",
+        "given": "A Shopify order with no 'gift-message' attribute.",
+        "when": "The connector creates the sales order.",
+        "then": "The sales order is created without error and Gift Message is blank.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.md"
+        ]
+      },
+      {
+        "id": "long-gift-message-truncated",
+        "given": "A 'gift-message' attribute longer than the Gift Message field.",
+        "when": "The connector creates the sales order.",
+        "then": "The order is created without error and Gift Message holds the first MaxStrLen characters.",
+        "knowledge": [
+          "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.md"
+        ]
+      },
+      {
+        "id": "gift-message-on-posted-invoice-and-shipment",
+        "given": "A customer, an item and a sales order created with Library - Sales, with Gift Message set to a random text of full field length.",
+        "when": "The order is posted with ship and invoice.",
+        "then": "Sales Invoice Header and Sales Shipment Header carry the same Gift Message.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "gift-message-on-return-receipt",
+        "given": "A sales return order created with Library - Sales with Gift Message set.",
+        "when": "The return order is posted with receive.",
+        "then": "Return Receipt Header carries the Gift Message.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "gift-message-on-archive",
+        "given": "A sales order with Gift Message set.",
+        "when": "The order is archived.",
+        "then": "Sales Header Archive carries the Gift Message.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "gift-message-on-corrective-credit-memo",
+        "given": "A posted sales invoice with Gift Message filled.",
+        "when": "The user runs Cancel on the posted invoice.",
+        "then": "The posted Sales Cr.Memo Header carries the Gift Message (or is blank if copy-document-behavior decides to clear it).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.md",
+      "used-for": "Mechanism and event for moving the gift-message note attribute from the Shopify order to the created sales header.",
+      "constraints": [
+        "Shpfy Process Order builds Sales Header field by field without TransferFields, so a custom value needs code.",
+        "Note attributes are stored in Shpfy Order Attribute keyed by Order Id and Key, with the text in Attribute Value; read the stored value, do not fetch the order again.",
+        "Subscribe to Shpfy Order Events OnAfterCreateSalesHeader, assign the value and call Modify, because the header already exists.",
+        "A stored field reaches posted documents through TransferFields; a FlowField to Shpfy Order Header is not copied on posting.",
+        "Do not Commit in the subscriber; do not use Confirm or pages.",
+        "Do not use Sales Header OnAfterInsertEvent (Shpfy Order Id is not yet set) or OnAfterImportShopifyOrderHeader (no sales document exists yet)."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.good.al",
+        "microsoft/knowledge/shopify/carry-shopify-order-values-to-the-created-sales-document.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.md",
+      "used-for": "Dependency and extension-point constraints for the Shopify Connector.",
+      "constraints": [
+        "Depend on Shopify Connector, id ec255f57-31d0-4ca2-b751-f2fa7c745abb, publisher Microsoft.",
+        "Use only [IntegrationEvent] publishers; check each event exists and is an integration event before designing.",
+        "Shpfy Process Order, Shpfy Import Order and related codeunits are Access = Internal and cannot be called.",
+        "Subscribers must not need UI and must not Commit; syncs can run as job queue entries.",
+        "If a needed event is missing, request it in BCApps; do not copy connector code."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/shopify/extend-the-shopify-connector-through-integration-events-and-public-objects.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Stage map for where the sales header field must travel, and the Copy Document decision.",
+      "constraints": [
+        "Plan one step per stage the field must reach; posted headers and the archive are reached by TransferFields.",
+        "Name the page extensions that show the field and add a test that posts a document and reads the value back from every target.",
+        "Copy Document copies posted and archived headers back with TransferFields; decide whether that is wanted and, if not, clear the field in OnAfterCopySalesHeaderDone.",
+        "Do not plan only the tables the requester named."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring Gift Message on every TransferFields target of Sales Header.",
+      "constraints": [
+        "Same field number, name, type and length on Sales Header and on Sales Shipment Header, Sales Invoice Header, Sales Cr.Memo Header, Return Receipt Header and Sales Header Archive, unless the plan states a document type never needs it.",
+        "No subscriber is needed for these stages.",
+        "Keep mirrored fields non-editable on posted tables.",
+        "Do not copy with OnAfter...Insert subscribers and Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length agreement for the mirrored Gift Message field.",
+      "constraints": [
+        "Define the mirrored field with the exact same field number, data type and length on every table in the cascade at creation time.",
+        "A shorter length on a target compiles but fails at runtime once a value exceeds it."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of the gift message.",
+      "constraints": [
+        "Every Normal field added by a tableextension must set its own DataClassification.",
+        "Customer-provided content is CustomerContent; do not leave ToBeClassified or use SystemMetadata."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+      "used-for": "Non-interactive subscriber, because order processing can run in a job queue session.",
+      "constraints": [
+        "No Confirm, Page.Run/RunModal, Report.Run/RunModal, Hyperlink, upload or download in code run by the job queue.",
+        "Do not use Message as the only result notification; let failures propagate."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+      "used-for": "Behavior of Gift Message on Cancel and Correct of the posted invoice.",
+      "constraints": [
+        "A field mirrored on the posted invoice is copied to the corrective credit memo and its posted header.",
+        "Business data stays mirrored with no code; per-document state is cleared in OnAfterCopySalesHeaderDone on Copy Document Mgt.",
+        "Test Cancel on an invoice with the field filled and read the posted credit memo back."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for the posting, return, archive and corrective credit memo tests.",
+      "constraints": [
+        "Create customers, items and sales documents with Library - Sales, Library - Inventory and Library - Random, not with hand-rolled Init/Insert.",
+        "Create parents before dependent records and Validate foreign keys."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "ToolTip for Gift Message on the sales order and posted invoice pages. Applies from BC24 (runtime 13.0) for table-field inheritance; target version unknown.",
+      "constraints": [
+        "On runtime 13.0 or later, define the ToolTip on the table field and omit duplicate page-level ToolTips.",
+        "Before runtime 13.0, user-facing page fields need page-level ToolTips.",
+        "Tooltip text must say what the value is used for, not just repeat the caption, and must not invent behavior."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/style/tooltip-required-on-page-fields.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Confirms bound page fields inherit the table-field ToolTip. Applies from BC24 (runtime 13.0); target version unknown.",
+      "constraints": [
+        "A page field bound to a table field with a non-empty ToolTip inherits it on runtime 13.0 or later.",
+        "A control with neither an inline nor an inherited ToolTip is a real gap."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "gift-message-length",
+      "question": "What is the maximum gift-message length the checkout allows? Choose the Gift Message field length from it; longer values are truncated by CopyStr.",
+      "affects": [
+        "sales-header-gift-message",
+        "sales-invoice-header-gift-message",
+        "sales-shipment-header-gift-message",
+        "sales-cr-memo-header-gift-message",
+        "return-receipt-header-gift-message",
+        "sales-header-archive-gift-message",
+        "long-gift-message-truncated"
+      ]
+    },
+    {
+      "id": "other-posted-targets",
+      "question": "The request names only the sales order and the posted sales invoice. The mirroring rule also adds Gift Message to Sales Shipment Header, Sales Cr.Memo Header, Return Receipt Header and Sales Header Archive. Should any of these be excluded?",
+      "affects": [
+        "sales-shipment-header-gift-message",
+        "sales-cr-memo-header-gift-message",
+        "return-receipt-header-gift-message",
+        "sales-header-archive-gift-message",
+        "gift-message-on-posted-invoice-and-shipment",
+        "gift-message-on-return-receipt",
+        "gift-message-on-archive",
+        "gift-message-on-corrective-credit-memo"
+      ]
+    },
+    {
+      "id": "copy-document-behavior",
+      "question": "When a posted invoice is cancelled, corrected or copied with Copy Document, should the gift message be copied to the new document (default, no code) or cleared?",
+      "affects": [
+        "gift-message-on-corrective-credit-memo"
+      ]
+    },
+    {
+      "id": "printed-invoice",
+      "question": "Must the gift message also appear on the printed sales invoice or other report layouts, or only on the posted invoice record and page?",
+      "affects": [
+        "posted-sales-invoice-page-gift-message"
+      ]
+    },
+    {
+      "id": "editable-on-order",
+      "question": "May users edit the gift message on the sales order after it is created from Shopify?",
+      "affects": [
+        "sales-order-page-gift-message"
+      ]
+    },
+    {
+      "id": "existing-orders",
+      "question": "Should Shopify sales orders created before the extension is installed be back-filled from Shpfy Order Attribute, or only new orders?",
+      "affects": [
+        "sales-header-gift-message"
+      ]
+    },
+    {
+      "id": "target-bc-version",
+      "question": "Which Business Central version does the app target? It decides whether page fields can inherit the table-field ToolTip.",
+      "affects": [
+        "sales-order-page-gift-message",
+        "posted-sales-invoice-page-gift-message"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Context dimensions unknown: bc-version, countries and application-area; tooltip inheritance articles apply only from BC24.",
+    "How a test app drives the Shopify Connector's order processing to raise OnAfterCreateSalesHeader is not covered by BCQuality knowledge; Shpfy Process Order is Access = Internal. The tests gift-message-copied-on-order-creation, no-gift-message-attribute-leaves-field-blank and long-gift-message-truncated rest on the agent's judgment for their When step (for example, calling the copy logic through a procedure the subscriber also uses).",
+    "Page names Sales Order and Posted Sales Invoice as extension targets are the agent's judgment; the cited articles require a page extension but do not name the pages."
+  ]
+}

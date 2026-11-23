@@ -49,7 +49,7 @@
           "minItems": 1,
           "maxItems": 1,
           "items": {
-            "enum": ["findings-report", "development-guidance-report", "knowledge-response"]
+            "enum": ["findings-report", "development-guidance-report", "knowledge-response", "feature-design-report"]
           }
         },
         "filters": {

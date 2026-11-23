@@ -1,0 +1,938 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Every night our web shop exports a CSV file of newly registered customers. Import them as customers in the background, report rows that fail without stopping the rest of the file, let the administrator change the column layout without a new release, and keep the import log for 90 days.",
+    "business-process": "Nightly background import of new web shop customers from a CSV file into the Customer master table through a data exchange definition and a job queue entry, with per-row error logging kept under retention policies; it extends customer master data creation in the base application, not a posting process.",
+    "candidates": 47,
+    "selected": 27
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "import-setup",
+        "action": "create",
+        "object-type": "table",
+        "target": "Web Shop Cust. Import Setup",
+        "purpose": "Singleton setup for the import: blank Code[10] \"Primary Key\", the data exchange definition code that describes the CSV layout, the job queue category code, and (if confirmed) the customer template to apply and the file source settings. The CSV layout itself lives in the data exchange definition so the administrator changes columns, separator, header lines and encoding without a release.",
+        "fields": [
+          {
+            "name": "Primary Key",
+            "type": "Code[10]",
+            "note": "always blank"
+          },
+          {
+            "name": "Data Exch. Def. Code",
+            "type": "Code[20]",
+            "note": "TableRelation to Data Exch. Def; the shipped definition is the default"
+          },
+          {
+            "name": "Job Queue Category Code",
+            "type": "Code[10]",
+            "note": "shared by every entry that runs this import"
+          },
+          {
+            "name": "Customer Templ. Code",
+            "type": "Code[20]",
+            "note": "only if open question customer-template is answered yes"
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md"
+        ]
+      },
+      {
+        "id": "import-setup-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Web Shop Cust. Import Setup",
+        "purpose": "Card page over the setup singleton with InsertAllowed = false, DeleteAllowed = false and an OnOpenPage guard that inserts the blank row when missing; actions to open the data exchange definition for editing, to schedule the nightly job queue entry and to open the import runs.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md"
+        ]
+      },
+      {
+        "id": "import-buffer",
+        "action": "create",
+        "object-type": "table",
+        "target": "Web Shop Cust. Import Buffer",
+        "purpose": "TableType = Temporary mapping target for Process Data Exch. Its last primary key field is an Integer line number, as ProcessColumnMapping requires; Customer cannot be the mapping target because its key is Code \"No.\". Fields hold the raw column values as text so that the administrator can map any file column to them; the shipped field list is fixed by the release. It is a working table, not one of the nine business table types.",
+        "fields": [
+          {
+            "name": "Import Run No.",
+            "type": "Integer",
+            "note": "key field 1, set on the template record"
+          },
+          {
+            "name": "Line No.",
+            "type": "Integer",
+            "note": "key field 2, set by ProcessColumnMapping from the file line number"
+          },
+          {
+            "name": "Data Exch. Entry No.",
+            "type": "Integer"
+          },
+          {
+            "name": "Web Shop Customer ID",
+            "type": "Text[50]",
+            "note": "DataClassification = CustomerContent"
+          },
+          {
+            "name": "Name",
+            "type": "Text[100]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "Address",
+            "type": "Text[100]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "Post Code",
+            "type": "Text[20]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "City",
+            "type": "Text[30]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "Country/Region Code",
+            "type": "Text[10]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "E-Mail",
+            "type": "Text[80]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "Phone No.",
+            "type": "Text[30]",
+            "note": "CustomerContent"
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "import-run",
+        "action": "create",
+        "object-type": "table",
+        "target": "Web Shop Cust. Import Run",
+        "purpose": "Log header, one row per processed file: Integer \"No.\", started/finished, data exchange entry, rows read, created and failed, and status (In Progress, Completed, Completed with Errors, Failed). It is the persisted aggregate outcome of the job, so a run with failed rows is observable even though the job itself finishes. Owned by the app, registered for retention policies.",
+        "fields": [
+          {
+            "name": "No.",
+            "type": "Integer"
+          },
+          {
+            "name": "Status",
+            "type": "Enum \"Web Shop Cust. Import Status\""
+          },
+          {
+            "name": "Data Exch. Entry No.",
+            "type": "Integer"
+          },
+          {
+            "name": "File Name",
+            "type": "Text[250]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "Rows Read",
+            "type": "Integer"
+          },
+          {
+            "name": "Customers Created",
+            "type": "Integer"
+          },
+          {
+            "name": "Rows Failed",
+            "type": "Integer"
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "import-log-entry",
+        "action": "create",
+        "object-type": "table",
+        "target": "Web Shop Cust. Import Log Entry",
+        "purpose": "Log line, one row per file row: run no., line no., result (Created or Failed), created customer no., the identifying values of the row and the error text of a failed row. Rows are written after the row loop from an in-memory list, so a failed row's rollback never removes its own log line. Owned by the app, registered for retention policies.",
+        "fields": [
+          {
+            "name": "Run No.",
+            "type": "Integer"
+          },
+          {
+            "name": "Line No.",
+            "type": "Integer"
+          },
+          {
+            "name": "Result",
+            "type": "Enum \"Web Shop Cust. Import Result\""
+          },
+          {
+            "name": "Customer No.",
+            "type": "Code[20]",
+            "note": "TableRelation Customer"
+          },
+          {
+            "name": "Web Shop Customer ID",
+            "type": "Text[50]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "Name",
+            "type": "Text[100]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "E-Mail",
+            "type": "Text[80]",
+            "note": "CustomerContent"
+          },
+          {
+            "name": "Error Message",
+            "type": "Text[2048]",
+            "note": "CustomerContent: error text can contain field values from the file"
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/error-handling/log-writes-must-survive-rollback.md",
+          "microsoft/knowledge/performance/codeunit-run-requires-prior-commit-inside-transaction.md",
+          "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "import-status-enums",
+        "action": "create",
+        "object-type": "enum",
+        "target": "Web Shop Cust. Import Status",
+        "purpose": "Status values of an import run; a second enum \"Web Shop Cust. Import Result\" holds Created and Failed for log entries.",
+        "knowledge": []
+      },
+      {
+        "id": "import-run-pages",
+        "action": "create",
+        "object-type": "page",
+        "target": "Web Shop Cust. Import Runs",
+        "purpose": "Read-only list of import runs with a drill-down to their log entries (a second read-only list page \"Web Shop Cust. Import Log\"), so the administrator sees which rows failed and why.",
+        "knowledge": []
+      },
+      {
+        "id": "mapping-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Web Shop Cust. Import Mapping",
+        "purpose": "Mapping Codeunit of the Data Exch. Mapping, TableNo = \"Web Shop Cust. Import Buffer\": gets the Data Exch. from the template record and calls Process Data Exch. ProcessAllLinesColumnMapping(DataExch, RecRef) on the temporary template record.",
+        "knowledge": [
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md"
+        ]
+      },
+      {
+        "id": "import-job-handler",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Web Shop Cust. Import Job",
+        "purpose": "Job queue entry point, non-interactive. Reads setup, obtains the file content as a stream, inserts the run row, imports the file into Data Exch. with the configured definition, commits once, maps into the temporary buffer, then calls the row codeunit with \"if Codeunit.Run\" per buffer row, collecting each failure (line, identifying values, GetLastErrorText) in memory. After the loop it writes the log entries and the run totals and status. Failures that invalidate the whole run (no setup, unreadable file, missing definition) are raised as errors so the job queue entry shows them.",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md",
+          "microsoft/knowledge/performance/codeunit-run-requires-prior-commit-inside-transaction.md",
+          "microsoft/knowledge/performance/avoid-commit-inside-loops.md",
+          "microsoft/knowledge/error-handling/log-writes-must-survive-rollback.md",
+          "microsoft/knowledge/appsource/file-datatype-saas.md",
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md"
+        ]
+      },
+      {
+        "id": "row-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Web Shop Cust. Create Customer",
+        "purpose": "One file row as an atomic sub-operation, TableNo = \"Web Shop Cust. Import Buffer\". Customer.Init, Customer.Insert(true) so OnInsert assigns \"No.\" from the number series and the standard defaults, then Validate each mapped field from the buffer, then (if confirmed) apply the customer template, then Modify(true). Any error rolls back the whole customer of that row only.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md",
+          "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md",
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+          "microsoft/knowledge/web-services/format-exchanged-values-with-standard-format-9.md"
+        ]
+      },
+      {
+        "id": "install-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Web Shop Cust. Import Install",
+        "purpose": "Subtype = Install, OnInstallAppPerCompany: imports the shipped data exchange definition once, registers both log tables as retention-policy allowed tables, creates the default retention policy setup, and seeds the upgrade tags.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md",
+          "microsoft/knowledge/privacy/ship-a-default-retention-policy-setup.md",
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "id": "upgrade-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Web Shop Cust. Import Upgrade",
+        "purpose": "Subtype = Upgrade, OnUpgradePerCompany: calls the same retention registration routine, because install code does not run on a version upgrade; every step guarded by its own upgrade tag.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md"
+        ]
+      },
+      {
+        "id": "retention-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Web Shop Cust. Import Retention",
+        "purpose": "Shared registration routine for the run and log entry tables (AddAllowedTable with SystemCreatedAt and MandatoryMinRetenDays = 90), with a ForceUpdate path for OnRefreshAllowedTables, plus the one-time default Retention Policy Setup creation. Needs tabledata \"Retention Policy Setup\" = ri.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md",
+          "microsoft/knowledge/privacy/ship-a-default-retention-policy-setup.md"
+        ]
+      },
+      {
+        "id": "permission-sets",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "WEBSHOP CUST IMPORT",
+        "purpose": "Non-assignable building blocks composed into assignable role sets: an admin set (setup RIMD, runs and log R, execute on the job and page objects) and a viewer set (runs and log read). Log and run tables are written only by the import code, so roles get indirect insert/modify on them rather than direct rights.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Web shop CSV file",
+        "to": "Data Exch. (Data Exch. Field rows)",
+        "mechanism": "other",
+        "note": "The job obtains the file as an InStream (no File type), then runs ImportToDataExch with the configured Generic Import definition and its CSV reading XMLport; File Encoding is set explicitly on the definition. Where the background job fetches the file from is an open question and rests on judgment.",
+        "knowledge": [
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md",
+          "microsoft/knowledge/appsource/file-datatype-saas.md",
+          "microsoft/knowledge/web-services/set-text-encoding-on-streams-exchanged-externally.md"
+        ]
+      },
+      {
+        "from": "Data Exch. Field rows",
+        "to": "Web Shop Cust. Import Buffer (temporary)",
+        "mechanism": "other",
+        "note": "Mapping codeunit runs ProcessAllLinesColumnMapping into the temporary template record; column-to-field mapping, column order, optional columns and transformation rules come from Data Exch. Field Mapping, which the administrator edits.",
+        "knowledge": [
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md"
+        ]
+      },
+      {
+        "from": "Web Shop Cust. Import Buffer (temporary)",
+        "to": "Customer",
+        "mechanism": "validate",
+        "note": "Per row through Codeunit.Run: Insert(true), Validate each field, Modify(true). Non-text values parsed from machine-generated text use Evaluate with format 9 unless the definition's transformation rule converts them.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md",
+          "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md",
+          "microsoft/knowledge/web-services/format-exchanged-values-with-standard-format-9.md"
+        ]
+      },
+      {
+        "from": "Customer Templ.",
+        "to": "Customer",
+        "mechanism": "other",
+        "note": "Only if the requester confirms a template: applied after the file values are set, so the template fills empty fields and does not overwrite file values for customers.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md"
+        ]
+      },
+      {
+        "from": "In-memory row results",
+        "to": "Web Shop Cust. Import Log Entry",
+        "mechanism": "other",
+        "note": "Written in one pass after the row loop, outside any row's rollback boundary.",
+        "knowledge": [
+          "microsoft/knowledge/performance/codeunit-run-requires-prior-commit-inside-transaction.md",
+          "microsoft/knowledge/error-handling/log-writes-must-survive-rollback.md"
+        ]
+      },
+      {
+        "from": "Row results",
+        "to": "Web Shop Cust. Import Run",
+        "mechanism": "other",
+        "note": "Totals and status written after the loop; run-level failures propagate to the job queue log entry.",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Reten. Pol. Allowed Tables",
+        "event": "OnRefreshAllowedTables",
+        "purpose": "Re-register the run and log entry tables with ForceUpdate when the administrator refreshes the allowed tables on the Retention Policies page.",
+        "guards": [
+          "Pass ForceUpdate = true so the upgrade tag does not stop re-registration",
+          "Skip AddAllowedTable when IsAllowedTable is already true"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "Ship a data exchange definition (type Generic Import, CSV reading XMLport 1220, explicit File Encoding, header lines, column definitions and field mappings to the buffer table with the mapping codeunit) and import it per company with XMLport 1225 \"Imp / Exp Data Exch Def & Map\" once, guarded by an upgrade tag so administrator changes are not overwritten on upgrade.",
+        "knowledge": [
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Setup card creates its singleton row on first open; the administrator selects the definition code, job queue category and (if confirmed) the customer template.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "Schedule one recurring nightly job queue entry for the import job codeunit with the setup's non-empty Job Queue Category Code, so a manual rerun and the nightly run never overlap. The handler has no Confirm, Message, page, report, upload or download.",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/job-queue-category-code-serializes-conflicting-jobs.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "Transactions: one Commit after the run row and the Data Exch. import, before the first per-row Codeunit.Run; no Commit inside the row loop; log entries and totals written after the loop.",
+        "knowledge": [
+          "microsoft/knowledge/performance/codeunit-run-requires-prior-commit-inside-transaction.md",
+          "microsoft/knowledge/performance/avoid-commit-inside-loops.md",
+          "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "Failure reporting: per-row failures are recorded deliberately as Failed log entries and a Completed with Errors run status; errors that invalidate the whole run propagate out of the handler so the job queue entry shows Error.",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md"
+        ]
+      },
+      {
+        "concern": "install",
+        "step": "Install codeunit registers Web Shop Cust. Import Run and Web Shop Cust. Import Log Entry with AddAllowedTable (SystemCreatedAt, MandatoryMinRetenDays 90), creates the default Retention Policy Setup once, and seeds the upgrade tags with SetUpgradeTag; tags also returned from OnGetPerCompanyUpgradeTags for new companies.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md",
+          "microsoft/knowledge/privacy/ship-a-default-retention-policy-setup.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "Upgrade codeunit calls the same registration routine in OnUpgradePerCompany, each step guarded by HasUpgradeTag and closed with SetUpgradeTag.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Classify every buffer, run and log field that holds file values or error text as CustomerContent; counters and statuses as SystemMetadata. Keep file values and error text out of any telemetry dimension.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/privacy/featuretelemetry-customdimensions-no-pii.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship non-assignable building-block permission sets (setup, log read, import execution) and assignable admin and viewer sets that include them; log and run tables get indirect insert/modify so only the import code writes them.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "valid-file-creates-customers",
+        "given": "Shipped definition, Sales & Receivables customer number series, a UTF-8 CSV with two valid rows",
+        "when": "The import job codeunit runs",
+        "then": "Two customers exist with \"No.\" from the number series and the file values; two Created log entries reference them; the run is Completed with Rows Read 2, Customers Created 2",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md",
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md",
+          "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md"
+        ]
+      },
+      {
+        "id": "failed-row-does-not-stop-file",
+        "given": "A CSV with three rows where the second has an invalid Country/Region Code",
+        "when": "The import job runs",
+        "then": "Rows 1 and 3 create customers; no customer exists for row 2; a Failed log entry for line 2 carries the validation error; the run is Completed with Errors with Rows Failed 1",
+        "knowledge": [
+          "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md",
+          "microsoft/knowledge/performance/codeunit-run-requires-prior-commit-inside-transaction.md",
+          "microsoft/knowledge/error-handling/log-writes-must-survive-rollback.md"
+        ]
+      },
+      {
+        "id": "layout-change-without-release",
+        "given": "The administrator swaps two columns in the CSV and updates the column numbers in the definition's field mapping",
+        "when": "The import job runs on the reordered file",
+        "then": "Customers carry the same values as with the original layout",
+        "knowledge": [
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md"
+        ]
+      },
+      {
+        "id": "encoding-preserves-accents",
+        "given": "A UTF-8 CSV with names such as Müller and Łódź",
+        "when": "The import job runs",
+        "then": "Customer Name and City hold the accented characters unchanged",
+        "knowledge": [
+          "microsoft/knowledge/web-services/set-text-encoding-on-streams-exchanged-externally.md",
+          "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md"
+        ]
+      },
+      {
+        "id": "buffer-guard-rejects-real-table",
+        "given": "The row-processing helper called with a non-temporary buffer variable",
+        "when": "It runs",
+        "then": "It raises an error naming the parameter before any write",
+        "knowledge": [
+          "microsoft/knowledge/security/guard-bulk-operations-with-istemporary.md"
+        ]
+      },
+      {
+        "id": "run-level-failure-propagates",
+        "given": "Setup with a definition code that does not exist",
+        "when": "The job queue handler runs",
+        "then": "The handler raises an error, so the job queue entry would show Error; no customers are created",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "id": "no-ui-in-background",
+        "given": "A test runner with no UI handlers registered",
+        "when": "The import job codeunit runs over a file with valid and failed rows",
+        "then": "It completes without any Confirm, Message or page handler being requested",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "id": "retention-registered-on-install-and-upgrade",
+        "given": "A company where the install and, separately, the upgrade routine run",
+        "when": "Retention registration runs, then OnRefreshAllowedTables is raised",
+        "then": "Both log tables are allowed tables with a 90-day mandatory minimum, the default Retention Policy Setup exists once, and refresh re-registers without duplicating the setup",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md",
+          "microsoft/knowledge/privacy/ship-a-default-retention-policy-setup.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "id": "template-fills-empty-fields",
+        "given": "Setup with a customer template that has posting groups and a country code, and a file row with its own country code",
+        "when": "The import job runs",
+        "then": "The customer takes the posting groups from the template and keeps the country code from the file (only if the template is confirmed)",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "commit-aware-test-transactions",
+        "given": "Import tests that run code which commits",
+        "when": "The tests are declared",
+        "then": "They use TransactionModel AutoCommit with a TestIsolation runner, not AutoRollback; fixtures (number series, templates, country codes) come from the Library codeunits",
+        "knowledge": [
+          "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-data-import-or-migration-feature.md",
+      "used-for": "Planning order for the import: mechanism, reading, staging, record creation, error collection, log, transactions, background run, retention, privacy, permissions, tests.",
+      "constraints": [
+        "A file whose layout users adapt uses a data exchange definition",
+        "Map into a temporary record and insert real records in own code",
+        "Collect row errors instead of stopping at the first; the failure log must survive rollback",
+        "No commit per row; commit before Codeunit.Run inside a write transaction",
+        "Job queue handler without UI, failures propagated, conflicting imports serialized by category",
+        "Detecting a file or row imported twice has no article; it rests on judgment",
+        "Register log tables for retention policies and consider a default setup"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.md",
+      "used-for": "Mechanism for an administrator-adaptable CSV layout and the buffer-table shape.",
+      "constraints": [
+        "Ship a Generic Import definition and import it with XMLport 1225 in a setup step",
+        "The mapping target's last primary key field must be Integer or BigInteger; it is set from the file line number",
+        "ProcessColumnMapping validates each value and inserts with RecRef.Insert() without OnInsert, so map into a temporary record and insert real records in own code with Insert(true)",
+        "Dependent mapped fields get a lower Priority so they validate later",
+        "Set File Encoding on the definition explicitly",
+        "Do not write a bespoke parser that splits lines on a hard-coded separator"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/web-services/import-files-through-data-exchange-definitions.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/appsource/file-datatype-saas.md",
+      "used-for": "Reading the file in the cloud.",
+      "constraints": [
+        "Do not use the File type's Open/Create/Read/Write; use streams staged in TempBlob",
+        "No server filesystem path is available in Business Central Online"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/set-text-encoding-on-streams-exchanged-externally.md",
+      "used-for": "Encoding of the incoming CSV bytes.",
+      "constraints": [
+        "Pass TextEncoding matching the actual encoding of the incoming bytes on the stream that reads text",
+        "MSDos default can corrupt accented and non-Latin characters"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/format-exchanged-values-with-standard-format-9.md",
+      "used-for": "Parsing non-text values from the machine-generated file.",
+      "constraints": [
+        "Parse machine-generated date, decimal and Boolean text with Evaluate(Variable, Text, 9)",
+        "Evaluate without format 9 depends on the session region of the job queue user"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Classifying the setup, buffer and log tables.",
+      "constraints": [
+        "Setup table has a blank Code[10] Primary Key",
+        "Buffer, log and working tables need not fit one of the nine business-record types"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+      "used-for": "Setup singleton and its card.",
+      "constraints": [
+        "Sole key Primary Key Code[10] left blank",
+        "Card page with InsertAllowed = false, DeleteAllowed = false and an open-time guard that inserts the row"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/guard-bulk-operations-with-istemporary.md",
+      "used-for": "Helper that processes the temporary buffer.",
+      "constraints": [
+        "A helper that bulk-writes or deletes a var record expected to be temporary checks IsTemporary at entry and raises a descriptive error"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md",
+      "used-for": "Creating Customer records from file rows.",
+      "constraints": [
+        "Create the customer with Insert(true), then Validate fields and Modify(true)",
+        "Importing from an external source is not an exception; OnInsert assigns No. and No. Series from Sales & Receivables Setup when No. is blank and sets defaults, contact and dimensions"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+      "used-for": "Optional template application to imported customers.",
+      "constraints": [
+        "Customer Templ. Mgt. inserts with Insert(true) before applying the template",
+        "For customers the template does not overwrite values already set and assigns without Validate",
+        "A field still at its InitValue counts as empty and takes the template value"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md",
+      "used-for": "Per-row atomic creation so a failed row leaves no partial customer and the run continues.",
+      "constraints": [
+        "Put each row in its own codeunit run via Codeunit.Run and capture the return value",
+        "On failure the row's database changes roll back and the caller receives false",
+        "TryFunction does not roll back writes"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/codeunit-run-requires-prior-commit-inside-transaction.md",
+      "used-for": "Transaction boundary before the row loop and the deferred log write.",
+      "constraints": [
+        "Codeunit.Run cannot nest inside an open write transaction; commit before it",
+        "Keep the outer loop read-only; collect failures in memory and write the log after the loop",
+        "Do not commit before each Codeunit.Run"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/avoid-commit-inside-loops.md",
+      "used-for": "No commit inside the row loop.",
+      "constraints": [
+        "Do not Commit inside a per-row loop"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/error-handling/log-writes-must-survive-rollback.md",
+      "used-for": "Failure log that is not lost with the failed work.",
+      "constraints": [
+        "A log whose purpose includes capturing failures must not be written in the same transaction as the operation that fails",
+        "Do not swallow the error to keep the log; the log must observe the failure"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+      "used-for": "Non-interactive job queue handler.",
+      "constraints": [
+        "No Confirm, Page.Run(Modal), Report.Run(Modal), Hyperlink, upload or download in the handler",
+        "Message cannot report a result; persist business-visible status instead"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+      "used-for": "Outcome reporting of the nightly run.",
+      "constraints": [
+        "Errors that invalidate the whole run propagate out of the handler",
+        "Per-item failures may be collected deliberately but the batch must persist an observable aggregate outcome"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-category-code-serializes-conflicting-jobs.md",
+      "used-for": "Serializing import runs.",
+      "constraints": [
+        "Entries that must not overlap share the same non-empty Job Queue Category Code",
+        "A category does not serialize across companies"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.md",
+      "used-for": "Making the run and log tables eligible for a 90-day retention policy.",
+      "constraints": [
+        "Register each owned log table with AddAllowedTable and its aging date field, usually SystemCreatedAt",
+        "Call the registration from both install (OnInstallAppPerCompany) and upgrade (OnUpgradePerCompany)",
+        "Guard with IsAllowedTable and an upgrade tag but keep a ForceUpdate path for OnRefreshAllowedTables",
+        "Pass MandatoryMinRetenDays when the data must survive a minimum period",
+        "Do not delete log rows with hand-rolled DeleteAll jobs"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/privacy/register-owned-log-tables-for-retention-policies.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/ship-a-default-retention-policy-setup.md",
+      "used-for": "Default 90-day retention policy.",
+      "constraints": [
+        "Registration deletes nothing; a Retention Policy Setup with a period must exist and be enabled",
+        "Get the period through Retention Policy Setup FindOrCreateRetentionPeriod; Validate Table Id, Apply to all records and Retention Period before insert",
+        "Create once per company behind an upgrade tag; default to Enabled = false unless the rows are documented as transient",
+        "Do not tell the administrator data is cleaned up automatically when no enabled setup exists"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/privacy/ship-a-default-retention-policy-setup.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Classification of buffer, run and log fields.",
+      "constraints": [
+        "Every field that holds customer data, such as names, e-mail addresses and addresses, is CustomerContent, not SystemMetadata or ToBeClassified"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md",
+      "used-for": "Log tables written only by the import code.",
+      "constraints": [
+        "Grant lowercase indirect letters where access must go through the import code; grant only the letters needed"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Permission set structure.",
+      "constraints": [
+        "Non-assignable building blocks composed into assignable role sets with IncludedPermissionSets"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+      "used-for": "Run-once install and upgrade steps.",
+      "constraints": [
+        "Guard every step with HasUpgradeTag and call SetUpgradeTag after the work",
+        "No DataVersion branching"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md",
+      "used-for": "Seeding tags for first install and new companies.",
+      "constraints": [
+        "Seed the tag explicitly with SetUpgradeTag from OnInstallAppPerCompany",
+        "Return per-company tags from OnGetPerCompanyUpgradeTags for new companies"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md",
+      "used-for": "Transaction model of the import tests.",
+      "constraints": [
+        "Code under test that commits needs AutoCommit, not AutoRollback",
+        "Pair suite-wide AutoCommit with a TestIsolation runner"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Build prerequisite records with the Library codeunits instead of hand-rolled Init/Insert",
+        "Create parents before records that reference them"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/featuretelemetry-customdimensions-no-pii.md",
+      "used-for": "Keeping file values out of telemetry if telemetry is added.",
+      "constraints": [
+        "No customer names, e-mail addresses or GetLastErrorText output in CustomDimensions"
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "file-source",
+      "question": "Where does the web shop put the nightly CSV, and how may Business Central read it from a background session (for example a storage service, a mailbox, or the web shop pushing the file through an API)? What happens to the file after import (move, archive, delete)?",
+      "affects": [
+        "import-job-handler",
+        "import-setup"
+      ]
+    },
+    {
+      "id": "csv-format",
+      "question": "What are the separator, header line, encoding, and date and decimal formats of the file, and which columns does it contain?",
+      "affects": [
+        "import-buffer",
+        "mapping-codeunit"
+      ]
+    },
+    {
+      "id": "customer-fields",
+      "question": "Which Customer fields must be filled from the file? Adding a field that has no buffer field later needs a release; only the column layout of existing fields is admin-configurable.",
+      "affects": [
+        "import-buffer",
+        "row-codeunit"
+      ]
+    },
+    {
+      "id": "customer-template",
+      "question": "Should a customer template supply posting groups and other defaults for imported customers, and is one template enough for all web shop customers?",
+      "affects": [
+        "import-setup",
+        "row-codeunit",
+        "template-fills-empty-fields"
+      ]
+    },
+    {
+      "id": "customer-numbering",
+      "question": "Should customer numbers come from the customer number series, or does the web shop supply a number to use as \"No.\"?",
+      "affects": [
+        "row-codeunit"
+      ]
+    },
+    {
+      "id": "duplicates",
+      "question": "How should a customer already imported (same web shop customer ID or e-mail) or a file delivered twice be treated: skip, update, or fail the row? Should the web shop customer ID be stored on the customer?",
+      "affects": [
+        "row-codeunit",
+        "import-log-entry"
+      ]
+    },
+    {
+      "id": "job-status-on-row-failures",
+      "question": "When some rows fail, should the job queue entry itself end in Error (so the standard job queue notifications fire) or finish with the run marked Completed with Errors? A retry or rerun of the same file would re-create customers already created.",
+      "affects": [
+        "import-job-handler"
+      ]
+    },
+    {
+      "id": "retention-policy",
+      "question": "Should the log be deleted after exactly 90 days or kept at least 90 days, which standard retention period should the default policy use, and should it ship enabled?",
+      "affects": [
+        "retention-codeunit",
+        "install-codeunit"
+      ]
+    },
+    {
+      "id": "job-user-permissions",
+      "question": "Which user or permission set does the nightly job queue entry run under, and is it allowed to create customers?",
+      "affects": [
+        "permission-sets"
+      ]
+    },
+    {
+      "id": "notification",
+      "question": "Should anyone be notified of failed rows (for example by e-mail), or is the import run list enough?",
+      "affects": [
+        "import-run-pages"
+      ]
+    },
+    {
+      "id": "telemetry",
+      "question": "Do you want feature telemetry for runs and failures? If yes, it carries only counts and statuses.",
+      "affects": [
+        "import-job-handler"
+      ]
+    },
+    {
+      "id": "data-exch-cleanup",
+      "question": "Should the Data Exch. records of processed files be deleted after the run, and when?",
+      "affects": [
+        "import-job-handler"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Reading the file from a background session: how the job obtains the CSV without upload UI is not covered by BCQuality knowledge; the intake step rests on judgment until open question file-source is answered.",
+    "Shipping the data exchange definition XML (for example as an app resource read at install) is not covered by BCQuality knowledge beyond importing it with XMLport 1225; rests on judgment.",
+    "The order in which the row codeunit validates dependent Customer fields (for example Country/Region Code before Post Code and City) is not covered by BCQuality knowledge; rests on judgment.",
+    "The exact Customer Templ. Mgt. procedure that applies a template to an already inserted customer is not named by an opened article; confirm it in symbols before use.",
+    "Detecting a row or file imported twice has no article (the data import map says it rests on judgment).",
+    "Cleanup of Data Exch. and Data Exch. Field rows (base application tables, which an extension cannot register for retention) is not covered by BCQuality knowledge.",
+    "Status enums and the run and log list pages rest on judgment; no article covers them.",
+    "bc-version, countries and application-area are unknown; every cited article applies to all versions, w1 and all areas."
+  ]
+}

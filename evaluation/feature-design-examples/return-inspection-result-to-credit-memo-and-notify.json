@@ -1,0 +1,910 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "When a sales return is received, the warehouse records an Inspection Result code on each return line. The credit memo lines created later with Get Return Receipt Lines must show the result recorded at receipt. After a bank reconciliation is posted, notify the treasury system that the statement was closed.",
+    "business-process": "Carries a warehouse-recorded Inspection Result from sales return order lines through return receipt posting to credit memo lines created by Get Return Receipt Lines (sales returns), and notifies an external treasury system through an outbox and job queue after Bank Acc. Reconciliation Post posts a statement (bank reconciliation).",
+    "candidates": 33,
+    "selected": 27
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "sales-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Holds the Inspection Result code the warehouse records on each sales return order line, and the value copied onto credit memo lines created by Get Return Receipt Lines. Source of every TransferFields cascade below.",
+        "fields": [
+          {
+            "name": "Inspection Result",
+            "type": "Code[10]",
+            "note": "Field number to be taken from the app's ID range and reused unchanged on every mirror table; DataClassification = CustomerContent. TableRelation depends on open question inspection-result-code-list."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/get-return-receipt-lines-copies-custom-fields-from-the-return-order-line.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "Keeps the result recorded at receipt. Return order posting fills it by TransferFields (InitFromSalesLine); Get Return Receipt Lines reads it from here, not from the order line.",
+        "fields": [
+          {
+            "name": "Inspection Result",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/get-return-receipt-lines-copies-custom-fields-from-the-return-order-line.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "Mirror target for the posted credit memo line, so the value shown on the credit memo survives posting by TransferFields. Chosen by the mirroring article; see open question mirror-targets.",
+        "fields": [
+          {
+            "name": "Inspection Result",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "Mirror target required by the mirroring article for a Sales Line field unless the plan states the document type never needs it; see open question mirror-targets.",
+        "fields": [
+          {
+            "name": "Inspection Result",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "Mirror target required by the mirroring article for a Sales Line field unless the plan states the document type never needs it; see open question mirror-targets.",
+        "fields": [
+          {
+            "name": "Inspection Result",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "Mirror target for archived return orders and credit memos, filled by TransferFields during archiving; see open question mirror-targets.",
+        "fields": [
+          {
+            "name": "Inspection Result",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "inspection-result-returns",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Inspection Result Returns",
+        "purpose": "Event subscriber that copies the Inspection Result from the posted Return Receipt Line to the new credit memo Sales Line in Get Return Receipt Lines, so the credit memo shows the value recorded at receipt rather than the return order line's current value.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/get-return-receipt-lines-copies-custom-fields-from-the-return-order-line.md"
+        ]
+      },
+      {
+        "id": "return-order-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Return Order Subform",
+        "purpose": "Lets the warehouse enter the Inspection Result on each return order line.",
+        "knowledge": []
+      },
+      {
+        "id": "posted-return-receipt-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Return Receipt Subform",
+        "purpose": "Shows the result recorded at receipt (read-only).",
+        "knowledge": []
+      },
+      {
+        "id": "cr-memo-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Cr. Memo Subform",
+        "purpose": "Shows the Inspection Result on credit memo lines created with Get Return Receipt Lines, as the request requires.",
+        "knowledge": []
+      },
+      {
+        "id": "posted-cr-memo-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Sales Cr. Memo Subform",
+        "purpose": "Shows the Inspection Result on the posted credit memo lines (read-only).",
+        "knowledge": []
+      },
+      {
+        "id": "treasury-setup",
+        "action": "create",
+        "object-type": "table",
+        "target": "Treasury Integration Setup",
+        "purpose": "Singleton setup (Primary Key Code[10], one blank-keyed row) holding whether the notification is enabled and the treasury endpoint URL. Credentials are not stored here; they go to IsolatedStorage.",
+        "fields": [
+          {
+            "name": "Primary Key",
+            "type": "Code[10]"
+          },
+          {
+            "name": "Enabled",
+            "type": "Boolean"
+          },
+          {
+            "name": "Endpoint URL",
+            "type": "Text[250]",
+            "note": "User-configurable; validated against a fixed expected host or pattern before every call."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/security/validate-user-configurable-urls.md"
+        ]
+      },
+      {
+        "id": "treasury-setup-card",
+        "action": "create",
+        "object-type": "page",
+        "target": "Treasury Integration Setup",
+        "purpose": "Card page over the singleton setup: InsertAllowed = false, DeleteAllowed = false, inserts the blank row on open; captures the credential straight into IsolatedStorage as SecretText and offers the privacy notice approval.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/security/secrettext-for-credentials.md",
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md"
+        ]
+      },
+      {
+        "id": "treasury-outbox",
+        "action": "create",
+        "object-type": "table",
+        "target": "Treasury Notification Outbox",
+        "purpose": "Outbox work item inserted in the same transaction as the bank reconciliation posting; it commits or rolls back with the posting. Its SystemId is the idempotency key sent to the treasury system. A row is deleted only after the call and all local updates succeed.",
+        "fields": [
+          {
+            "name": "Entry No.",
+            "type": "Integer",
+            "note": "AutoIncrement primary key."
+          },
+          {
+            "name": "Bank Account No.",
+            "type": "Code[20]",
+            "note": "Copied from the posted Bank Acc. Reconciliation record."
+          },
+          {
+            "name": "Statement No.",
+            "type": "Code[20]",
+            "note": "Copied from the posted Bank Acc. Reconciliation record."
+          },
+          {
+            "name": "Statement Date",
+            "type": "Date",
+            "note": "Sent as a typed JSON value or Format(..., 0, 9)."
+          },
+          {
+            "name": "Statement Ending Balance",
+            "type": "Decimal",
+            "note": "Sent as a typed JSON value or Format(..., 0, 9). Payload content is open question treasury-payload."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/web-services/format-exchanged-values-with-standard-format-9.md"
+        ]
+      },
+      {
+        "id": "bank-rec-subscriber",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Treasury Bank Rec. Notification",
+        "purpose": "Subscribes to OnAfterFinalizePost and inserts one Treasury Notification Outbox row from the reconciliation record it receives. It runs inside the posting transaction, so it does no HTTP, no Commit and no slow work.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/choose-the-after-posting-hook-per-posting-routine.md",
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      },
+      {
+        "id": "treasury-worker",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Treasury Notification Worker",
+        "purpose": "Job queue handler (TableNo = Job Queue Entry) run by a recurring job queue entry. For each committed outbox row: checks the custom privacy notice approval without UI, validates the endpoint URL, POSTs the statement-closed message with the outbox SystemId as idempotency key, handles platform failure then HTTP status, and deletes the row only on success. No UI; failures propagate to the job queue.",
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+          "microsoft/knowledge/security/prefer-oauth2-over-api-keys-for-external-http-calls.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/security/secrettext-for-credentials.md",
+          "microsoft/knowledge/security/validate-user-configurable-urls.md",
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+          "microsoft/knowledge/web-services/format-exchanged-values-with-standard-format-9.md"
+        ]
+      },
+      {
+        "id": "treasury-privacy-notice",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Treasury Privacy Notice",
+        "purpose": "Registers the integration's own stable privacy notice ID through OnRegisterPrivacyNotices; the same ID is used for the consent check in the worker.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-integration-in-privacy-notice-registrations.md",
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md"
+        ]
+      },
+      {
+        "id": "feature-permissions",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Return Inspection and Treasury",
+        "purpose": "Grants the new tables, pages and codeunits (setup, outbox, subscribers, worker) to the users who post returns and bank reconciliations and to the job queue user.",
+        "knowledge": []
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User (warehouse)",
+        "to": "Sales Line (Return Order).Inspection Result",
+        "mechanism": "user-entry",
+        "note": "Entered on Sales Return Order Subform before the return is received. Warehouse-receipt entry point is open question warehouse-receipt-entry.",
+        "knowledge": []
+      },
+      {
+        "from": "Sales Line (Return Order).Inspection Result",
+        "to": "Return Receipt Line.Inspection Result",
+        "mechanism": "transferfields",
+        "note": "Return order posting (receive) creates the posted line with InitFromSalesLine / TransferFields; same field number required, no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/get-return-receipt-lines-copies-custom-fields-from-the-return-order-line.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Return Receipt Line.Inspection Result",
+        "to": "Sales Line (Credit Memo).Inspection Result",
+        "mechanism": "event-copy",
+        "note": "Get Return Receipt Lines (InsertInvLineFromRetRcptLine) copies from the open return order line by default; the subscriber overrides that with the posted receipt line's value in OnAfterCopyFieldsFromReturnReceiptLine, before insert, without Modify.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/get-return-receipt-lines-copies-custom-fields-from-the-return-order-line.md"
+        ]
+      },
+      {
+        "from": "Sales Line (Credit Memo).Inspection Result",
+        "to": "Sales Cr.Memo Line.Inspection Result",
+        "mechanism": "transferfields",
+        "note": "Credit memo posting creates posted lines with InitFromSalesLine / TransferFields.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Inspection Result",
+        "to": "Sales Shipment Line / Sales Invoice Line.Inspection Result",
+        "mechanism": "transferfields",
+        "note": "Mirror targets chosen by the mirroring article; see open question mirror-targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Inspection Result",
+        "to": "Sales Line Archive.Inspection Result",
+        "mechanism": "transferfields",
+        "note": "Archiving copies lines with TransferFields; see open question mirror-targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Bank Acc. Reconciliation (posted)",
+        "to": "Treasury Notification Outbox",
+        "mechanism": "other",
+        "note": "Inserted in the OnAfterFinalizePost subscriber inside the posting transaction, from the record the event passes (the reconciliation lines are already deleted).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/choose-the-after-posting-hook-per-posting-routine.md",
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      },
+      {
+        "from": "Treasury Notification Outbox",
+        "to": "Treasury system",
+        "mechanism": "other",
+        "note": "Recurring job queue entry POSTs each committed outbox row with its SystemId as idempotency key, then deletes the row.",
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Return Receipt Line",
+        "event": "OnAfterCopyFieldsFromReturnReceiptLine",
+        "purpose": "Assign SalesLine.\"Inspection Result\" := ReturnReceiptLine.\"Inspection Result\" so the credit memo line carries the value recorded at receipt, not the return order line's current value.",
+        "guards": [
+          "Assign only; no Modify (the line is inserted after the event)",
+          "Do not patch the credit memo line in OnAfterInsertEvent"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/get-return-receipt-lines-copies-custom-fields-from-the-return-order-line.md"
+        ]
+      },
+      {
+        "publisher": "Bank Acc. Reconciliation Post",
+        "event": "OnAfterFinalizePost",
+        "purpose": "Insert one Treasury Notification Outbox row for the posted statement, from the reconciliation record the event passes.",
+        "guards": [
+          "Runs before the codeunit's Commit: no HttpClient call, no Commit, no slow work (they hold the posting's locks)",
+          "An error here rolls back the whole reconciliation posting; raise one only to deliberately stop posting",
+          "Do not read the reconciliation lines from the database; they are already deleted",
+          "No preview guard: FinalizePost exits before this event in preview",
+          "Exit when Treasury Integration Setup is missing or not Enabled",
+          "Restrict to the statement types the requester confirms (open question statement-types)"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/choose-the-after-posting-hook-per-posting-routine.md",
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      },
+      {
+        "publisher": "Privacy Notice",
+        "event": "OnRegisterPrivacyNotices",
+        "purpose": "Add the treasury integration's own stable notice ID, name and link to the temporary Privacy Notice record.",
+        "guards": [
+          "Never reuse a built-in notice ID such as Exchange"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-integration-in-privacy-notice-registrations.md",
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Classify Inspection Result as CustomerContent on Sales Line and on every mirror table (table extensions cannot inherit a table-level value); classify the outbox and setup tables explicitly.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Register the custom treasury privacy notice through OnRegisterPrivacyNotices; the worker checks GetPrivacyNoticeApprovalState with that ID (no UI) before sending, and the setup page lets the admin approve it with ConfirmPrivacyNoticeApproval outside a write transaction.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/register-integration-in-privacy-notice-registrations.md",
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Treasury Integration Setup singleton card: Enabled flag and endpoint URL; credential captured into IsolatedStorage (SetEncrypted where it fits) and carried as SecretText; prefer OAuth2 client credentials via the OAuth2 codeunit when the treasury system supports it.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/security/secrettext-for-credentials.md",
+          "microsoft/knowledge/security/prefer-oauth2-over-api-keys-for-external-http-calls.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "Create a recurring job queue entry for Treasury Notification Worker when the integration is enabled. Handler must be non-interactive and let failures propagate so the entry shows the error and retries apply.",
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship a permission set covering the new tables, pages and codeunits, and assign it to posting users and the job queue user.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "receive-return-carries-result",
+        "given": "A customer, an item and a sales return order line with an Inspection Result, built with the Library codeunits (LibrarySales, LibraryInventory).",
+        "when": "The return order is posted with Receive only.",
+        "then": "The Return Receipt Line has the same Inspection Result.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md"
+        ]
+      },
+      {
+        "id": "get-return-receipt-lines-uses-received-value",
+        "given": "A return order line received in two parts: first with Inspection Result A, then the field is changed to B on the return order line and the rest is received.",
+        "when": "A sales credit memo for the customer runs Get Return Receipt Lines for both receipt lines.",
+        "then": "Each credit memo line shows the result of its own receipt (A and B), not the return order line's current value.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/get-return-receipt-lines-copies-custom-fields-from-the-return-order-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "posted-cr-memo-carries-result",
+        "given": "A credit memo created with Get Return Receipt Lines whose lines carry Inspection Results.",
+        "when": "The credit memo is posted.",
+        "then": "Each Sales Cr.Memo Line carries the Inspection Result of its source line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "mirror-targets-carry-result",
+        "given": "A sales line with an Inspection Result on a document type that reaches shipment, invoice and archive (only if open question mirror-targets keeps them).",
+        "when": "The document is archived and posted.",
+        "then": "Sales Line Archive, Sales Shipment Line and Sales Invoice Line carry the value; the posted fields are not editable.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "bank-rec-post-creates-outbox-row",
+        "given": "Treasury Integration Setup enabled and a bank account reconciliation ready to post, built with Library codeunits.",
+        "when": "The bank reconciliation is posted.",
+        "then": "Exactly one Treasury Notification Outbox row exists with the bank account no., statement no., statement date and ending balance; no HTTP call was made during posting. Test uses AutoCommit (posting commits).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/choose-the-after-posting-hook-per-posting-routine.md",
+          "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md"
+        ]
+      },
+      {
+        "id": "bank-rec-disabled-no-outbox",
+        "given": "Treasury Integration Setup missing or Enabled = false.",
+        "when": "A bank reconciliation is posted.",
+        "then": "No outbox row is created and posting succeeds.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/choose-the-after-posting-hook-per-posting-routine.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "worker-sends-and-deletes",
+        "given": "A committed outbox row, approved privacy notice and valid endpoint (HTTP stubbed).",
+        "when": "Treasury Notification Worker runs.",
+        "then": "One POST is sent whose body contains the outbox row's SystemId as idempotency key and culture-independent date/amount values; the row is deleted afterwards.",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/web-services/format-exchanged-values-with-standard-format-9.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      },
+      {
+        "id": "worker-failure-propagates",
+        "given": "A committed outbox row and a treasury response that is a platform failure or a non-success HTTP status.",
+        "when": "Treasury Notification Worker runs.",
+        "then": "The run ends with an error (the job queue entry shows it), the body is not parsed as success, and the outbox row still exists for the retry.",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md"
+        ]
+      },
+      {
+        "id": "worker-blocks-without-consent-or-valid-url",
+        "given": "A committed outbox row with the privacy notice not approved, or an endpoint URL whose host does not match the expected host/pattern.",
+        "when": "Treasury Notification Worker runs.",
+        "then": "No request is sent, the run errors without UI, and the row remains.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+          "microsoft/knowledge/security/validate-user-configurable-urls.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Process map for the return field: Returns row (Get Return Receipt Lines) and cross-cutting rows (mirrored definitions, privacy, tests).",
+      "constraints": [
+        "Plan one row group per process the field touches and open every linked article for the chosen stages",
+        "Whether the field reaches stages the request does not name is a question for the requester, one question per group of stages",
+        "Do not fill other records with subscribers that find and modify them after posting"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md",
+      "used-for": "Outbound map for the treasury notification: where the call runs, retries, job queue handler, responses, credentials, consent, exchanged values.",
+      "constraints": [
+        "Never call the external service inside a write transaction; record an outbox row and send it from a recurring job queue entry",
+        "Give each outbox row a stable idempotency key; the external service must deduplicate",
+        "Who calls whom, how often and what the external service does with a repeated request are questions for the requester"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/get-return-receipt-lines-copies-custom-fields-from-the-return-order-line.md",
+      "used-for": "Hop from Return Receipt Line to the credit memo line and its subscriber; partial-receipt test.",
+      "constraints": [
+        "InsertInvLineFromRetRcptLine copies the open return order line, not the posted receipt line",
+        "When the credit memo must carry the received value, mirror the field on Return Receipt Line and assign it in OnAfterCopyFieldsFromReturnReceiptLine without Modify",
+        "Test a return order received in two parts and invoiced through Get Return Receipt Lines, changing the field between receipts",
+        "Get Posted Document Lines to Reverse and Copy Document take another path"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/choose-the-after-posting-hook-per-posting-routine.md",
+      "used-for": "Choice and guards of the bank reconciliation after-posting hook.",
+      "constraints": [
+        "OnAfterFinalizePost runs before the commit; an error there rolls back the whole posting",
+        "Keep slow work and external calls out because they hold the posting's locks",
+        "The reconciliation lines are already deleted; use the record the event passes",
+        "Not raised in preview, so no preview guard",
+        "Do not copy guards from sales or purchase after-posting subscribers by analogy"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the Sales Line field on Return Receipt Line, Sales Cr.Memo Line, Sales Shipment Line, Sales Invoice Line and Sales Line Archive.",
+      "constraints": [
+        "Same field number, name, type and length on the source and on every target table the plan needs, unless the plan states a document type never needs it",
+        "No subscriber is needed for TransferFields stages",
+        "Keep mirrored fields non-editable on posted tables"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-bank-reconciliation-line-fields-to-payment-postings.md",
+      "used-for": "Confirms Bank Acc. Reconciliation Post's commit order and that FinalizePost exits in preview.",
+      "constraints": [
+        "OnAfterFinalizePost runs before the codeunit's Commit(), so an error rolls back the reconciliation posting",
+        "Neither OnBeforeFinalizePost nor OnAfterFinalizePost runs in preview",
+        "Do not modify posted bank, customer or vendor ledger entries in OnAfterFinalizePost"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Posted credit memo line and archive stages of a Sales Line field; Copy Document flow-back decision.",
+      "constraints": [
+        "Plan one step per stage the field must reach",
+        "Posted lines and Sales Line Archive are filled by TransferFields from Sales Line",
+        "Decide whether a field mirrored on posted tables should flow back through Copy Document"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+      "used-for": "Basis for leaving the warehouse-receipt entry point open.",
+      "constraints": [
+        "Warehouse lines are built field by field; sales return orders build their warehouse lines in their own codeunits with their own events, to be confirmed per source type in the target version's symbols"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/copy-document-recalculate-lines-drops-custom-line-fields.md",
+      "used-for": "Basis for the open question on credit memos created by Copy Document or Get Posted Document Lines to Reverse.",
+      "constraints": [
+        "With Recalculate Lines (always for posted return receipts) custom line fields are not copied",
+        "To keep the field, copy it in OnAfterRecalculateSalesLine without Modify"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Mirrored field definitions.",
+      "constraints": [
+        "Exact same field number, data type and length on every table in the TransferFields cascade"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Classification of the new fields.",
+      "constraints": [
+        "Every Normal field in a table extension sets its own DataClassification matching the data it stores; never leave ToBeClassified"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+      "used-for": "Outbox pattern for the notification.",
+      "constraints": [
+        "Insert the outbox work item in the same transaction as the business change",
+        "Process committed outbox rows from a recurring job queue entry; perform HTTP before deleting the row",
+        "Do not use Commit() as a remedy"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+      "used-for": "Idempotency key for the treasury call.",
+      "constraints": [
+        "Use a stable request ID such as the outbox SystemId in every attempt; the external service must enforce uniqueness",
+        "Delete the outbox row only after the external call and local updates succeed; a Processed flag does not close the failure window"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+      "used-for": "Non-interactive worker.",
+      "constraints": [
+        "No Confirm, Page.Run(Modal), Report.Run(Modal), Hyperlink, upload or download in the job queue handler",
+        "Message cannot report the result"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+      "used-for": "Failure propagation from the worker.",
+      "constraints": [
+        "Let errors that invalidate the run propagate so the dispatcher records them and retries apply"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md",
+      "used-for": "Platform failure handling.",
+      "constraints": [
+        "When the Boolean result of Post is false, stop without reading status, headers or content"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+      "used-for": "HTTP status handling.",
+      "constraints": [
+        "Check IsSuccessStatusCode before treating the response body as success"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/prefer-oauth2-over-api-keys-for-external-http-calls.md",
+      "used-for": "Authentication choice.",
+      "constraints": [
+        "Use the OAuth2 codeunit when the partner supports OAuth; tokens and secrets as SecretText, persisted only in IsolatedStorage"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/secrets-isolated-storage.md",
+      "used-for": "Credential storage.",
+      "constraints": [
+        "Credentials in IsolatedStorage, never in a table field; prefer SetEncrypted when the value fits"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/secrettext-for-credentials.md",
+      "used-for": "Credential type.",
+      "constraints": [
+        "Carry credentials as SecretText end to end; never round-trip through Text"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/validate-user-configurable-urls.md",
+      "used-for": "Endpoint validation.",
+      "constraints": [
+        "Before HttpClient uses a URL from a table field, validate it with Uri.AreURIsHaveSameHost or Uri.IsValidURIPattern and error when it fails"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+      "used-for": "Consent before data leaves Business Central.",
+      "constraints": [
+        "Use the integration's own notice ID",
+        "Check GetPrivacyNoticeApprovalState in flows without UI; ConfirmPrivacyNoticeApproval only outside a write transaction",
+        "No path sends the request without approval"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/register-integration-in-privacy-notice-registrations.md",
+      "used-for": "Registering the privacy notice.",
+      "constraints": [
+        "Register a stable, extension-owned ID through OnRegisterPrivacyNotices or CreatePrivacyNotice; do not reuse built-in IDs"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/format-exchanged-values-with-standard-format-9.md",
+      "used-for": "Exchanged values in the treasury payload.",
+      "constraints": [
+        "Use typed JsonObject values or Format(Value, 0, 9) for dates and decimals sent externally"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+      "used-for": "Treasury Integration Setup table and card.",
+      "constraints": [
+        "Primary Key Code[10] as sole key, one blank row",
+        "Card page with InsertAllowed = false, DeleteAllowed = false and an open-time guard that inserts the row"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Build customers, items, documents and bank accounts with the Library codeunits, parents first, validating foreign keys"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md",
+      "used-for": "Transaction model of posting tests.",
+      "constraints": [
+        "Code under test that commits (posting, job queue handlers) needs AutoCommit, not explicit AutoRollback; pair suite-wide AutoCommit with a TestIsolation runner"
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "inspection-result-code-list",
+      "question": "Is the Inspection Result code chosen from a maintained list (a new code table with a TableRelation, and who maintains it), or free text? What length should it have?",
+      "affects": [
+        "sales-line-ext",
+        "return-receipt-line-ext",
+        "sales-cr-memo-line-ext",
+        "sales-shipment-line-ext",
+        "sales-invoice-line-ext",
+        "sales-line-archive-ext"
+      ]
+    },
+    {
+      "id": "warehouse-receipt-entry",
+      "question": "Do the return locations use warehouse receipts? If so, does the warehouse record the result on the Warehouse Receipt Line instead of the return order line? That path (return order line to warehouse receipt line to return receipt line) is not covered by BCQuality knowledge and its events must be confirmed in the target version's symbols.",
+      "affects": [
+        "return-order-subform-ext",
+        "sales-line-ext",
+        "return-receipt-line-ext"
+      ]
+    },
+    {
+      "id": "mirror-targets",
+      "question": "Besides the return receipt line and the credit memo, should the field reach the other Sales Line mirror targets (posted credit memo lines, sales shipment and invoice lines, Sales Line Archive)? The mirroring guidance designs all of them unless you state a document type never needs it.",
+      "affects": [
+        "sales-cr-memo-line-ext",
+        "sales-shipment-line-ext",
+        "sales-invoice-line-ext",
+        "sales-line-archive-ext",
+        "mirror-targets-carry-result",
+        "posted-cr-memo-carries-result"
+      ]
+    },
+    {
+      "id": "other-credit-memo-paths",
+      "question": "Must the result also appear on credit memo lines created by Copy Document from a posted return receipt or by Get Posted Document Lines to Reverse? Those paths recalculate lines and drop the field unless OnAfterRecalculateSalesLine copies it.",
+      "affects": [
+        "inspection-result-returns",
+        "cr-memo-subform-ext"
+      ]
+    },
+    {
+      "id": "purchase-returns",
+      "question": "Is the feature limited to sales returns, or should purchase return shipments carry an Inspection Result to purchase credit memos too (Get Return Shipment Lines)?",
+      "affects": [
+        "inspection-result-returns",
+        "sales-line-ext"
+      ]
+    },
+    {
+      "id": "cr-memo-field-editable",
+      "question": "May users change the Inspection Result on a credit memo line after Get Return Receipt Lines, or must it stay as recorded at receipt?",
+      "affects": [
+        "cr-memo-subform-ext",
+        "sales-line-ext"
+      ]
+    },
+    {
+      "id": "statement-types",
+      "question": "Which postings count as 'the statement was closed': only bank account reconciliations, or also payment reconciliation journals posted through the same codeunit?",
+      "affects": [
+        "bank-rec-subscriber"
+      ]
+    },
+    {
+      "id": "treasury-payload",
+      "question": "What must the treasury message contain (bank account, statement no., statement date, ending balance, others) and in which format?",
+      "affects": [
+        "treasury-outbox",
+        "treasury-worker"
+      ]
+    },
+    {
+      "id": "treasury-endpoint-auth",
+      "question": "What is the treasury system's endpoint and host, does it support OAuth2 client credentials, and does it deduplicate requests by an idempotency key? Is the setup per company or per tenant?",
+      "affects": [
+        "treasury-setup",
+        "treasury-worker",
+        "treasury-setup-card"
+      ]
+    },
+    {
+      "id": "notification-latency",
+      "question": "How soon after posting must the treasury system be notified? This sets the job queue recurrence.",
+      "affects": [
+        "treasury-worker"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Page extensions (return-order-subform-ext, posted-return-receipt-subform-ext, cr-memo-subform-ext, posted-cr-memo-subform-ext) rest on judgment: not covered by BCQuality knowledge.",
+    "The permission set (feature-permissions) and its assignment rest on judgment: not covered by BCQuality knowledge.",
+    "The user-entry hop onto the return order line rests on judgment: not covered by BCQuality knowledge.",
+    "Warehouse receipt entry point for sales return orders: no BCQuality article confirms the events that carry a field from a sales return line to a warehouse receipt line or back to the return receipt line; left as open question warehouse-receipt-entry.",
+    "Stubbing the treasury HTTP endpoint in tests is not covered by BCQuality knowledge.",
+    "bc-version, countries and application-area could not be determined (no repository); applicability assumed for all."
+  ]
+}

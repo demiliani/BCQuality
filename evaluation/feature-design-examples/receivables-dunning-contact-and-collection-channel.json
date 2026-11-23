@@ -1,0 +1,597 @@
+{
+  "skill": { "id": "al-feature-design", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "request": "Customers get a Dunning Contact Code that must default onto reminders and finance charge memos, both when a user creates them and when they are created by the Create Reminders and Create Finance Charge Memos batch jobs. Separately, cash receipt journal lines get a Collection Channel. It must appear on the customer ledger entry and on the detailed customer ledger entries, including application entries when a payment is applied later from Customer Ledger Entries.",
+    "business-process": "Receivables: reminder and finance charge memo creation (manual, Create Reminders, Create Finance Charge Memos) and cash receipt journal posting with later application of customer ledger entries.",
+    "candidates": 17,
+    "selected": 15
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": ["al"],
+    "countries": [],
+    "application-area": [],
+    "unknown": ["bc-version", "countries", "application-area"]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "customer-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Customer",
+        "purpose": "Holds the Dunning Contact Code that reminders and finance charge memos default from.",
+        "fields": [
+          { "name": "Dunning Contact Code", "type": "Code[20]", "note": "Type and length are provisional: they must equal the related field once the TableRelation target is settled (see open question dunning-contact-reference). DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "customer-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Customer Card",
+        "purpose": "Lets users maintain the Dunning Contact Code on the customer.",
+        "knowledge": []
+      },
+      {
+        "id": "reminder-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Reminder Header",
+        "purpose": "Receives the defaulted Dunning Contact Code. Use the same field number and type as the Customer field so that, if issued reminders are later brought into scope, Issued Reminder Header can mirror it through TransferFields without a subscriber.",
+        "fields": [
+          { "name": "Dunning Contact Code", "type": "Code[20]", "note": "Same type and length as Customer.\"Dunning Contact Code\"; same field number reserved for Issued Reminder Header. DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md",
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "fin-charge-memo-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Finance Charge Memo Header",
+        "purpose": "Receives the defaulted Dunning Contact Code on finance charge memos, which are a separate document with their own event. Same field number and type as on Reminder Header and Customer.",
+        "fields": [
+          { "name": "Dunning Contact Code", "type": "Code[20]", "note": "Same type and length as Customer.\"Dunning Contact Code\"; same field number reserved for Issued Fin. Charge Memo Header. DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md",
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "reminder-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Reminder",
+        "purpose": "Shows the defaulted Dunning Contact Code on the reminder document page.",
+        "knowledge": []
+      },
+      {
+        "id": "fin-charge-memo-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Finance Charge Memo",
+        "purpose": "Shows the defaulted Dunning Contact Code on the finance charge memo document page.",
+        "knowledge": []
+      },
+      {
+        "id": "dunning-contact-defaults",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Dunning Contact Defaults",
+        "purpose": "Two subscribers, one per header table, on OnValidateCustomerNoOnAfterAssignCustomerValues. One subscriber per header covers manual entry, Create Reminders (via Reminder-Make), reminder automation and Create Finance Charge Memos (via FinChrgMemo-Make).",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Holds the Collection Channel entered on cash receipt journal lines, and receives the applying entry's value on the journal line that application from Customer Ledger Entries creates.",
+        "fields": [
+          { "name": "Collection Channel", "type": "Code[20]", "note": "Type and length provisional until the reference is settled (open question collection-channel-reference); must match Cust. Ledger Entry and Detailed Cust. Ledg. Entry. DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "cash-receipt-journal-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Cash Receipt Journal",
+        "purpose": "Lets users enter the Collection Channel on cash receipt journal lines.",
+        "knowledge": []
+      },
+      {
+        "id": "cust-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Cust. Ledger Entry",
+        "purpose": "Stores the Collection Channel on the customer entry. Cust. Ledger Entry is a hot ledger, where a related table keyed by Entry No. is preferred; a stored field is chosen because the request requires the value to appear on the entry, which the knowledge allows when users must see it as a native list column and it is read on almost every access (confirm with open question cle-list-column). The field exists only on Cust. Ledger Entry, so the round trip through CV Ledger Entry Buffer during application leaves it untouched.",
+        "fields": [
+          { "name": "Collection Channel", "type": "Code[20]", "note": "Same type and length as Gen. Journal Line.\"Collection Channel\". DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "dtld-cust-ledg-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Detailed Cust. Ledg. Entry",
+        "purpose": "Stores the Collection Channel on each detailed row, taken from the customer entry the row belongs to, because the request requires it on detailed entries including application rows.",
+        "fields": [
+          { "name": "Collection Channel", "type": "Code[20]", "note": "Same type and length as Cust. Ledger Entry.\"Collection Channel\". DataClassification = CustomerContent." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "cust-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Customer Ledger Entries",
+        "purpose": "Shows the Collection Channel as a list column on customer ledger entries.",
+        "knowledge": [
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md"
+        ]
+      },
+      {
+        "id": "dtld-cust-ledg-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Detailed Cust. Ledg. Entries",
+        "purpose": "Shows the Collection Channel on detailed customer ledger entries.",
+        "knowledge": []
+      },
+      {
+        "id": "collection-channel-posting",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Collection Channel Posting",
+        "purpose": "Subscribers that carry the Collection Channel from the journal line to the customer entry, from each customer entry to its own detailed rows, and from the applying entry to the application journal line.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      },
+      {
+        "id": "feature-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Dunning Contact and Collection Channel",
+        "purpose": "Grants execute on the two codeunits and covers the pages the feature extends, so non-SUPER users can use the feature.",
+        "knowledge": [
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User on Customer Card",
+        "to": "Customer.\"Dunning Contact Code\"",
+        "mechanism": "user-entry",
+        "knowledge": []
+      },
+      {
+        "from": "Customer.\"Dunning Contact Code\"",
+        "to": "Reminder Header.\"Dunning Contact Code\" (manual creation on the Reminder page)",
+        "mechanism": "event-copy",
+        "note": "Validate(\"Customer No.\") raises OnValidateCustomerNoOnAfterAssignCustomerValues; the page saves the record.",
+        "knowledge": ["microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md"]
+      },
+      {
+        "from": "Customer.\"Dunning Contact Code\"",
+        "to": "Reminder Header.\"Dunning Contact Code\" (Create Reminders report 188 and reminder automation, via Reminder-Make 392)",
+        "mechanism": "event-copy",
+        "note": "Reminder-Make inserts an empty header, validates Customer No. (same event) and then calls Modify.",
+        "knowledge": ["microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md"]
+      },
+      {
+        "from": "Customer.\"Dunning Contact Code\"",
+        "to": "Finance Charge Memo Header.\"Dunning Contact Code\" (manual creation on the Finance Charge Memo page)",
+        "mechanism": "event-copy",
+        "knowledge": ["microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md"]
+      },
+      {
+        "from": "Customer.\"Dunning Contact Code\"",
+        "to": "Finance Charge Memo Header.\"Dunning Contact Code\" (Create Finance Charge Memos report 191, via FinChrgMemo-Make 394)",
+        "mechanism": "event-copy",
+        "note": "FinChrgMemo-Make also validates Customer No. in a checking mode on a header that is never inserted.",
+        "knowledge": ["microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md"]
+      },
+      {
+        "from": "User on Cash Receipt Journal",
+        "to": "Gen. Journal Line.\"Collection Channel\"",
+        "mechanism": "user-entry",
+        "knowledge": []
+      },
+      {
+        "from": "Gen. Journal Line.\"Collection Channel\"",
+        "to": "Cust. Ledger Entry.\"Collection Channel\" (payment entry)",
+        "mechanism": "event-copy",
+        "note": "Set in OnAfterCopyCustLedgerEntryFromGenJnlLine while the entry is initialized, before insert; no extra write.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "from": "Cust. Ledger Entry",
+        "to": "CV Ledger Entry Buffer and back to Cust. Ledger Entry (during application)",
+        "mechanism": "transferfields",
+        "note": "The field exists only on Cust. Ledger Entry; TransferFields leaves it untouched. No field is added to CV Ledger Entry Buffer.",
+        "knowledge": ["microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md"]
+      },
+      {
+        "from": "Cust. Ledger Entry.\"Collection Channel\" (the entry named by DtldCVLedgEntryBuffer.\"CV Ledger Entry No.\")",
+        "to": "Detailed Cust. Ledg. Entry.\"Collection Channel\" (initial and application rows posted from the cash receipt journal, including Applies-to ID applications)",
+        "mechanism": "event-copy",
+        "note": "Set in OnBeforeInsertDtldCustLedgEntry from the row's own customer entry, never from the posted GenJournalLine, so invoice application rows do not take the payment's value.",
+        "knowledge": ["microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md"]
+      },
+      {
+        "from": "Cust. Ledger Entry.\"Collection Channel\" (applying entry, application from Customer Ledger Entries)",
+        "to": "Gen. Journal Line.\"Collection Channel\" (journal line created with Init by CustEntry-Apply Posted Entries)",
+        "mechanism": "event-copy",
+        "note": "Set in OnAfterCopyGenJnlLineFromCustLedgEntry, so the application posting carries the applying entry's value.",
+        "knowledge": ["microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md"]
+      },
+      {
+        "from": "Cust. Ledger Entry.\"Collection Channel\" (each entry involved in a later application)",
+        "to": "Detailed Cust. Ledg. Entry.\"Collection Channel\" (application rows posted from Apply Customer Entries)",
+        "mechanism": "event-copy",
+        "note": "Same OnBeforeInsertDtldCustLedgEntry subscriber; the payment's application row gets the payment entry's value even though the application journal line was created with Init.",
+        "knowledge": ["microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md"]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Reminder Header\"",
+        "event": "OnValidateCustomerNoOnAfterAssignCustomerValues(var ReminderHeader; Customer)",
+        "purpose": "Assign ReminderHeader.\"Dunning Contact Code\" := Customer.\"Dunning Contact Code\". Covers manual creation, Create Reminders and reminder automation.",
+        "guards": [
+          "Assign the value from the Customer parameter and do nothing else.",
+          "Do not call Modify; the page or Reminder-Make saves the record afterwards."
+        ],
+        "knowledge": ["microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md"]
+      },
+      {
+        "publisher": "Table \"Finance Charge Memo Header\"",
+        "event": "OnValidateCustomerNoOnAfterAssignCustomerValues(var FinanceChargeMemoHeader; Customer)",
+        "purpose": "Assign FinanceChargeMemoHeader.\"Dunning Contact Code\" := Customer.\"Dunning Contact Code\". Covers manual creation and Create Finance Charge Memos.",
+        "guards": [
+          "Assign the value from the Customer parameter and do nothing else.",
+          "Do not call Modify: in FinChrgMemo-Make's checking mode the header is never inserted, so Modify fails; in the normal flow the make codeunit modifies the record right after."
+        ],
+        "knowledge": ["microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md"]
+      },
+      {
+        "publisher": "Table \"Cust. Ledger Entry\"",
+        "event": "OnAfterCopyCustLedgerEntryFromGenJnlLine(var CustLedgerEntry; GenJournalLine)",
+        "purpose": "Copy GenJournalLine.\"Collection Channel\" to the customer entry before it is inserted.",
+        "guards": [
+          "Assign only; do not find and Modify the posted entry afterwards."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Gen. Jnl.-Post Line\"",
+        "event": "OnBeforeInsertDtldCustLedgEntry(var DtldCustLedgEntry; GenJournalLine; DtldCVLedgEntryBuffer; GLRegister)",
+        "purpose": "Set DtldCustLedgEntry.\"Collection Channel\" from the Cust. Ledger Entry named by DtldCVLedgEntryBuffer.\"CV Ledger Entry No.\" (already inserted when the event runs).",
+        "guards": [
+          "Read the value from the row's own customer entry, never from GenJournalLine: otherwise invoice application rows get the payment's value and rows from Apply Customer Entries get blank.",
+          "Load only the Collection Channel field (SetLoadFields) before the Get, and use if Get(...) so a missing entry does not raise an error.",
+          "Do not write the field on closed invoice entries with Modify after posting."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Gen. Journal Line\"",
+        "event": "OnAfterCopyGenJnlLineFromCustLedgEntry(CustLedgerEntry; var GenJournalLine)",
+        "purpose": "Give the application journal line created by CustEntry-Apply Posted Entries the applying entry's Collection Channel.",
+        "guards": [
+          "Assign only; application itself stays in the standard application codeunits."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/finance/apply-ledger-entries-through-application-codeunits.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on every new field in every tableextension (a tableextension has no table-level value to inherit); leave none as ToBeClassified or SystemMetadata.",
+        "knowledge": ["microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship a permission set granting execute on Dunning Contact Defaults and Collection Channel Posting and covering the extended pages; verify manual reminder creation, both batch jobs, cash receipt posting and application as a user without SUPER. Grant the minimum, no wildcards.",
+        "knowledge": ["microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md"]
+      },
+      {
+        "concern": "upgrade",
+        "step": "No upgrade code: all fields are new schema with no released baseline. Existing reminders, finance charge memos and ledger entries keep a blank value; a back-fill is not part of this design.",
+        "knowledge": ["microsoft/knowledge/upgrade/unreleased-schema-change-needs-no-upgrade-path.md"]
+      }
+    ],
+    "tests": [
+      {
+        "id": "reminder-manual-defaults-dunning-contact",
+        "given": "A customer created with library codeunits, with a reminder terms code and a Dunning Contact Code.",
+        "when": "A user creates a reminder on the Reminder page and enters the customer number.",
+        "then": "The Reminder Header's Dunning Contact Code equals the customer's.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "create-reminders-defaults-dunning-contact",
+        "given": "A customer with a Dunning Contact Code, reminder terms and levels, and an overdue posted sales invoice (full posting-group chain set up).",
+        "when": "Create Reminders runs for that customer.",
+        "then": "The created Reminder Header has the customer's Dunning Contact Code.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "fin-charge-memo-manual-defaults-dunning-contact",
+        "given": "A customer with finance charge terms and a Dunning Contact Code.",
+        "when": "A user creates a finance charge memo on the Finance Charge Memo page and enters the customer number.",
+        "then": "The Finance Charge Memo Header's Dunning Contact Code equals the customer's.",
+        "knowledge": ["microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md"]
+      },
+      {
+        "id": "create-fin-charge-memos-defaults-dunning-contact",
+        "given": "A customer with finance charge terms, a Dunning Contact Code and an overdue posted sales invoice (full posting-group chain set up).",
+        "when": "Create Finance Charge Memos runs for that customer.",
+        "then": "The created Finance Charge Memo Header has the customer's Dunning Contact Code, and the run raises no error from the checking mode.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md"
+        ]
+      },
+      {
+        "id": "cash-receipt-channel-reaches-customer-entry",
+        "given": "A cash receipt journal line for a customer with a Collection Channel and no application.",
+        "when": "The journal line is posted.",
+        "then": "The payment's Cust. Ledger Entry and its initial Detailed Cust. Ledg. Entry carry the Collection Channel.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "applies-to-id-application-rows-use-own-entry",
+        "given": "A posted sales invoice with a blank Collection Channel and a cash receipt line with a Collection Channel that applies to it through Applies-to ID.",
+        "when": "The cash receipt line is posted.",
+        "then": "Application rows of the payment entry carry the payment's Collection Channel, and application rows of the invoice entry carry the invoice entry's own (blank) value, not the payment's.",
+        "knowledge": ["microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md"]
+      },
+      {
+        "id": "later-application-carries-channel",
+        "given": "A posted unapplied payment with a Collection Channel and an open posted invoice for the same customer.",
+        "when": "The payment is applied to the invoice from Customer Ledger Entries through the standard application codeunit (CustEntry-Apply Posted Entries).",
+        "then": "The payment entry's application Detailed Cust. Ledg. Entry carries the Collection Channel (not blank), the invoice entry's application row carries the invoice entry's own value, and the payment Cust. Ledger Entry keeps its Collection Channel after the application.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+          "microsoft/knowledge/finance/apply-ledger-entries-through-application-codeunits.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.md",
+      "used-for": "Defaulting Dunning Contact Code onto reminder and finance charge memo headers for manual and batch creation.",
+      "constraints": [
+        "Subscribe to OnValidateCustomerNoOnAfterAssignCustomerValues on each header table in scope; one subscriber covers manual entry, Create Reminders, reminder automation and Create Finance Charge Memos.",
+        "Assign the value from the Customer parameter and do nothing else; do not call Modify in the event (fails in FinChrgMemo-Make checking mode).",
+        "Do not rely only on OnBeforeReminderHeaderInsert on Reminder-Make; manually created reminders would not get the value.",
+        "A design that defaults on reminders must add the finance charge memo subscriber too when both are in scope.",
+        "Sales header events such as OnAfterCopySellToCustomerAddressFieldsFromCustomer do not run for these documents."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.good.al",
+        "microsoft/knowledge/finance-extensions/default-customer-fields-on-reminder-and-finance-charge-headers.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md",
+      "used-for": "Carrying Collection Channel from cash receipt journal lines to customer and detailed customer ledger entries, including later applications.",
+      "constraints": [
+        "Store the field on Cust. Ledger Entry and set it in OnAfterCopyCustLedgerEntryFromGenJnlLine.",
+        "For detailed entries, set it in OnBeforeInsertDtldCustLedgEntry from the customer entry named by DtldCVLedgEntryBuffer.\"CV Ledger Entry No.\", not from GenJournalLine.",
+        "For application postings, set it on the new journal line in OnAfterCopyGenJnlLineFromCustLedgEntry.",
+        "Do not write the field on closed invoice entries with Modify after posting.",
+        "Change application only through the application codeunits."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.good.al",
+        "microsoft/knowledge/finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+      "used-for": "Choosing field numbers on the reminder and finance charge memo headers so issued documents can mirror the value later.",
+      "constraints": [
+        "To show a custom field on issued documents, give it the same field number and type on the source and issued tables; no subscriber is needed.",
+        "Do not fill the issued header in OnAfterIssueReminder with Modify."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+      "used-for": "The journal-line to customer-entry hop and the choice between a stored field and a related table.",
+      "constraints": [
+        "Copy the value in OnAfterCopyCustLedgerEntryFromGenJnlLine while the entry is initialized, before insert, with no extra write.",
+        "Store the field on the ledger entry only when users must see or filter it as a native list column, or it is read on almost every access.",
+        "Do not find the customer entry after posting and Modify it."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/apply-ledger-entries-through-application-codeunits.md",
+      "used-for": "Keeping application in the standard workflow and exercising it in tests.",
+      "constraints": [
+        "Use CustEntry-Apply Posted Entries and the supported application workflow; do not persist Open, Closed by Entry No. or detailed application amounts directly."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Guard against writing the Collection Channel onto posted entries after posting.",
+      "constraints": [
+        "Do not persist changes to posted customer or detailed ledger entries outside a supported workflow; a subscriber is not exempt merely because it runs inside a supported workflow."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Deciding between a stored field and a related table on Cust. Ledger Entry and Detailed Cust. Ledg. Entry.",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by the ledger entry number.",
+        "Use a tableextension stored field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing Dunning Contact Code and Collection Channel once their TableRelation targets are known.",
+      "constraints": [
+        "Read the type and length of the related field before adding a TableRelation.",
+        "For an unconditional relation, use the same type and exact length as the related field."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Classifying every new field in the table extensions.",
+      "constraints": [
+        "Every Normal field a tableextension adds must set its own DataClassification.",
+        "Do not leave fields ToBeClassified or classify customer data as SystemMetadata."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+      "used-for": "The database read in the OnBeforeInsertDtldCustLedgEntry subscriber.",
+      "constraints": [
+        "Keep subscriber code lightweight; apply cheap in-memory guards before any database call.",
+        "Issue the database call with SetLoadFields for only the columns the body reads."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+      "used-for": "The permission set step.",
+      "constraints": [
+        "Provide permission sets that let users complete normal usage without SUPER, covering every page and codeunit the feature uses.",
+        "Grant the minimum required operations; do not use wildcards."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/unreleased-schema-change-needs-no-upgrade-path.md",
+      "used-for": "Deciding that no upgrade code is needed for the new fields.",
+      "constraints": [
+        "Schema that has no released baseline needs no upgrade or migration path."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Building customer, invoice, journal and reminder fixtures.",
+      "constraints": [
+        "Use library codeunits (LibrarySales, LibraryERM, LibraryRandom) instead of hand-rolled Init/Insert; create parents before dependents and Validate foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+      "used-for": "Test data rules for all scenarios.",
+      "constraints": [
+        "Create the records the test owns instead of assuming existing ones; fill every mandatory field.",
+        "Keep scenario-defining values such as amounts and dates explicit."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+      "used-for": "Batch job and posting test setup.",
+      "constraints": [
+        "For posting and batch tests, set up the full posting-group chain and the setup records the path reads, with explicit dates when the path is date-sensitive."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "dunning-contact-reference",
+      "question": "What does Dunning Contact Code refer to: a Contact No., a contact person of the customer, or a new code table? This sets its TableRelation, type and length, and whether a new table, page and permissions are needed.",
+      "affects": ["customer-ext", "reminder-header-ext", "fin-charge-memo-header-ext", "customer-card-ext", "feature-permissionset"]
+    },
+    {
+      "id": "collection-channel-reference",
+      "question": "What are the allowed Collection Channel values: a new setup/code table, an enum, or free code? This sets type, length and TableRelation on all three tables and whether a new table and page are needed.",
+      "affects": ["gen-journal-line-ext", "cust-ledger-entry-ext", "dtld-cust-ledg-entry-ext", "feature-permissionset"]
+    },
+    {
+      "id": "issued-documents-in-scope",
+      "question": "Must the Dunning Contact Code also appear on issued reminders and issued finance charge memos (and their customer and G/L entries)? Only the field numbers are reserved now; issued-table extensions are not designed.",
+      "affects": ["reminder-header-ext", "fin-charge-memo-header-ext"]
+    },
+    {
+      "id": "invoice-side-application-rows",
+      "question": "Application rows on the invoice's customer entry take the invoice entry's own Collection Channel (usually blank), as the knowledge prescribes. Is that what users expect, or must they show the payment's channel?",
+      "affects": ["collection-channel-posting", "dtld-cust-ledg-entry-ext"]
+    },
+    {
+      "id": "cle-list-column",
+      "question": "Must users see and filter Collection Channel as a column on Customer Ledger Entries and Detailed Cust. Ledg. Entries? If not, a related table keyed by Entry No. is preferred over stored fields on these hot ledgers.",
+      "affects": ["cust-ledger-entry-ext", "dtld-cust-ledg-entry-ext", "cust-ledger-entries-page-ext", "dtld-cust-ledg-entries-page-ext"]
+    },
+    {
+      "id": "gl-entries-and-unapply",
+      "question": "Should the Collection Channel also reach G/L entries of payment and application postings, and what is expected on reversing detailed rows when an application is unapplied?",
+      "affects": ["collection-channel-posting", "gen-journal-line-ext"]
+    },
+    {
+      "id": "channel-mandatory-and-scope",
+      "question": "Is Collection Channel mandatory on cash receipt lines, and does it apply only to lines with Account Type Customer?",
+      "affects": ["gen-journal-line-ext", "cash-receipt-journal-ext"]
+    },
+    {
+      "id": "header-field-editable",
+      "question": "May users change the defaulted Dunning Contact Code on a reminder or finance charge memo before issuing, or is it read-only?",
+      "affects": ["reminder-page-ext", "fin-charge-memo-page-ext"]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown (no repository or app.json); all selected articles declare [all]/w1/all, so applicability is not affected.",
+    "Page extensions customer-card-ext, reminder-page-ext, fin-charge-memo-page-ext, cash-receipt-journal-ext and dtld-cust-ledg-entries-page-ext and the user-entry hops rest on agent judgment; no BCQuality article covers them. Target page names (Customer Card, Reminder, Finance Charge Memo, Cash Receipt Journal, Detailed Cust. Ledg. Entries) are not confirmed by an opened article or repository symbols.",
+    "Object and field IDs are not assigned; the app's ID range is unknown without app.json."
+  ]
+}

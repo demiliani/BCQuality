@@ -21,6 +21,8 @@ When line-specific dimensions must survive a header change, use the appropriate 
 
 See sample: [`write-dimensions-as-dimension-set-entries.good.al`](write-dimensions-as-dimension-set-entries.good.al).
 
+To design a feature that carries its own data through this process, see [plan the dimension sources of a custom document](../feature-design/plan-the-dimension-sources-of-a-custom-document.md).
+
 ## Anti Pattern
 
 A routine intended to copy **all** posting dimensions copies only global/shortcut codes, or assigns a set ID without synchronizing the destination's stored projections. Require evidence of a complete-transfer intent and inspect surrounding validation; an explicit change to one selected dimension or a read-only filter is not this defect.

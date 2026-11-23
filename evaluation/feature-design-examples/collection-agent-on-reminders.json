@@ -1,0 +1,749 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "partial",
+  "outcome-reason": "The copy of the agent from Customer to Reminder Header and Finance Charge Memo Header needs an event that no opened BCQuality article confirms and no repository was supplied to check symbols; the issued-document, journal-line and customer-ledger hops are fully designed.",
+  "summary": {
+    "request": "Customers are assigned a Collection Agent. Reminders and finance charge memos must show the agent, the issued documents must keep it, and the customer ledger entries created when they are issued must carry it so we can track each agent's collections.",
+    "business-process": "Reminder and finance charge memo issuing (Reminder-Issue, FinChrgMemo-Issue) and the customer ledger posting it triggers",
+    "candidates": 21,
+    "selected": 17
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "collection-agent-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Collection Agent",
+        "purpose": "Supplemental table listing the collection agents that can be assigned to customers. Primary key Code (Code[10]) and a Name field; plural list page set as LookupPageID. Table-level DataClassification covers its fields; the Name field overrides it if it identifies a person (see open question).",
+        "fields": [
+          {
+            "name": "Code",
+            "type": "Code[10]",
+            "note": "Primary key, per the Supplemental table-type convention."
+          },
+          {
+            "name": "Name",
+            "type": "Text[100]",
+            "note": "Length is agent judgment; classification depends on whether agents are named persons."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "collection-agents-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Collection Agents",
+        "purpose": "List page for the Collection Agent table, named after the table it shows and used as its LookupPageID.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "customer-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Customer",
+        "purpose": "Holds the customer's assigned collection agent.",
+        "fields": [
+          {
+            "name": "Collection Agent Code",
+            "type": "Code[10]",
+            "note": "TableRelation = \"Collection Agent\".Code; exact type and length of the related key. Explicit DataClassification = CustomerContent, because a tableextension inherits no table-level value."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "customer-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Customer Card",
+        "purpose": "Lets users assign the collection agent on the customer.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "reminder-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Reminder Header",
+        "purpose": "Carries the agent on the reminder so it can be shown and transferred to the issued reminder.",
+        "fields": [
+          {
+            "name": "Collection Agent Code",
+            "type": "Code[10]",
+            "note": "Field 50100, Code[10], same number and type as on every other table in the cascade; explicit DataClassification = CustomerContent. TableRelation to Collection Agent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "issued-reminder-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Issued Reminder Header",
+        "purpose": "Keeps the agent on the issued reminder; filled by the standard TransferFields from Reminder Header, so no subscriber writes it.",
+        "fields": [
+          {
+            "name": "Collection Agent Code",
+            "type": "Code[10]",
+            "note": "Field 50100, Code[10], same number and type as on every other table in the cascade; explicit DataClassification = CustomerContent. Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "fin-charge-memo-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Finance Charge Memo Header",
+        "purpose": "Carries the agent on the finance charge memo so it can be shown and transferred to the issued memo.",
+        "fields": [
+          {
+            "name": "Collection Agent Code",
+            "type": "Code[10]",
+            "note": "Field 50100, Code[10], same number and type as on every other table in the cascade; explicit DataClassification = CustomerContent. TableRelation to Collection Agent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "issued-fin-charge-memo-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Issued Fin. Charge Memo Header",
+        "purpose": "Keeps the agent on the issued finance charge memo; filled by the standard TransferFields from Finance Charge Memo Header.",
+        "fields": [
+          {
+            "name": "Collection Agent Code",
+            "type": "Code[10]",
+            "note": "Field 50100, Code[10], same number and type as on every other table in the cascade; explicit DataClassification = CustomerContent. Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Carries the agent on the temporary journal lines that Reminder-Issue and FinChrgMemo-Issue build, so the customer ledger entry can receive it during posting.",
+        "fields": [
+          {
+            "name": "Collection Agent Code",
+            "type": "Code[10]",
+            "note": "Explicit DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "cust-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Cust. Ledger Entry",
+        "purpose": "Stores the agent on customer ledger entries created by issuing. Chosen as a stored field rather than a related table because the request is to track each agent's collections, which implies filtering the entries list by agent; the hot-ledger article allows a stored field only when the value must appear as a native list column (confirm in open questions).",
+        "fields": [
+          {
+            "name": "Collection Agent Code",
+            "type": "Code[10]",
+            "note": "Explicit DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "reminder-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Reminder",
+        "purpose": "Shows the agent on the reminder.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "fin-charge-memo-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Finance Charge Memo",
+        "purpose": "Shows the agent on the finance charge memo.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "issued-reminder-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Issued Reminder",
+        "purpose": "Shows the kept agent on the issued reminder.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "issued-fin-charge-memo-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Issued Finance Charge Memo",
+        "purpose": "Shows the kept agent on the issued finance charge memo.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "customer-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Customer Ledger Entries",
+        "purpose": "Shows the agent as a list column so entries can be filtered per agent.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md"
+        ]
+      },
+      {
+        "id": "collection-agent-issuing-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Collection Agent Issuing",
+        "purpose": "Event subscribers that copy the agent from the reminder or finance charge memo header to the issuing journal lines, and from the journal line to the customer ledger entry.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "id": "collection-agent-permissions",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Collection Agent - Objects",
+        "purpose": "Non-assignable building block granting the new table, page and codeunit explicitly, included through IncludedPermissionSets in an assignable role-shaped set; no wildcard grants.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "id": "collection-agent-tests",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Collection Agent Tests",
+        "purpose": "Test codeunit covering every data-flow hop by issuing documents and reading the agent back.",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Collection Agent",
+        "to": "Customer.\"Collection Agent Code\"",
+        "mechanism": "user-entry",
+        "note": "User assigns the agent on the Customer Card; the TableRelation validates it.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "from": "Customer.\"Collection Agent Code\"",
+        "to": "Reminder Header.\"Collection Agent Code\"",
+        "mechanism": "other",
+        "note": "UNRESOLVED: no opened article or repository symbol confirms an event raised when Reminder Header copies customer data (manual entry or Create Reminders). The copy point must be confirmed in BaseApp symbols before implementation.",
+        "knowledge": []
+      },
+      {
+        "from": "Customer.\"Collection Agent Code\"",
+        "to": "Finance Charge Memo Header.\"Collection Agent Code\"",
+        "mechanism": "other",
+        "note": "UNRESOLVED: no opened article or repository symbol confirms an event raised when Finance Charge Memo Header copies customer data. The copy point must be confirmed in BaseApp symbols before implementation.",
+        "knowledge": []
+      },
+      {
+        "from": "Reminder Header",
+        "to": "Issued Reminder Header",
+        "mechanism": "transferfields",
+        "note": "Reminder-Issue (393) fills the issued header with TransferFields; same field number and type is enough, no subscriber and no Modify in OnAfterIssueReminder.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Finance Charge Memo Header",
+        "to": "Issued Fin. Charge Memo Header",
+        "mechanism": "transferfields",
+        "note": "FinChrgMemo-Issue (395) fills the issued header with TransferFields.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Reminder Header",
+        "to": "Gen. Journal Line",
+        "mechanism": "event-copy",
+        "note": "Reminder-Issue OnAfterInitGenJnlLine; the sales CopyFromSalesHeader event never fires for reminder entries.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md"
+        ]
+      },
+      {
+        "from": "Finance Charge Memo Header",
+        "to": "Gen. Journal Line",
+        "mechanism": "event-copy",
+        "note": "FinChrgMemo-Issue OnAfterInitGenJnlLine.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line",
+        "to": "Cust. Ledger Entry",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyCustLedgerEntryFromGenJnlLine, while the entry is initialized and before it is inserted; never by modifying posted entries afterwards.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Reminder-Issue\" (393)",
+        "event": "OnAfterInitGenJnlLine(var GenJournalLine; ReminderHeader; var SrcCode; AccNo)",
+        "purpose": "Copy the agent from the reminder header to each journal line built for interest, fees and the customer total.",
+        "guards": [
+          "Plain assignment only; declare only the parameters used.",
+          "Runs inside the issuing transaction: no external calls, no Modify of other records."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"FinChrgMemo-Issue\" (395)",
+        "event": "OnAfterInitGenJnlLine(var GenJnlLine; FinChargeMemoHeader; var SrcCode)",
+        "purpose": "Copy the agent from the finance charge memo header to each journal line it builds.",
+        "guards": [
+          "Parameter names differ from the Reminder-Issue event (GenJnlLine, FinChargeMemoHeader); do not copy the reminder subscriber signature.",
+          "Runs inside the issuing transaction: no external calls, no Modify of other records."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Cust. Ledger Entry\"",
+        "event": "OnAfterCopyCustLedgerEntryFromGenJnlLine(var CustLedgerEntry; GenJournalLine)",
+        "purpose": "Copy the agent from the journal line to the customer ledger entry before it is inserted.",
+        "guards": [
+          "Assign during initialization; never find and Modify posted customer entries after issuing."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "permissions",
+        "step": "Ship a non-assignable building-block permission set listing tabledata Collection Agent (RIMD), table/page/codeunit execute entries for the new objects, and include it through IncludedPermissionSets in an assignable set; enumerate each object, no wildcards.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Classify the Collection Agent table at table level and override the Name field if it identifies a person; give every field added by a tableextension an explicit DataClassification (CustomerContent); leave no ToBeClassified.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Tooltips: on runtime 13.0 (BC24) or later define the tooltip on the table fields and let bound page fields inherit it; on earlier targets add page-level tooltips on every page extension. Applies conditionally because the target bc-version is unknown.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "customer-agent-defaults-to-reminder",
+        "given": "A customer with a Collection Agent, created with the test Library codeunits",
+        "when": "A reminder is created for the customer",
+        "then": "Reminder Header shows the customer's Collection Agent Code (depends on the unresolved copy point)",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "customer-agent-defaults-to-fin-charge-memo",
+        "given": "A customer with a Collection Agent",
+        "when": "A finance charge memo is created for the customer",
+        "then": "Finance Charge Memo Header shows the customer's Collection Agent Code (depends on the unresolved copy point)",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "issued-reminder-keeps-agent",
+        "given": "A reminder with a Collection Agent Code",
+        "when": "The reminder is issued",
+        "then": "Issued Reminder Header has the same Collection Agent Code",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "issued-fin-charge-memo-keeps-agent",
+        "given": "A finance charge memo with a Collection Agent Code",
+        "when": "The memo is issued",
+        "then": "Issued Fin. Charge Memo Header has the same Collection Agent Code",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "reminder-cust-ledger-entries-carry-agent",
+        "given": "A reminder with a Collection Agent Code and an additional fee or interest that posts entries",
+        "when": "The reminder is issued",
+        "then": "Every Cust. Ledger Entry created for the issued reminder carries the Collection Agent Code",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "fin-charge-memo-cust-ledger-entries-carry-agent",
+        "given": "A finance charge memo with a Collection Agent Code and amounts that post entries",
+        "when": "The memo is issued",
+        "then": "Every Cust. Ledger Entry created for the issued memo carries the Collection Agent Code",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "issuing-subscribers-do-not-modify-posted-entries",
+        "given": "A reminder with a Collection Agent Code",
+        "when": "The reminder is issued",
+        "then": "The agent is present on the customer ledger entry as inserted by posting, with no subscriber on OnAfterIssueReminder modifying the issued header or the entries",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.md",
+      "used-for": "Issued-document and ledger-entry hops for reminders and finance charge memos, and the issuing subscribers.",
+      "constraints": [
+        "Issued headers are filled by TransferFields: give the field the same number and type on source and issued tables; no subscriber is needed.",
+        "Carry the value to customer and G/L entries by adding it to Gen. Journal Line and setting it in each issuing codeunit's own OnAfterInitGenJnlLine; the sales OnAfterCopyGenJnlLineFromSalesHeader never fires for reminder entries.",
+        "OnAfterIssueReminder and OnAfterIssueFinChargeMemo run inside the issuing transaction; an error there undoes the issued document, so keep external calls out.",
+        "Do not fill the issued header in OnAfterIssueReminder with Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.good.al",
+        "microsoft/knowledge/finance-extensions/carry-reminder-and-finance-charge-fields-when-issuing.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.md",
+      "used-for": "Customer-entry hop from Gen. Journal Line to Cust. Ledger Entry.",
+      "constraints": [
+        "Add the field to Gen. Journal Line and Cust. Ledger Entry and copy it in OnAfterCopyCustLedgerEntryFromGenJnlLine while the entry is initialized, before insert.",
+        "Store the field on the ledger entry only when users must see or filter it as a native list column, or it is read on almost every access.",
+        "Do not find and Modify the customer entry after posting."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.good.al",
+        "microsoft/knowledge/sales-purchase/carry-sales-fields-to-customer-ledger-through-the-journal-line.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Mirroring the agent field across the TransferFields cascade to the issued headers.",
+      "constraints": [
+        "Define the mirrored field with the exact same field number, data type and length on every table in the cascade."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choosing a stored field on Cust. Ledger Entry instead of a related table.",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by Entry No.",
+        "Use a tableextension stored field on a hot ledger only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Guard that ledger entries receive the agent during posting, not by later row edits.",
+      "constraints": [
+        "Do not change posted financial entries in place outside the supported posting and correction workflows."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Decisions for the new Collection Agent entity: table type, privacy, pages, permissions and tests.",
+      "constraints": [
+        "Plan table type, numbering, setup, data rules, privacy, pages, permissions, install/upgrade and tests before building.",
+        "A decision the request does not settle is a question for the requester, not a default to assume."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Collection Agent as a Supplemental table.",
+      "constraints": [
+        "Supplemental tables use a Code[10] primary key named Code and one plural List page set as LookupPageID."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing every Collection Agent Code field that relates to the Collection Agent table.",
+      "constraints": [
+        "A field with an unconditional TableRelation must have the exact type and length of the related field."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Classification of the agent fields and the agent name.",
+      "constraints": [
+        "Set DataClassification to match the data actually stored; personal identifiers are EndUserIdentifiableInformation or EndUserPseudonymousIdentifiers; never SystemMetadata for customer or personal data."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Table-level classification on the new table and explicit field-level classification on every tableextension field.",
+      "constraints": [
+        "A tableextension inherits no table-level DataClassification; every Normal field it adds must classify itself."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of the classification.",
+      "constraints": [
+        "No field may ship with ToBeClassified."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Permission set structure.",
+      "constraints": [
+        "Use non-assignable building blocks composed into assignable role-shaped sets through IncludedPermissionSets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Permission set entries.",
+      "constraints": [
+        "Enumerate each tabledata and table entry explicitly; no wildcard grants; grant only the letters required."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips on the new fields shown on pages; applies conditionally on target runtime (table-field tooltips from BC24/runtime 13.0).",
+      "constraints": [
+        "On runtime 13.0 or later define the tooltip on the table field and let bound page fields inherit it; before that, add page-level tooltips.",
+        "Tooltip text must say what the value is used for, not repeat the caption."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/page-name-must-match-source-table.md",
+      "used-for": "Naming the new list page.",
+      "constraints": [
+        "A page name must describe the table it shows."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for customers, reminders and finance charge memos.",
+      "constraints": [
+        "Build fixtures with the test Library codeunits, top-down, validating foreign-key fields; no hand-rolled Init/Insert."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Test structure.",
+      "constraints": [
+        "Tag the test codeunit with [FEATURE] and each test with [SCENARIO], [GIVEN], [WHEN], [THEN]."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "agent-source-table",
+      "question": "Is the Collection Agent a new list of agents, or should the field reuse an existing table such as Salesperson/Purchaser? Reusing an existing table removes the new table, page and permissions and changes every field's type and length to match its key.",
+      "affects": [
+        "collection-agent-table",
+        "collection-agents-page",
+        "customer-ext",
+        "reminder-header-ext",
+        "fin-charge-memo-header-ext",
+        "issued-reminder-header-ext",
+        "issued-fin-charge-memo-header-ext",
+        "gen-journal-line-ext",
+        "cust-ledger-entry-ext",
+        "collection-agent-permissions"
+      ]
+    },
+    {
+      "id": "agent-name-classification",
+      "question": "Are collection agents named persons (employees or external collectors)? If so, the agent name is personal data and needs EndUserIdentifiableInformation rather than CustomerContent.",
+      "affects": [
+        "collection-agent-table"
+      ]
+    },
+    {
+      "id": "agent-editable-on-document",
+      "question": "May users change the agent on an open reminder or finance charge memo, or must it always equal the customer's agent? What happens to open documents when the customer's agent changes?",
+      "affects": [
+        "reminder-header-ext",
+        "fin-charge-memo-header-ext",
+        "reminder-page-ext",
+        "fin-charge-memo-page-ext"
+      ]
+    },
+    {
+      "id": "show-on-printed-documents",
+      "question": "Does 'show the agent' include the printed or emailed reminder and finance charge memo reports, or only the pages? Printed output would need report extensions and layout selection, which are not designed.",
+      "affects": [
+        "reminder-page-ext",
+        "fin-charge-memo-page-ext",
+        "issued-reminder-page-ext",
+        "issued-fin-charge-memo-page-ext"
+      ]
+    },
+    {
+      "id": "stored-ledger-field-confirmed",
+      "question": "Must users filter or see the agent as a column on Customer Ledger Entries? The design stores the field on Cust. Ledger Entry for that reason; if not, a related table keyed by Entry No. is preferred.",
+      "affects": [
+        "cust-ledger-entry-ext",
+        "customer-ledger-entries-page-ext"
+      ]
+    },
+    {
+      "id": "gl-entries",
+      "question": "Should G/L entries created by issuing also carry the agent? Not designed; the journal-line field would allow it.",
+      "affects": [
+        "gen-journal-line-ext"
+      ]
+    },
+    {
+      "id": "other-customer-entries",
+      "question": "Do 'each agent's collections' also include payments and sales invoices for the customer? Only entries created by issuing reminders and finance charge memos are designed; payments and sales postings would need their own hops.",
+      "affects": [
+        "cust-ledger-entry-ext",
+        "collection-agent-issuing-codeunit"
+      ]
+    },
+    {
+      "id": "existing-data",
+      "question": "Must existing customers, open reminders or already issued documents and entries receive an agent when the app is installed or upgraded? No install or upgrade step is designed.",
+      "affects": [
+        "customer-ext",
+        "issued-reminder-header-ext",
+        "cust-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "reminder-lines",
+      "question": "Is the agent needed only on headers, or also on reminder and finance charge memo lines? Only headers are designed.",
+      "affects": [
+        "reminder-header-ext",
+        "fin-charge-memo-header-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Material gap: event for copying Customer.\"Collection Agent Code\" to Reminder Header (manual entry and Create Reminders) is not confirmed by any opened article or repository symbols.",
+    "Material gap: event for copying Customer.\"Collection Agent Code\" to Finance Charge Memo Header is not confirmed by any opened article or repository symbols.",
+    "Not covered by BCQuality knowledge: the Customer-to-reminder and Customer-to-finance-charge-memo hops rest on agent judgment only.",
+    "Applicability dimensions unknown: bc-version, countries, application-area (no repository or app.json supplied); all cited articles declare [all] / w1, and the tooltip guidance applies conditionally on runtime 13.0 (BC24)."
+  ]
+}

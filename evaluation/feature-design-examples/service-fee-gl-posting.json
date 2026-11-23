@@ -1,0 +1,679 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "outcome-reason": "Design covers journal-line creation in a reserved batch, the Contract No. copy to G/L entries, and standard reversal; the fee source record and the Post Fees host page are open questions.",
+  "summary": {
+    "request": "Our service contracts charge a monthly handling fee. When a user runs Post Fees, each fee must be posted to the general ledger, and the G/L entries must carry the contract number so finance can analyze fees per contract. Posted fees must be reversible.",
+    "business-process": "General journal posting from feature code (Gen. Journal Line in a reserved batch, Gen. Jnl.-Post Batch creating G/L entries) and G/L transaction reversal",
+    "candidates": 26,
+    "selected": 22
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "service-fee-setup",
+        "action": "create",
+        "object-type": "table",
+        "target": "Service Fee Setup",
+        "purpose": "Singleton setup that names the journal template and batch reserved for fee posting and the G/L accounts the fee posts to, so no account or batch is hard-coded. Which accounts live here depends on open question account-source.",
+        "fields": [
+          {
+            "name": "Primary Key",
+            "type": "Code[10]",
+            "note": "Sole key; the single row keeps a blank value."
+          },
+          {
+            "name": "Journal Template Name",
+            "type": "Code[10]",
+            "note": "TableRelation to Gen. Journal Template. Checked with TestField before any journal line is created."
+          },
+          {
+            "name": "Journal Batch Name",
+            "type": "Code[10]",
+            "note": "TableRelation to Gen. Journal Batch of the template. A batch reserved for fees only. Checked with TestField."
+          },
+          {
+            "name": "Fee G/L Account No.",
+            "type": "Code[20]",
+            "note": "TableRelation to G/L Account. Only if the answer to account-source is one account per company; checked with TestField."
+          },
+          {
+            "name": "Balancing Account No.",
+            "type": "Code[20]",
+            "note": "Type and table relation depend on open question balancing-side (G/L account or another account type). Checked with TestField."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md",
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "service-fee-setup-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Service Fee Setup",
+        "purpose": "Card page over Service Fee Setup with InsertAllowed = false and DeleteAllowed = false; OnOpenPage inserts the blank row when it is missing. Reads and writes only its own setup record.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Hold the contract number on each fee journal line so the posting engine can pass it to the G/L entry through the copy event.",
+        "fields": [
+          {
+            "name": "Contract No.",
+            "type": "Code[20] (confirm it matches the contract number field of the contract table; see open question contract-source)",
+            "note": "Explicit DataClassification on the field, because a tableextension inherits no table-level value; CustomerContent is the likely value, to be confirmed. Never ToBeClassified."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "gl-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "G/L Entry",
+        "purpose": "Stored Contract No. on the G/L entry so finance can filter and analyze fee entries per contract. A stored field on a hot ledger is chosen because the request requires the G/L entries themselves to carry the value; the performance article allows this only when the value must appear as a native list column and is read on almost every access, otherwise a related table keyed by Entry No. is preferred (applies from BC23). Confirm with open question analysis-surface.",
+        "fields": [
+          {
+            "name": "Contract No.",
+            "type": "Same type and length as Gen. Journal Line \"Contract No.\"",
+            "note": "Explicit DataClassification (tableextension). A reference value: reversal copies it unchanged to the reversing entry, which is the intended behavior. Add no custom amount field without a reversal subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "general-ledger-entries-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "General Ledger Entries",
+        "purpose": "Show Contract No. as a list column so finance can filter and analyze fee entries per contract. Depends on open question analysis-surface.",
+        "knowledge": [
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "service-fee-post",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Service Fee-Post",
+        "purpose": "The Post Fees operation. Reads Service Fee Setup and TestFields every value it needs; errors when the reserved batch is not empty; creates one balanced journal document per fee with SetUpNewLine (document numbers from the batch series), validates account fields, amount and Dimension Set ID, sets Contract No., then posts through Gen. Jnl.-Post Batch. Owns the transaction boundary: calls SetSuppressCommit(true) when the posting must roll back together with the feature's own writes (see open question double-posting). The page action that starts Post Fees only calls this codeunit.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md",
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/finance/post-ledger-entries-through-posting-codeunits.md",
+          "microsoft/knowledge/finance/preserve-journal-batch-document-balance.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/finance/write-dimensions-as-dimension-set-entries.md",
+          "microsoft/knowledge/finance/normal-vat-journal-amount-includes-vat.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md"
+        ]
+      },
+      {
+        "id": "service-fee-gl-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Service Fee G/L Subscribers",
+        "purpose": "Event subscriber that copies Contract No. from Gen. Journal Line to G/L Entry when the posting engine creates the entry.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      },
+      {
+        "id": "service-fee-objects-permissions",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Service Fee - Objects",
+        "purpose": "Building block, Assignable = false: explicit entries for Service Fee Setup tabledata, the setup page, Service Fee-Post and the subscriber codeunit. No wildcard grants; only the letters each object needs.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "id": "service-fee-post-permissions",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Service Fee - Post",
+        "purpose": "Role-shaped, Assignable = true set for users who run Post Fees, composed through IncludedPermissionSets from the building block. Whether it also includes the standard journal-posting rights or relies on a separately assigned finance role is open question permissions-scope.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User runs Post Fees (page action; host page to be confirmed)",
+        "to": "Service Fee-Post codeunit",
+        "mechanism": "user-entry",
+        "note": "The action only calls the codeunit; no posting logic in the page.",
+        "knowledge": [
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md"
+        ]
+      },
+      {
+        "from": "Service fee source (contract and monthly fee amount; record to be confirmed)",
+        "to": "Gen. Journal Line in the reserved fee batch",
+        "mechanism": "validate",
+        "note": "Service Fee-Post validates Account Type/No., Bal. Account Type/No. and Amount so posting groups, VAT and default dimensions are filled; assigns Contract No.; one balanced document per fee by date and document number.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/finance/preserve-journal-batch-document-balance.md",
+          "microsoft/knowledge/finance/normal-vat-journal-amount-includes-vat.md"
+        ]
+      },
+      {
+        "from": "Service fee source dimension set (if it has one)",
+        "to": "Gen. Journal Line \"Dimension Set ID\"",
+        "mechanism": "validate",
+        "note": "Validate(\"Dimension Set ID\", source set ID) so the shortcut dimensions are synchronized; never copy only shortcut codes. Applies only if the fee source carries dimensions (open question dimensions).",
+        "knowledge": [
+          "microsoft/knowledge/finance/write-dimensions-as-dimension-set-entries.md",
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line \"Contract No.\"",
+        "to": "G/L Entry \"Contract No.\"",
+        "mechanism": "event-copy",
+        "note": "Gen. Jnl.-Post Line initializes each G/L entry with CopyFromGenJnlLine, which raises OnAfterCopyGLEntryFromGenJnlLine. VAT and bank entries are not extended; the request asks only for G/L entries.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/finance/post-ledger-entries-through-posting-codeunits.md"
+        ]
+      },
+      {
+        "from": "Original fee G/L Entry",
+        "to": "Reversing G/L Entry",
+        "mechanism": "other",
+        "note": "Standard reversal (Reversal Entry.ReverseTransaction with the G/L entry's Transaction No.) builds the reversing entry by assigning the original record, so Contract No. is copied unchanged. As a reference value it must stay as copied; no reversal subscriber is needed. The reversal pair nets to zero per contract.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/finance/reverse-transactions-by-transaction-number.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"G/L Entry\"",
+        "event": "OnAfterCopyGLEntryFromGenJnlLine",
+        "purpose": "Copy Contract No. from the journal line to the G/L entry being created.",
+        "guards": [
+          "Plain field assignment only; no database call and no Modify of the entry."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "An administrator opens Service Fee Setup (the page inserts the blank row on first open), names a journal template and a batch reserved for fees, and fills the accounts. Whether the app creates the template and batch or the customer does is open question batch-provisioning; account numbers are never hard-coded in an install codeunit.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Service Fee-Post calls TestField on Journal Template Name, Journal Batch Name and every account it uses before creating any journal line, including any account returned by a posting setup getter.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship Service Fee - Objects (Assignable = false) and Service Fee - Post (Assignable = true, IncludedPermissionSets), with explicit entries and no wildcards.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Give Service Fee Setup a table-level DataClassification; give each Contract No. field on Gen. Journal Line and G/L Entry its own explicit DataClassification, because table extensions inherit nothing. No ToBeClassified ships.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "post-fee-carries-contract-no",
+        "given": "Service Fee Setup with a reserved empty template and batch and fee/balancing accounts created with LibraryERM, and a fee for contract C with a random amount",
+        "when": "Post Fees runs",
+        "then": "The G/L entries of the fee document carry Contract No. = C, the fee account entry has the fee amount, and the reserved batch is empty",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "two-contracts-separate-documents",
+        "given": "Fees for two different contracts C1 and C2",
+        "when": "Post Fees runs",
+        "then": "Each contract's G/L entries form their own balanced document and carry their own contract number; filtering G/L entries by Contract No. returns only that contract's fee",
+        "knowledge": [
+          "microsoft/knowledge/finance/preserve-journal-batch-document-balance.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "reverse-fee-keeps-contract-and-nets-zero",
+        "given": "A posted fee for contract C",
+        "when": "The fee is reversed through Reversal Entry.ReverseTransaction with the Transaction No. of one of its G/L entries",
+        "then": "The reversing G/L entries carry Contract No. = C, the original entries are marked reversed, and the sum of G/L Amount for contract C on the fee account is zero",
+        "knowledge": [
+          "microsoft/knowledge/finance/reverse-transactions-by-transaction-number.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md"
+        ]
+      },
+      {
+        "id": "blank-setup-field-blocks-posting",
+        "given": "Service Fee Setup with one required field blanked (Journal Template Name, Journal Batch Name, fee account or balancing account; one test per field)",
+        "when": "Post Fees runs under asserterror",
+        "then": "Assert.ExpectedTestFieldError names the blanked field, and no G/L entry was posted",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md"
+        ]
+      },
+      {
+        "id": "non-empty-batch-blocks-posting",
+        "given": "A line a user entered in the reserved fee batch",
+        "when": "Post Fees runs under asserterror",
+        "then": "Assert.ExpectedError with the full batch-not-empty label text built with StrSubstNo, the user's line is still unposted, and no fee G/L entry exists",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md"
+        ]
+      },
+      {
+        "id": "dimensions-carried-to-gl",
+        "given": "A fee whose source carries a dimension set with a dimension outside the shortcut dimensions",
+        "when": "Post Fees runs",
+        "then": "The fee G/L entries have the source's Dimension Set ID, including the non-shortcut dimension",
+        "knowledge": [
+          "microsoft/knowledge/finance/write-dimensions-as-dimension-set-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "post-fees-with-role-permissions",
+        "given": "TestPermissions Restrictive and the test user lowered to Service Fee - Post plus the journal-posting rights decided in permissions-scope",
+        "when": "Post Fees runs",
+        "then": "Posting succeeds; without Service Fee - Post the same run fails with the expected permission error",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md",
+      "used-for": "The decision list for the finance feature: account source, missing-account check, how to post, balance, dimensions, VAT, custom values on entries, corrections and tests.",
+      "constraints": [
+        "Do not hard-code account numbers in code or an install codeunit; read accounts from posting groups or a feature setup table.",
+        "Check every account the feature needs before creating journal lines, including a posting setup getter's value, which can be blank.",
+        "Create journal lines in a batch reserved for the feature and post through the posting engine.",
+        "Which account a fee belongs to is the requester's accounting decision; raise an open question rather than choosing.",
+        "Test with a blanked account to prove the check fires, and post then reverse to prove the entries net to zero."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+      "used-for": "Shape of Service Fee Setup and its card page.",
+      "constraints": [
+        "Primary Key Code[10] is the sole key; one blank-keyed row per company.",
+        "Card page with InsertAllowed = false and DeleteAllowed = false and an open-time guard that inserts the missing row.",
+        "No Integer/AutoIncrement key and no List page over the setup table."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.good.al",
+        "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+      "used-for": "Guarding every setup value Post Fees depends on, and the test that blanks it.",
+      "constraints": [
+        "Call TestField on a required setup field before use; never fall through to a default when it is blank.",
+        "Write a test that blanks the setup field and asserts the resulting error."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/testfield-required-setup-field.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+      "used-for": "How Service Fee-Post creates and posts journal lines.",
+      "constraints": [
+        "Use the feature's own journal template and batch, named in setup, so batch posting only reaches the feature's lines.",
+        "Gen. Jnl.-Post Batch posts every line in the batch matching the record's filters, including lines users entered.",
+        "Create lines with SetUpNewLine so document numbers come from the batch series; hard-coded numbers fail unless the series allows manual numbers.",
+        "Validate account fields rather than assigning them.",
+        "Batch posting commits unless SetSuppressCommit(true) was called; decide the transaction boundary in the design."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.good.al",
+        "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/post-ledger-entries-through-posting-codeunits.md",
+      "used-for": "Posting fees only through the posting engine.",
+      "constraints": [
+        "Never insert G/L Entry or register records directly; Insert(true) does not invoke the posting engine.",
+        "Use Gen. Jnl.-Post Batch for a persisted journal batch; normal batch posting owns numbering and commits by default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/preserve-journal-batch-document-balance.md",
+      "used-for": "Keeping each fee document balanced in the reserved batch.",
+      "constraints": [
+        "Post the batch through its batch workflow, not a loop over Gen. Jnl.-Post Line.RunWithCheck.",
+        "Keep balancing lines in the same document/date group when the template's Force Doc. Balance requires it."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+      "used-for": "Copying Contract No. to G/L entries and deciding reversal behavior.",
+      "constraints": [
+        "Add the field to Gen. Journal Line and to each entry table that needs it, and subscribe to that table's copy event (OnAfterCopyGLEntryFromGenJnlLine on G/L Entry).",
+        "Do not add the field to VAT or bank entries only because it exists on the journal line.",
+        "Reversal copies custom fields unchanged; a reference may stay as copied, a custom amount or quantity must be negated in the reversal events such as OnReverseGLEntryOnBeforeInsertGLEntry.",
+        "Add a test that reverses a posted transaction and checks the custom values.",
+        "Do not patch entries after posting."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.good.al",
+        "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/reverse-transactions-by-transaction-number.md",
+      "used-for": "How a posted fee is reversed and how the reversal test starts it.",
+      "constraints": [
+        "Pass the G/L entry's Transaction No. to Reversal Entry.ReverseTransaction, never its Entry No.; ReverseRegister takes a G/L register number.",
+        "Let the reversal workflow validate eligibility; do not bypass a rejection by changing origin, application or reversal fields. Reversal is not guaranteed for every posting."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance/reverse-transactions-by-transaction-number.good.al",
+        "microsoft/knowledge/finance/reverse-transactions-by-transaction-number.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Making reversal the only correction path for posted fees.",
+      "constraints": [
+        "Correct posted fees through supported reversal or a correcting posting, never by changing amounts or deleting entries.",
+        "Do not set Reversed or negate a single row yourself."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/write-dimensions-as-dimension-set-entries.md",
+      "used-for": "Passing the fee source's dimensions to the journal line.",
+      "constraints": [
+        "Copy the complete Dimension Set ID and synchronize projections with Validate(\"Dimension Set ID\") on Gen. Journal Line.",
+        "Do not copy only global or shortcut dimension codes."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance/write-dimensions-as-dimension-set-entries.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choosing between a stored Contract No. on G/L Entry and a related table. Applies from BC23; bc-version unknown.",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by the ledger Entry No., shown through a FactBox or FlowField.",
+        "Use a stored tableextension field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/normal-vat-journal-amount-includes-vat.md",
+      "used-for": "The VAT decision for the fee journal line, conditional on open question vat.",
+      "constraints": [
+        "With Automatic VAT Entry and Normal VAT, journal Amount includes VAT; posting extracts tax and does not add it.",
+        "Establish the account and posting-group combination before validating the final amount; account-derived VAT defaults depend on Copy VAT Setup to Jnl. Lines."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Structure of the feature's permission sets.",
+      "constraints": [
+        "Building blocks marked Assignable = false; role-shaped Assignable = true sets reference them through IncludedPermissionSets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Content of the permission sets.",
+      "constraints": [
+        "Enumerate each tabledata and object explicitly; no * grants.",
+        "Grant only the letters required (R, RIM, RIMD as the role needs)."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Classification of the new table and the extension fields.",
+      "constraints": [
+        "A table-level DataClassification is the default for the table's own Normal fields.",
+        "A tableextension inherits nothing; every Normal field it adds needs an explicit DataClassification."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of every new field.",
+      "constraints": [
+        "No field ships with DataClassification = ToBeClassified."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+      "used-for": "Keeping Post Fees logic out of the page action.",
+      "constraints": [
+        "The page owns presentation; the business operation lives in a codeunit the action calls.",
+        "A setup page reading and writing its own singleton record is conventional."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips on the setup page fields and the Contract No. column.",
+      "constraints": [
+        "On runtime 13.0 or later define the tooltip on the table field and let bound page fields inherit it; before that, add page-level tooltips.",
+        "Tooltips say what the value is used for, not only its name."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for G/L accounts, journal template/batch and amounts in tests.",
+      "constraints": [
+        "Create prerequisite records with Library codeunits (for example LibraryERM.CreateGLAccount, LibraryRandom) instead of Init/Insert with invented keys.",
+        "Create parents before dependent records and Validate foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Structure of the test codeunit.",
+      "constraints": [
+        "[FEATURE] once per codeunit; [SCENARIO] first in each test body; [GIVEN]/[WHEN]/[THEN] marking setup, action and assertions."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+      "used-for": "Negative tests for blank setup and a non-empty batch.",
+      "constraints": [
+        "Follow every asserterror with a check of the specific error; use Assert.ExpectedTestFieldError for TestField failures.",
+        "For other errors, use Assert.ExpectedError with the full label text built with StrSubstNo; an error code alone is not enough."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+      "used-for": "The permission test for Post Fees.",
+      "constraints": [
+        "Use TestPermissions Restrictive and lower the test user with Permissions Mock or Library - Lower Permissions before the protected operation.",
+        "A role that includes the permission set under test is an adequate context."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "contract-source",
+      "question": "Are the service contracts the standard Service Management Service Contract Header, or a table in your own app? This fixes the Contract No. type and length and the table relation.",
+      "affects": [
+        "gen-journal-line-ext",
+        "gl-entry-ext"
+      ]
+    },
+    {
+      "id": "fee-source",
+      "question": "Where is the monthly handling fee stored (amount per contract, a fee line per month, or a fee table), and which records does Post Fees select (all unposted fees up to a date, one contract, a filter the user enters)?",
+      "affects": [
+        "service-fee-post",
+        "post-fee-carries-contract-no"
+      ]
+    },
+    {
+      "id": "post-fees-entry-point",
+      "question": "Which page hosts the Post Fees action (contract card, contract list, a fee list or a report request page)?",
+      "affects": [
+        "service-fee-post"
+      ]
+    },
+    {
+      "id": "double-posting",
+      "question": "How is a fee marked as posted so a second Post Fees run does not post it again, and must that mark roll back with a failed posting (which decides SetSuppressCommit(true))? After reversal, may the fee be posted again?",
+      "affects": [
+        "service-fee-post",
+        "reverse-fee-keeps-contract-and-nets-zero"
+      ]
+    },
+    {
+      "id": "account-source",
+      "question": "Which G/L account does the fee post to: one account per company in Service Fee Setup, or an account resolved from posting groups (for example by customer or contract group)?",
+      "affects": [
+        "service-fee-setup",
+        "service-fee-post"
+      ]
+    },
+    {
+      "id": "balancing-side",
+      "question": "What is the other side of the fee posting: another G/L account (accrual or clearing), or the customer of the contract (a customer ledger entry, which needs unapplication before reversal if it was applied)?",
+      "affects": [
+        "service-fee-setup",
+        "service-fee-post",
+        "reverse-fee-keeps-contract-and-nets-zero"
+      ]
+    },
+    {
+      "id": "vat",
+      "question": "Does the handling fee carry VAT? If yes, is the fee amount VAT-inclusive or net, and which VAT posting groups apply?",
+      "affects": [
+        "service-fee-post",
+        "post-fee-carries-contract-no"
+      ]
+    },
+    {
+      "id": "dimensions",
+      "question": "Should the fee G/L entries carry the contract's dimensions (if the contract record has a dimension set) or none?",
+      "affects": [
+        "service-fee-post",
+        "dimensions-carried-to-gl"
+      ]
+    },
+    {
+      "id": "analysis-surface",
+      "question": "How will finance analyze fees per contract: filtering the General Ledger Entries list by a Contract No. column, a report, or a query/API? A list column needs the stored field; otherwise a related table keyed by G/L Entry No. is preferred.",
+      "affects": [
+        "gl-entry-ext",
+        "general-ledger-entries-ext"
+      ]
+    },
+    {
+      "id": "batch-provisioning",
+      "question": "Does the app create the reserved journal template and batch, or does the customer create them and enter them in setup? Which number series should the batch use?",
+      "affects": [
+        "service-fee-setup"
+      ]
+    },
+    {
+      "id": "posting-date-and-document",
+      "question": "Which posting date and description should each fee use (run date, end of the fee month), and should several fees of one run share one document number or have one each?",
+      "affects": [
+        "service-fee-post",
+        "two-contracts-separate-documents"
+      ]
+    },
+    {
+      "id": "permissions-scope",
+      "question": "Should Service Fee - Post include standard general-journal posting rights, or are fee posters already assigned a finance role that grants them?",
+      "affects": [
+        "service-fee-post-permissions",
+        "post-fees-with-role-permissions"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined; no repository was supplied.",
+    "prefer-related-table-over-extension-on-hot-ledgers applies from BC23; the stored-field choice on G/L Entry rests on the request and open question analysis-surface.",
+    "The fee source record and the Post Fees host page are not designed because the request does not say where fees are stored; see fee-source and post-fees-entry-point.",
+    "Preventing a fee from being posted twice is not covered by BCQuality knowledge; see double-posting."
+  ]
+}

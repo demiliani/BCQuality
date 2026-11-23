@@ -1,0 +1,526 @@
+{
+  "skill": { "id": "al-feature-design", "version": 3 },
+  "outcome": "completed",
+  "summary": {
+    "request": "Our AppSource app has a Priority option field (Low, Normal, High) on its Service Contract table, used in an integration event, an API page and a Power Automate business event. Replace it with a Priority Level code that points to a new setup table, and keep existing contracts' priorities.",
+    "business-process": "Change to a feature the AppSource app already ships: the app's own Service Contract priority moves from a shipped Option field to a code on a new Priority Level table, while its integration event, API page and external business event keep their published contracts and existing contract data is migrated by upgrade code; no standard Business Central posting process is involved.",
+    "candidates": 72,
+    "selected": 56
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": ["al"],
+    "countries": [],
+    "application-area": [],
+    "unknown": ["bc-version", "countries", "application-area"]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "priority-level-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Priority Level",
+        "purpose": "Supplemental code table that replaces the fixed Low/Normal/High choice. Primary key Code[10] named Code, one plural list page set as LookupPageID and DrillDownPageID. A table-level DataClassification covers its Normal fields; no field is left ToBeClassified. Tooltips are defined on the table fields where the target runtime supports inheritance (BC24 and later). The request calls it a setup table, but it holds many rows, so it follows Supplemental conventions rather than the singleton Setup type.",
+        "fields": [
+          { "name": "Code", "type": "Code[10]", "note": "Primary key; the referencing field on Service Contract must have exactly this type and length." },
+          { "name": "Description", "type": "Text[100]", "note": "Shown in the dropdown and on the list page." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "priority-levels-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Priority Levels",
+        "purpose": "List page for maintaining priority levels, named after its source table, used as the table's LookupPageID. It holds no business logic; tooltips are inherited from the table fields or set on the page for runtimes before 13.0.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "service-contract-table",
+        "action": "modify",
+        "object-type": "table",
+        "target": "Service Contract",
+        "purpose": "Add the replacement field under a new, unused field ID and keep the shipped Priority option field with its original ID, name and type, marked ObsoleteState = Pending with an ObsoleteReason naming Priority Level Code and an ObsoleteTag recording the obsoletion version. The option field is not converted to Code in place, not renamed (a rename also changes its translation IDs) and not part of any key change. It moves to Removed only in a later release.",
+        "fields": [
+          { "name": "Priority Level Code", "type": "Code[10]", "note": "New field ID. TableRelation = \"Priority Level\".Code with exactly the related field's type and length. DataClassification inherited from the table if it has a valid table-level value, otherwise set explicitly. Needs new caption and tooltip translations." },
+          { "name": "Priority", "type": "Option (Low,Normal,High)", "note": "Existing shipped field: keep ID, name and type; ObsoleteState = Pending, ObsoleteReason = 'Replaced by Priority Level Code.', ObsoleteTag = the release that introduces the replacement." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/breaking-changes/unreleased-symbol-change-is-not-a-breaking-change.md",
+          "microsoft/knowledge/breaking-changes/obsolete-table-fields-instead-of-deleting-them.md",
+          "microsoft/knowledge/upgrade/breaking-changes-only-on-tables-without-data.md",
+          "microsoft/knowledge/upgrade/obsolete-pending-to-removed-staging.md",
+          "microsoft/knowledge/upgrade/obsoletion-requires-reason-and-tag.md",
+          "microsoft/knowledge/upgrade/obsoletereason-need-not-restate-removal-version.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/style/renaming-objects-or-members-changes-translation-ids.md"
+        ]
+      },
+      {
+        "id": "service-contract-pages",
+        "action": "modify",
+        "object-type": "page",
+        "target": "Service Contract card and list pages",
+        "purpose": "Show Priority Level Code instead of the obsolete Priority field, with its tooltip inherited from the table field where supported. Validation of the code stays in the table relation, not in page triggers. Whether the old Priority control can be removed from pages that dependent apps may extend is not covered by an opened article and is left to judgment.",
+        "knowledge": [
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "integration-event-publisher",
+        "action": "modify",
+        "object-type": "codeunit",
+        "target": "Codeunit that publishes the Service Contract integration event",
+        "purpose": "Keep the shipped integration event's name, every existing parameter's name, type and var mode, and its attribute flags exactly as shipped, and keep raising it. If the publisher is local or internal, add a Priority Level Code parameter to it (position does not matter, subscribers bind by name). If the publisher is public, leave it unchanged and publish a new local event beside it that carries the code as a concrete Code[10] value, raised at the same point; then mark the old event [Obsolete('reason', 'tag')] naming the new one. No IsHandled is added to the existing event.",
+        "knowledge": [
+          "microsoft/knowledge/events/treat-local-and-internal-events-as-subscriber-contracts.md",
+          "microsoft/knowledge/events/add-new-event-parameters-at-the-end.md",
+          "microsoft/knowledge/events/adding-a-parameter-to-an-event-is-not-a-breaking-change.md",
+          "microsoft/knowledge/events/do-not-change-shipped-event-attribute-flags.md",
+          "microsoft/knowledge/events/do-not-add-ishandled-to-an-existing-event.md",
+          "microsoft/knowledge/events/declare-event-publishers-local-or-internal.md",
+          "microsoft/knowledge/events/avoid-loosely-typed-event-parameters.md",
+          "microsoft/knowledge/upgrade/obsoletion-requires-reason-and-tag.md"
+        ]
+      },
+      {
+        "id": "service-contract-api-v2-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Service Contract API page v2.0",
+        "purpose": "New API page object, copied from the published one, with APIVersion = 'v2.0' and the same APIPublisher, APIGroup, EntityName and EntitySetName, exposing priorityLevelCode instead of the option field. The published v1.0 page object stays unchanged; v2.0 is not added to its APIVersion list.",
+        "knowledge": [
+          "microsoft/knowledge/web-services/version-apis-by-adding-not-mutating-published-versions.md",
+          "microsoft/knowledge/web-services/set-required-api-page-properties.md",
+          "microsoft/knowledge/style/api-page-version-format.md"
+        ]
+      },
+      {
+        "id": "business-events-codeunit",
+        "action": "modify",
+        "object-type": "codeunit",
+        "target": "Codeunit that declares the Service Contract external business event",
+        "purpose": "Add a new procedure with the same ExternalBusinessEvent name and a higher version (for example '2.0') whose payload carries the Priority Level Code as a Code value, raise both versions from the same point, and mark the old one [Obsolete] with '[OBSOLETE]' at the start of its display name. The shipped event's name, version and parameters are not edited; it is removed in a later release.",
+        "knowledge": [
+          "microsoft/knowledge/web-services/raise-external-business-events-for-power-automate.md",
+          "microsoft/knowledge/upgrade/obsoletion-requires-reason-and-tag.md"
+        ]
+      },
+      {
+        "id": "priority-upgrade-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Priority Level Upgrade",
+        "purpose": "Codeunit with Subtype = Upgrade. OnUpgradePerCompany calls, in this order, two separately tagged steps: (1) create the Priority Level records that correspond to Low, Normal and High; (2) copy each contract's option value to Priority Level Code. Both steps live in this one codeunit so their order is guaranteed. Step 2 uses DataTransfer on Service Contract with AddSourceFilter on Priority and AddConstantValue for the matching code, once per option value. The new field has no validation or trigger logic that the transfer would skip, so the bypass is safe; if validation is later added to the field, a Validate loop replaces the transfer.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/upgrade-codeunit-subtype.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+          "microsoft/knowledge/upgrade/install-and-upgrade-codeunits-have-no-order.md",
+          "microsoft/knowledge/upgrade/upgrade-tag-logic-must-not-nest-deeply.md",
+          "microsoft/knowledge/upgrade/datatransfer-for-bulk-init.md",
+          "microsoft/knowledge/upgrade/datatransfer-skips-triggers-and-subscribers.md",
+          "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md"
+        ]
+      },
+      {
+        "id": "install-codeunit",
+        "action": "modify",
+        "object-type": "codeunit",
+        "target": "App install codeunit",
+        "purpose": "In OnInstallAppPerCompany, detect a first install with DataVersion() = Version.Create('0.0.0.0') and explicitly SetUpgradeTag for both Priority Level upgrade tags, so the option-to-code migration never runs later against a company that starts on the new schema. Create the codeunit with Subtype = Install if the app has none.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/first-install-dataversion-zero-check.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md"
+        ]
+      },
+      {
+        "id": "app-permission-sets",
+        "action": "modify",
+        "object-type": "permissionset",
+        "target": "App permission sets",
+        "purpose": "Add tabledata \"Priority Level\" (R for users, RIMD for the admin/setup building block), table and page \"Priority Levels\" execute, and page = X for the new v2.0 API page to the app's focused non-assignable building blocks, so the assignable role sets inherit them through IncludedPermissionSets. No wildcard entries. Users must be able to set up priority levels and assign them to contracts without SUPER.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Priority option values Low, Normal, High",
+        "to": "Priority Level table",
+        "mechanism": "other",
+        "note": "Upgrade step 1, per company, guarded by its own upgrade tag: insert one Priority Level per option value when it does not exist yet (guarded Get), without errors that block the upgrade.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+          "microsoft/knowledge/upgrade/guard-database-reads.md",
+          "microsoft/knowledge/upgrade/do-not-block-upgrade-on-data-errors.md"
+        ]
+      },
+      {
+        "from": "Service Contract.Priority",
+        "to": "Service Contract.Priority Level Code",
+        "mechanism": "other",
+        "note": "Upgrade step 2, per company, guarded by its own upgrade tag and run after step 1 from the same trigger: DataTransfer in place on Service Contract, one CopyFields per option value with AddSourceFilter(Priority) and AddConstantValue(Priority Level Code). InitValue on the new field would not reach these existing rows.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/datatransfer-for-bulk-init.md",
+          "microsoft/knowledge/upgrade/datatransfer-skips-triggers-and-subscribers.md",
+          "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+          "microsoft/knowledge/upgrade/install-and-upgrade-codeunits-have-no-order.md"
+        ]
+      },
+      {
+        "from": "Priority Levels page",
+        "to": "Priority Level",
+        "mechanism": "user-entry",
+        "note": "Users maintain the list of levels.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md"
+        ]
+      },
+      {
+        "from": "Service Contract card",
+        "to": "Service Contract.Priority Level Code",
+        "mechanism": "validate",
+        "note": "The TableRelation to Priority Level checks the entered code and drives the lookup.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "from": "Service Contract.Priority Level Code",
+        "to": "Integration event subscribers",
+        "mechanism": "other",
+        "note": "Passed as a new parameter on the existing local/internal event, or on a new event beside a public one.",
+        "knowledge": [
+          "microsoft/knowledge/events/add-new-event-parameters-at-the-end.md",
+          "microsoft/knowledge/events/treat-local-and-internal-events-as-subscriber-contracts.md"
+        ]
+      },
+      {
+        "from": "Service Contract.Priority Level Code",
+        "to": "External business event version 2.0 payload",
+        "mechanism": "other",
+        "note": "Raised beside the obsoleted version; Power Automate receives it only after the transaction commits.",
+        "knowledge": [
+          "microsoft/knowledge/web-services/raise-external-business-events-for-power-automate.md"
+        ]
+      },
+      {
+        "from": "Service Contract.Priority Level Code",
+        "to": "Service Contract API v2.0 priorityLevelCode",
+        "mechanism": "other",
+        "note": "Read and written through the new API page object only; v1.0 keeps its shape.",
+        "knowledge": [
+          "microsoft/knowledge/web-services/version-apis-by-adding-not-mutating-published-versions.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Upgrade Tag",
+        "event": "OnGetPerCompanyUpgradeTags",
+        "purpose": "Add both Priority Level upgrade tags to the per-company list so SetAllUpgradeTags marks them complete for newly created companies, which start on the new schema.",
+        "guards": [
+          "Use the same shared tag definitions as the upgrade and install codeunits."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "upgrade",
+        "step": "Run the Priority Level migration only from OnUpgradePerCompany of a Subtype = Upgrade codeunit; guard each step with HasUpgradeTag at entry and SetUpgradeTag after success; one tag per step, not nested; no DataVersion or AppVersion branching.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/upgrade-codeunit-subtype.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+          "microsoft/knowledge/upgrade/upgrade-tag-logic-must-not-nest-deeply.md",
+          "microsoft/knowledge/upgrade/appversion-meaning-depends-on-execution-context.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "Keep upgrade code safe: guard every database read with if, log a warning with a stable, registered telemetry event ID and continue instead of raising an error on unexpected data, make no external calls and never use ChangeCompany.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/guard-database-reads.md",
+          "microsoft/knowledge/upgrade/do-not-block-upgrade-on-data-errors.md",
+          "microsoft/knowledge/upgrade/no-external-calls-in-upgrade.md",
+          "microsoft/knowledge/upgrade/no-changecompany-in-upgrade.md",
+          "microsoft/knowledge/telemetry/telemetry-event-id-stable-unique.md"
+        ]
+      },
+      {
+        "concern": "install",
+        "step": "On first install (DataVersion 0.0.0.0) set both Priority Level upgrade tags explicitly; register them in OnGetPerCompanyUpgradeTags for new companies.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/first-install-dataversion-zero-check.md",
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Obsoletion staging: this release marks the Priority field Pending (with reason and tag), the old integration event (if replaced) and the old business event version [Obsolete]; a later release moves the field to Removed and deletes the obsolete event procedures. New logic is built only on Priority Level Code, never on the obsolete members.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/obsolete-pending-to-removed-staging.md",
+          "microsoft/knowledge/upgrade/obsoletion-requires-reason-and-tag.md",
+          "microsoft/knowledge/breaking-changes/deprecate-public-members-with-the-obsolete-lifecycle.md",
+          "microsoft/knowledge/breaking-changes/do-not-modify-code-already-marked-obsolete.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Any published (non-local) procedure that takes or returns the Priority option keeps its signature; add a new procedure or overload that uses the Priority Level code, let the old one delegate, and mark the old one [Obsolete] naming the replacement. New helpers start local or internal.",
+        "knowledge": [
+          "microsoft/knowledge/breaking-changes/do-not-change-published-procedure-signatures.md",
+          "microsoft/knowledge/breaking-changes/deprecate-public-members-with-the-obsolete-lifecycle.md",
+          "microsoft/knowledge/breaking-changes/choose-access-modifiers-deliberately.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Classify the Priority Level table at table level and the new Service Contract field through the table default or explicitly; no ToBeClassified at release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Extend the app's building-block permission sets with Priority Level tabledata, the Priority Levels page and the v2.0 API page; validate setup and contract maintenance as a user with only the app roles.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Translations: add XLIFF entries for the new table, page, field captions and tooltips; the old field keeps its name so its translation IDs stay valid.",
+        "knowledge": [
+          "microsoft/knowledge/style/renaming-objects-or-members-changes-translation-ids.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Release: raise the app version deliberately (new functionality, no breaking change, so a minor bump by convention) before the AppSource submission.",
+        "knowledge": [
+          "microsoft/knowledge/appsource/release-must-update-app-version.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "upgrade-maps-option-to-code",
+        "given": "A company with Service Contracts whose obsolete Priority is Low, Normal and High, no Priority Level records and no Priority Level upgrade tags",
+        "when": "The Priority Level upgrade procedures run",
+        "then": "Priority Level records exist for the three former values and every contract's Priority Level Code matches its former Priority",
+        "knowledge": []
+      },
+      {
+        "id": "upgrade-runs-once",
+        "given": "The Priority Level upgrade tags are already set and a contract's Priority Level Code was changed by a user",
+        "when": "The upgrade procedures run again",
+        "then": "No Priority Level is inserted and the user's Priority Level Code is unchanged",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "id": "upgrade-tolerates-existing-levels",
+        "given": "A Priority Level with the code for Normal already exists",
+        "when": "Upgrade step 1 runs",
+        "then": "The upgrade completes without error and the existing record is kept",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/guard-database-reads.md",
+          "microsoft/knowledge/upgrade/do-not-block-upgrade-on-data-errors.md"
+        ]
+      },
+      {
+        "id": "new-company-and-install-tags",
+        "given": "A first install (DataVersion 0.0.0.0) or a newly created company",
+        "when": "Install code runs or SetAllUpgradeTags initializes the company",
+        "then": "Both Priority Level upgrade tags are set, so the migration does not run later",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md",
+          "microsoft/knowledge/upgrade/first-install-dataversion-zero-check.md"
+        ]
+      },
+      {
+        "id": "contract-validates-priority-level",
+        "given": "A Priority Level with a 10-character code and a Service Contract built through the app's fixture helpers",
+        "when": "Priority Level Code is validated with that code, and then with a code that does not exist",
+        "then": "The existing code is accepted without a length error and the unknown code is rejected by the table relation",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "integration-event-carries-code",
+        "given": "A test subscriber bound to the integration event by name, one with and one without the new Priority Level Code parameter",
+        "when": "The contract action that raises the event runs",
+        "then": "Both subscribers are called and the new parameter (or new event) carries the contract's Priority Level Code",
+        "knowledge": [
+          "microsoft/knowledge/events/adding-a-parameter-to-an-event-is-not-a-breaking-change.md",
+          "microsoft/knowledge/events/treat-local-and-internal-events-as-subscriber-contracts.md"
+        ]
+      },
+      {
+        "id": "business-event-versions",
+        "given": "A Service Contract with a Priority Level Code",
+        "when": "The business action that raises the external business event commits",
+        "then": "Version 2.0 is raised with the Priority Level Code and the obsoleted version is still raised with its original payload",
+        "knowledge": [
+          "microsoft/knowledge/web-services/raise-external-business-events-for-power-automate.md"
+        ]
+      },
+      {
+        "id": "api-versions",
+        "given": "A Service Contract with a Priority Level Code",
+        "when": "It is read through the v1.0 and the v2.0 API pages",
+        "then": "v2.0 returns priorityLevelCode and v1.0 returns exactly its published fields",
+        "knowledge": [
+          "microsoft/knowledge/web-services/version-apis-by-adding-not-mutating-published-versions.md"
+        ]
+      },
+      {
+        "id": "permissions-without-super",
+        "given": "A test user lowered to the app's assignable role sets only (TestPermissions = Restrictive)",
+        "when": "The user creates a Priority Level, assigns it to a contract and reads it through the v2.0 API page",
+        "then": "Each operation succeeds without SUPER",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    { "path": "microsoft/knowledge/feature-design/plan-a-change-to-a-shipped-feature.md", "used-for": "Planning map for changing the shipped Priority option: one decision per row for fields, obsoletion, procedures, upgrade, events, APIs, business events, translations, release and tests.", "constraints": ["Establish whether the symbol was released before applying breaking-change and upgrade rules.", "Do not change the option field to a code field in place, rename the event parameter or rely on InitValue.", "Which release removes an obsolete element, and whether dependent apps or flows are known, are questions for the requester."] },
+    { "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md", "used-for": "Planning map for the new Priority Level table: table type, pages, privacy, permissions, install and tests.", "constraints": ["Plan table type, pages, privacy, permissions and install behavior, not only the table and its page.", "A row the request does not settle is a question for the requester, not a default."] },
+    { "path": "microsoft/knowledge/feature-design/plan-api-exposure-and-background-sync.md", "used-for": "Inbound API decisions for the changed Service Contract API page: version by adding, routing properties, permissions.", "constraints": ["A changed shape is a new version.", "Every API page needs an execute entry in a permission set."] },
+    { "path": "microsoft/knowledge/breaking-changes/unreleased-symbol-change-is-not-a-breaking-change.md", "used-for": "Establishes that breaking-change rules apply: the request states the Priority field ships in an AppSource app.", "constraints": ["Treat a change as breaking only when the symbol was present in a released baseline."] },
+    { "path": "microsoft/knowledge/breaking-changes/obsolete-table-fields-instead-of-deleting-them.md", "used-for": "Keep the Priority field and add Priority Level Code under a new ID.", "constraints": ["Keep the old field's ID, name and type unchanged.", "Add the replacement under an unused ID and mark the old field Pending with a reason naming the replacement and a tag.", "Keep the old field readable so upgrade code can copy its data; move to Removed only in a later release."], "sample-paths": ["microsoft/knowledge/breaking-changes/obsolete-table-fields-instead-of-deleting-them.good.al"] },
+    { "path": "microsoft/knowledge/upgrade/breaking-changes-only-on-tables-without-data.md", "used-for": "Rules out changing the Priority field type in place on a table with customer data.", "constraints": ["Field-type changes are restricted to tables introduced in the same change; tables with data need an explicit migration design."] },
+    { "path": "microsoft/knowledge/upgrade/obsolete-pending-to-removed-staging.md", "used-for": "Staging the Priority field and obsolete events across releases.", "constraints": ["Mark Pending first with reason and tag; move to Removed in a later release.", "Do not jump straight to Removed and do not leave an element Pending indefinitely."] },
+    { "path": "microsoft/knowledge/upgrade/obsoletion-requires-reason-and-tag.md", "used-for": "Obsoletion metadata for the Priority field and the [Obsolete] events.", "constraints": ["Fields use ObsoleteState, ObsoleteReason and ObsoleteTag together.", "Events and methods use [Obsolete('reason', 'tag')] with both arguments.", "Keep the original tag stable through the lifecycle."] },
+    { "path": "microsoft/knowledge/upgrade/obsoletereason-need-not-restate-removal-version.md", "used-for": "Wording of the Priority field's ObsoleteReason.", "constraints": ["The reason explains the deprecation and names the replacement; the version lives in ObsoleteTag."] },
+    { "path": "microsoft/knowledge/breaking-changes/deprecate-public-members-with-the-obsolete-lifecycle.md", "used-for": "Retiring published procedures and events that use the Priority option.", "constraints": ["Keep a superseded procedure, mark it [Obsolete] naming the replacement, and let it forward to the new one.", "Delete it only after the deprecation window; methods have no ObsoleteState."] },
+    { "path": "microsoft/knowledge/breaking-changes/do-not-modify-code-already-marked-obsolete.md", "used-for": "New behavior is built on Priority Level Code, not on the obsolete field or events.", "constraints": ["Leave obsolete members as they are and implement against the supported replacement."] },
+    { "path": "microsoft/knowledge/breaking-changes/do-not-change-published-procedure-signatures.md", "used-for": "Published procedures that take or return the Priority option.", "constraints": ["Do not add, remove, reorder or retype parameters of a non-local procedure that shipped; add a new procedure or overload and let the old one delegate."] },
+    { "path": "microsoft/knowledge/breaking-changes/choose-access-modifiers-deliberately.md", "used-for": "Access of the new procedures introduced for the Priority Level code.", "constraints": ["Start new members local or internal; make public only a deliberately supported entry point."] },
+    { "path": "microsoft/knowledge/events/treat-local-and-internal-events-as-subscriber-contracts.md", "used-for": "Keeping the shipped integration event's identity and parameters.", "constraints": ["Preserve the event name and every existing parameter's name, type/subtype and var mode, whatever the publisher's access modifier."] },
+    { "path": "microsoft/knowledge/events/add-new-event-parameters-at-the-end.md", "used-for": "Choosing between adding a parameter and publishing a new event.", "constraints": ["Add a parameter directly only when the shipped publisher is local or internal.", "For a public event, keep the original unchanged and introduce a new event."], "sample-paths": ["microsoft/knowledge/events/add-new-event-parameters-at-the-end.good.al"] },
+    { "path": "microsoft/knowledge/events/adding-a-parameter-to-an-event-is-not-a-breaking-change.md", "used-for": "Confirms that existing subscribers keep binding after the Priority Level Code parameter is added.", "constraints": ["Adding a parameter to a local or internal publisher does not break subscribers at any position."] },
+    { "path": "microsoft/knowledge/events/do-not-change-shipped-event-attribute-flags.md", "used-for": "Attribute flags of the shipped integration event.", "constraints": ["Keep IncludeSender, GlobalVarAccess and (BC20 and later) Isolated exactly as shipped; publish a new event for different flags."] },
+    { "path": "microsoft/knowledge/events/do-not-add-ishandled-to-an-existing-event.md", "used-for": "The existing integration event stays a notification.", "constraints": ["Do not add var IsHandled to the existing event; use a separate OnBefore event if an override seam is needed."] },
+    { "path": "microsoft/knowledge/events/declare-event-publishers-local-or-internal.md", "used-for": "Access of any new integration event publisher.", "constraints": ["Declare new publishers local (or internal when another object in the app raises them)."] },
+    { "path": "microsoft/knowledge/events/avoid-loosely-typed-event-parameters.md", "used-for": "Typing of the new Priority Level Code parameter.", "constraints": ["Pass a concrete typed value, not a RecordRef or xRec."] },
+    { "path": "microsoft/knowledge/web-services/version-apis-by-adding-not-mutating-published-versions.md", "used-for": "New v2.0 API page object beside the unchanged v1.0 page.", "constraints": ["Keep the existing page object and its v1.0 contract unchanged.", "Create a separate page object with APIVersion = 'v2.0' for the changed shape; do not add v2.0 to the old page."] },
+    { "path": "microsoft/knowledge/web-services/set-required-api-page-properties.md", "used-for": "Routing properties of the v2.0 API page.", "constraints": ["Declare APIPublisher, APIGroup, EntityName, EntitySetName and SourceTable, and an explicit stable APIVersion."] },
+    { "path": "microsoft/knowledge/style/api-page-version-format.md", "used-for": "Format of the new API version.", "constraints": ["APIVersion follows vX.Y, such as 'v2.0'; bump the major for a breaking shape change."] },
+    { "path": "microsoft/knowledge/web-services/raise-external-business-events-for-power-automate.md", "used-for": "Versioning the Power Automate business event to carry the Priority Level code.", "constraints": ["Do not rename, re-version or change the parameters of the shipped event.", "Add a procedure with the same name and a higher version, raise both, and mark the old one [Obsolete] with [OBSOLETE] at the start of its display name; remove it in a later release.", "Payload uses simple types such as Code, not records."], "sample-paths": ["microsoft/knowledge/web-services/raise-external-business-events-for-power-automate.good.al"] },
+    { "path": "microsoft/knowledge/upgrade/upgrade-codeunit-subtype.md", "used-for": "Home of the migration code.", "constraints": ["Upgrade logic lives in a codeunit with Subtype = Upgrade entered from OnUpgradePerCompany or OnUpgradePerDatabase; helpers it calls inherit upgrade rules."] },
+    { "path": "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md", "used-for": "Making each migration step run once per company.", "constraints": ["Start each upgrade procedure with HasUpgradeTag and end with SetUpgradeTag; no DataVersion branching."], "sample-paths": ["microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.good.al"] },
+    { "path": "microsoft/knowledge/upgrade/install-and-upgrade-codeunits-have-no-order.md", "used-for": "Ordering the create-levels step before the copy step.", "constraints": ["Coordinate dependent steps from one owning trigger in the required order; do not rely on codeunit order."] },
+    { "path": "microsoft/knowledge/upgrade/upgrade-tag-logic-must-not-nest-deeply.md", "used-for": "Tag structure of the two migration steps.", "constraints": ["One tag, one migration; do not nest one tag check inside another."] },
+    { "path": "microsoft/knowledge/upgrade/appversion-meaning-depends-on-execution-context.md", "used-for": "Rules out AppVersion-based routing in the migration.", "constraints": ["AppVersion() in upgrade code is the target version; prefer upgrade tags to control steps."] },
+    { "path": "microsoft/knowledge/upgrade/datatransfer-for-bulk-init.md", "used-for": "Set-based copy of the option value to the new code field.", "constraints": ["Prefer DataTransfer over an equivalent FindSet/Modify loop regardless of record count, using SetTables, AddSourceFilter, AddConstantValue and CopyFields.", "Clear the variable before reusing it for a different transfer."], "sample-paths": ["microsoft/knowledge/upgrade/datatransfer-for-bulk-init.good.al"] },
+    { "path": "microsoft/knowledge/upgrade/datatransfer-skips-triggers-and-subscribers.md", "used-for": "Checking that skipping the new field's validation is safe.", "constraints": ["DataTransfer runs no OnValidate, OnModify or subscribers; establish which logic is bypassed before using it.", "Use a Validate loop when field validation must run."] },
+    { "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md", "used-for": "Why existing contracts need upgrade code rather than an InitValue.", "constraints": ["InitValue reaches new rows only; existing rows need an upgrade routine guarded by an upgrade tag."] },
+    { "path": "microsoft/knowledge/upgrade/guard-database-reads.md", "used-for": "Reads in the migration steps.", "constraints": ["Wrap every Get, FindSet and FindLast in upgrade code in an if."] },
+    { "path": "microsoft/knowledge/upgrade/do-not-block-upgrade-on-data-errors.md", "used-for": "Handling unexpected data during migration.", "constraints": ["Log a warning with a stable event ID and exit the procedure instead of raising an error."] },
+    { "path": "microsoft/knowledge/upgrade/no-external-calls-in-upgrade.md", "used-for": "Upgrade code must not notify flows or external systems.", "constraints": ["No HttpClient or other external I/O in upgrade code or anything it calls."] },
+    { "path": "microsoft/knowledge/upgrade/no-changecompany-in-upgrade.md", "used-for": "Per-company scope of the migration.", "constraints": ["Migrate in OnUpgradePerCompany for the current company only; never ChangeCompany."] },
+    { "path": "microsoft/knowledge/telemetry/telemetry-event-id-stable-unique.md", "used-for": "Event ID of the upgrade warning.", "constraints": ["Use a real, registered, unique event ID; never a placeholder."] },
+    { "path": "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md", "used-for": "Separating first-install tag seeding from the version migration.", "constraints": ["Install code runs on install and reinstall only; version migration goes in an upgrade codeunit."] },
+    { "path": "microsoft/knowledge/upgrade/first-install-dataversion-zero-check.md", "used-for": "Detecting a first install before seeding the upgrade tags.", "constraints": ["Run first-install logic only when DataVersion() = Version.Create('0.0.0.0')."] },
+    { "path": "microsoft/knowledge/upgrade/register-upgrade-tags-with-subscribers.md", "used-for": "Upgrade tags for new companies and fresh installs.", "constraints": ["Add the tags in OnGetPerCompanyUpgradeTags for new companies.", "Seed the tags explicitly with SetUpgradeTag from OnInstallAppPerCompany; registration does not set them on install.", "Share one tag definition across all paths."] },
+    { "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md", "used-for": "Table type of Priority Level.", "constraints": ["A Supplemental table has primary key Code[10] named Code and one plural list page set as LookupPageID.", "A table that holds more than one record does not follow singleton Setup rules."] },
+    { "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md", "used-for": "Type and length of Priority Level Code.", "constraints": ["An unconditionally related field has the same type and exact length as the related field."] },
+    { "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md", "used-for": "Classification of the new table and field.", "constraints": ["A table-level classification covers the table's own Normal fields; a tableextension field must classify itself."] },
+    { "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md", "used-for": "Release readiness of the new table and field.", "constraints": ["No ToBeClassified in a shipped extension."] },
+    { "path": "microsoft/knowledge/style/page-name-must-match-source-table.md", "used-for": "Name of the new list page.", "constraints": ["The page name must describe its source table."] },
+    { "path": "microsoft/knowledge/style/pages-must-not-contain-business-logic.md", "used-for": "Keeping priority validation out of pages.", "constraints": ["A rule that must hold for every entry point belongs in the table or a codeunit, not in a page trigger."] },
+    { "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md", "used-for": "Tooltips for the new field and table (applies from BC24 for table-field inheritance).", "constraints": ["On runtime 13.0 or later define tooltips on the table field and let pages inherit them; earlier runtimes need page-level tooltips."] },
+    { "path": "microsoft/knowledge/style/renaming-objects-or-members-changes-translation-ids.md", "used-for": "Not renaming the old field, and translating the new captions.", "constraints": ["A rename changes translation IDs; existing translations must be moved in the same change."] },
+    { "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md", "used-for": "Where the new grants go.", "constraints": ["Add objects to focused non-assignable building blocks included by role-shaped assignable sets."] },
+    { "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md", "used-for": "Shape of the new grants.", "constraints": ["Enumerate each tabledata and object entry with only the letters needed; no wildcards."] },
+    { "path": "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md", "used-for": "Execute permission for the v2.0 API page.", "constraints": ["Every API page has a page = X entry in a shipped permission set."] },
+    { "path": "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md", "used-for": "AppSource permission completeness for priority setup and use.", "constraints": ["App role sets must let users complete setup and normal usage without SUPER, validated as such a user."] },
+    { "path": "microsoft/knowledge/appsource/release-must-update-app-version.md", "used-for": "Version of the release that ships the change.", "constraints": ["Update the app version deliberately at every release; major for breaking changes, minor for new functionality by convention."] },
+    { "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md", "used-for": "Building test fixtures.", "constraints": ["Use library codeunits for standard prerequisite data, create parents first and Validate foreign-key fields so the TableRelation runs."] },
+    { "path": "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md", "used-for": "Permission test for priority setup and use.", "constraints": ["Use TestPermissions::Restrictive and lower the user with the test libraries before the protected operation."] },
+    { "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md", "used-for": "Structure of the test codeunits.", "constraints": ["Tag codeunits with [FEATURE] and tests with [SCENARIO], [GIVEN], [WHEN], [THEN]."] }
+  ],
+  "open-questions": [
+    {
+      "id": "obsolete-removal-release",
+      "question": "In which release should the Priority field move from Pending to Removed, and when should the obsoleted integration event, business event version 1.0 and the v1.0 API page be retired? Are dependent apps or flows bound to them known?",
+      "affects": ["service-contract-table", "integration-event-publisher", "business-events-codeunit", "service-contract-api-v2-page"]
+    },
+    {
+      "id": "legacy-value-during-window",
+      "question": "During the deprecation window, what should the v1.0 API page, the old integration event parameter and business event version 1.0 report for a contract whose Priority Level is not one of the three migrated levels? Should the obsolete Priority field be kept in sync from the new code (and through which mapping), or left frozen at its migrated value?",
+      "affects": ["service-contract-table", "integration-event-publisher", "business-events-codeunit", "service-contract-api-v2-page"]
+    },
+    {
+      "id": "integration-event-shape",
+      "question": "Is the shipped integration event publisher local, internal or public, and does it pass the Priority option as its own parameter or the whole Service Contract record? This decides between adding a parameter and publishing a new event.",
+      "affects": ["integration-event-publisher", "integration-event-carries-code"]
+    },
+    {
+      "id": "migrated-codes",
+      "question": "Which codes and descriptions should the three migrated Priority Level records get (for example LOW, NORMAL, HIGH), and should fresh installs and new companies also receive these default levels?",
+      "affects": ["priority-upgrade-codeunit", "install-codeunit", "upgrade-maps-option-to-code"]
+    },
+    {
+      "id": "default-and-required",
+      "question": "Must every contract have a Priority Level, and should new contracts get a default level (the old option defaulted to its first value)? If so, where is the default kept?",
+      "affects": ["service-contract-table", "priority-level-table"]
+    },
+    {
+      "id": "delete-in-use-level",
+      "question": "May a Priority Level that contracts still use be deleted or renamed, or should it be blocked?",
+      "affects": ["priority-level-table"]
+    },
+    {
+      "id": "published-procedures-and-telemetry",
+      "question": "Does the app have published procedures, keys, reports or telemetry custom dimensions that use the Priority option? Each needs its own non-breaking replacement.",
+      "affects": ["service-contract-table"]
+    },
+    {
+      "id": "old-control-on-pages",
+      "question": "Should the obsolete Priority control stay on the Service Contract pages during the deprecation window because dependent apps may anchor page extensions on it, or be removed now?",
+      "affects": ["service-contract-pages"]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Testing the upgrade path on data shaped like the previous app version is not covered by BCQuality knowledge; the upgrade-maps-option-to-code test rests on judgment.",
+    "Whether removing a shipped control from a page breaks dependent page extensions is not covered by an opened article; service-contract-pages rests on judgment for that part.",
+    "Seeding default Priority Level records in newly created companies is not covered by an opened article; only the upgrade-tag registration is.",
+    "Applicability dimensions bc-version, countries and application-area are unknown; version-conditional guidance (Isolated from BC20, table-field tooltip inheritance from BC24) is applied conditionally."
+  ]
+}

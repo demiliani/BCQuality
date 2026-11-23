@@ -1,0 +1,942 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Sales orders get a delivery route. Warehouse staff must be able to pull only the released sales orders for one route into a warehouse shipment through the source document filters. Items also get a brand code that must default onto sales lines, including when the salesperson picks a substitute or a catalog item, and a substitute line must remember the brand that was originally ordered.",
+    "business-process": "Adds a delivery route to sales orders that warehouse shipments filter on through Warehouse Request and Get Source Documents, and a brand code that defaults from the item onto sales lines through standard item, catalog item and substitution routes; changes sales order entry, release, warehouse shipment creation and sales posting.",
+    "candidates": 14,
+    "selected": 10
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "sales-header-route",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header",
+        "purpose": "Holds the delivery route of the sales order. The route is captured on Warehouse Request at release, so the OnValidate trigger requires Status = Open; users reopen and release again to change it, which rewrites the request.",
+        "fields": [
+          {
+            "name": "Delivery Route",
+            "type": "Code[20]",
+            "note": "Entered by the user; OnValidate tests Status = Open. DataClassification = CustomerContent. Same field number, name, type and length on every mirrored table."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "whse-request-route",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Warehouse Request",
+        "purpose": "Carries the delivery route of the released sales order so Get Source Documents can filter on it; a field on Sales Header is invisible to Get Source Documents.",
+        "fields": [
+          {
+            "name": "Delivery Route",
+            "type": "Code[20]",
+            "note": "Filled at release only; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "whse-source-filter-route",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Warehouse Source Filter",
+        "purpose": "Stores the delivery route filter that a warehouse user sets on a source document filter.",
+        "fields": [
+          {
+            "name": "Delivery Route Filter",
+            "type": "Code[100]",
+            "note": "Filter expression applied to Warehouse Request.\"Delivery Route\"; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "source-doc-filter-card-route",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Source Document Filter Card",
+        "purpose": "Shows Delivery Route Filter so warehouse staff can pull only one route's released sales orders into a warehouse shipment.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md"
+        ]
+      },
+      {
+        "id": "route-whse-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Delivery Route Warehouse Mgt.",
+        "purpose": "Event subscribers that copy the route to Warehouse Request at release and apply the route filter to Warehouse Request.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md"
+        ]
+      },
+      {
+        "id": "posted-headers-route",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Header",
+        "purpose": "Mirror of Delivery Route so sales posting copies it by TransferFields.",
+        "fields": [
+          {
+            "name": "Delivery Route",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "posted-invoice-header-route",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Header",
+        "purpose": "Mirror of Delivery Route for the TransferFields copy at invoice posting.",
+        "fields": [
+          {
+            "name": "Delivery Route",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "posted-crmemo-header-route",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Header",
+        "purpose": "Mirror of Delivery Route for the TransferFields copy at credit memo posting.",
+        "fields": [
+          {
+            "name": "Delivery Route",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-header-route",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Header",
+        "purpose": "Mirror of Delivery Route for the TransferFields copy at return receipt posting.",
+        "fields": [
+          {
+            "name": "Delivery Route",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-header-archive-route",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header Archive",
+        "purpose": "Mirror of Delivery Route so archiving and restore copy it by TransferFields.",
+        "fields": [
+          {
+            "name": "Delivery Route",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Header; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "item-brand",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item",
+        "purpose": "Holds the item's brand code, the master value that defaults onto sales lines.",
+        "fields": [
+          {
+            "name": "Brand Code",
+            "type": "Code[20]",
+            "note": "DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "nonstock-item-brand",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Nonstock Item",
+        "purpose": "Holds the catalog item's brand so the item created from it gets a brand; CreateNewItem inserts the item without its OnInsert trigger, so the brand is assigned in OnCreateNewItemOnBeforeItemModify.",
+        "fields": [
+          {
+            "name": "Brand Code",
+            "type": "Code[20]",
+            "note": "Same type and length as Item.\"Brand Code\"; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-brand",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Holds the brand defaulted from the item on every route that sets the line's item, and the brand originally ordered when the line was substituted.",
+        "fields": [
+          {
+            "name": "Brand Code",
+            "type": "Code[20]",
+            "note": "Defaulted from the item; same field number, name, type and length on every mirrored line table; DataClassification = CustomerContent."
+          },
+          {
+            "name": "Requested Brand",
+            "type": "Code[20]",
+            "note": "Brand of the line before substitution; same field number, name, type and length on every mirrored line table; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "posted-lines-brand",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "Mirror of Brand Code and Requested Brand so InitFromSalesLine copies them by TransferFields.",
+        "fields": [
+          {
+            "name": "Brand Code",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          },
+          {
+            "name": "Requested Brand",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "posted-invoice-line-brand",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "Mirror of the line brand fields for the TransferFields copy at invoice posting.",
+        "fields": [
+          {
+            "name": "Brand Code",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          },
+          {
+            "name": "Requested Brand",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "posted-crmemo-line-brand",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "Mirror of the line brand fields for the TransferFields copy at credit memo posting.",
+        "fields": [
+          {
+            "name": "Brand Code",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          },
+          {
+            "name": "Requested Brand",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-line-brand",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "Mirror of the line brand fields for the TransferFields copy at return receipt posting.",
+        "fields": [
+          {
+            "name": "Brand Code",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          },
+          {
+            "name": "Requested Brand",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-archive-brand",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "Mirror of the line brand fields so archiving copies them and restore can put the archived Brand Code back.",
+        "fields": [
+          {
+            "name": "Brand Code",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          },
+          {
+            "name": "Requested Brand",
+            "type": "Code[20]",
+            "note": "Mirror of the Sales Line field: same number, name, type and length; Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "brand-defaults-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Brand Code Defaults",
+        "purpose": "Event subscribers that default Brand Code from the item, give catalog-created items their brand, keep the requested brand on substitutes and restore the archived brand.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md",
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      },
+      {
+        "id": "sales-order-page-route",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order",
+        "purpose": "Shows Delivery Route on the sales order; the matching posted and archive pages show it read-only.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "sales-order-subform-brand",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order Subform",
+        "purpose": "Shows Brand Code and Requested Brand on sales order lines.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "item-card-brand",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item Card",
+        "purpose": "Lets users maintain Brand Code on the item.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "id": "catalog-item-card-brand",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Catalog Item Card",
+        "purpose": "Lets users maintain Brand Code on the catalog item.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "Sales Header.Delivery Route",
+        "mechanism": "user-entry",
+        "note": "Allowed only while the order is Open.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Delivery Route",
+        "to": "Warehouse Request.Delivery Route",
+        "mechanism": "event-copy",
+        "note": "OnBeforeCreateWhseRequest on Whse.-Sales Release, on every release, for each location request.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md"
+        ]
+      },
+      {
+        "from": "Warehouse Source Filter.Delivery Route Filter",
+        "to": "Warehouse Request filter used by Get Source Documents",
+        "mechanism": "event-copy",
+        "note": "OnSetFiltersOnSourceTables on Warehouse Source Filter sets the filter before the report reads released, not completely handled requests; only that route's released orders reach the warehouse shipment.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md"
+        ]
+      },
+      {
+        "from": "Sales Header.Delivery Route",
+        "to": "Sales Shipment Header, Sales Invoice Header, Sales Cr.Memo Header, Return Receipt Header, Sales Header Archive",
+        "mechanism": "transferfields",
+        "note": "Standard posting and archiving copy by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Item.Brand Code and Nonstock Item.Brand Code",
+        "mechanism": "user-entry",
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "from": "Nonstock Item.Brand Code",
+        "to": "Item.Brand Code (item created from the catalog item)",
+        "mechanism": "event-copy",
+        "note": "OnCreateNewItemOnBeforeItemModify on Catalog Item Management; runs for ShowNonstock, NonstockAutoItem and catalog substitutes.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "from": "Item.Brand Code",
+        "to": "Sales Line.Brand Code",
+        "mechanism": "event-copy",
+        "note": "OnAfterAssignItemValues on Sales Line covers typed items, catalog items, substitutes (validated on a temporary line) and item references; no IsTemporary guard.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Brand Code (line before substitution)",
+        "to": "Sales Line.Requested Brand (substitute line)",
+        "mechanism": "event-copy",
+        "note": "OnItemSubstGetOnAfterSubstSalesLineItem on Item Subst.",
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Brand Code, Requested Brand",
+        "to": "Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line, Sales Line Archive",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine and archiving copy by field number.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md"
+        ]
+      },
+      {
+        "from": "Sales Line Archive.Brand Code",
+        "to": "Sales Line.Brand Code (restored document)",
+        "mechanism": "event-copy",
+        "note": "Restore revalidates No., which re-defaults today's item brand; OnAfterTransferFromArchToSalesLine puts the archived value back without Modify.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Whse.-Sales Release",
+        "event": "OnBeforeCreateWhseRequest",
+        "purpose": "Copy Sales Header.Delivery Route to the Warehouse Request being created or rewritten at release.",
+        "guards": [
+          "Assign only; the publisher inserts or modifies the request after the event."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md"
+        ]
+      },
+      {
+        "publisher": "Warehouse Source Filter",
+        "event": "OnSetFiltersOnSourceTables",
+        "purpose": "Apply Delivery Route Filter to the Warehouse Request filter record passed by var.",
+        "guards": [
+          "Set the filter only when Delivery Route Filter is not blank."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md"
+        ]
+      },
+      {
+        "publisher": "Sales Line",
+        "event": "OnAfterAssignItemValues",
+        "purpose": "Default Sales Line.Brand Code from Item.Brand Code for every route that validates No.",
+        "guards": [
+          "No IsTemporary guard: substitutes are validated on a temporary line.",
+          "Declare only the parameters used, with the names the Sales Line publisher declares."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "publisher": "Catalog Item Management",
+        "event": "OnCreateNewItemOnBeforeItemModify",
+        "purpose": "Assign Nonstock Item.Brand Code to the item created from the catalog item.",
+        "guards": [
+          "Assign only when the catalog item's brand is not blank."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "publisher": "Item Subst.",
+        "event": "OnItemSubstGetOnAfterSubstSalesLineItem",
+        "purpose": "Set Requested Brand on the new line (first parameter) from the line before substitution (second parameter).",
+        "guards": [
+          "Take the source line's Requested Brand when it is already filled, otherwise its Brand Code, so a second substitution keeps the brand originally ordered."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "publisher": "ArchiveManagement",
+        "event": "OnAfterTransferFromArchToSalesLine",
+        "purpose": "Put the archived Brand Code back after restore revalidated No. and re-defaulted the item's current brand.",
+        "guards": [
+          "Assign without Modify; the restore modifies the line right after the event."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on every field added by the table extensions; a tableextension has no table-level value to inherit.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "release-copies-route-to-whse-request",
+        "given": "A location that requires shipment, a customer and item created with LibrarySales and LibraryInventory, and a sales order for that location with Delivery Route R1",
+        "when": "The order is released",
+        "then": "The Warehouse Request for the order and location has Delivery Route R1",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "filter-card-pulls-only-one-route",
+        "given": "Released sales orders for routes R1 and R2 and an open order for R1 at a shipment-required location, and a Warehouse Source Filter with Delivery Route Filter R1",
+        "when": "Get Source Documents runs for a warehouse shipment with that filter",
+        "then": "The shipment holds lines only from the released R1 order; the R2 order and the open R1 order are not included",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "blank-route-filter-keeps-standard",
+        "given": "Released orders for R1 and R2 and a source filter with a blank Delivery Route Filter",
+        "when": "Get Source Documents runs",
+        "then": "Both orders reach the shipment",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md"
+        ]
+      },
+      {
+        "id": "route-change-requires-open-order",
+        "given": "A released sales order with Delivery Route R1",
+        "when": "The user validates Delivery Route R2",
+        "then": "An error requires Status Open; after reopen, change and release the Warehouse Request carries R2",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md"
+        ]
+      },
+      {
+        "id": "brand-defaults-on-typed-item",
+        "given": "An item with Brand Code B1",
+        "when": "A sales line is created for the item",
+        "then": "Sales Line.Brand Code is B1",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "substitute-keeps-requested-brand",
+        "given": "Item A with brand B1 and substitute item S with brand B2, and a sales line for item A",
+        "when": "The salesperson picks S through Item Subst. (ShowItemSub)",
+        "then": "The line has No. S, Brand Code B2 and Requested Brand B1",
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "id": "second-substitution-keeps-original-brand",
+        "given": "A line already substituted from A (B1) to S (B2)",
+        "when": "The salesperson substitutes again to item T with brand B3",
+        "then": "Brand Code is B3 and Requested Brand stays B1",
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "id": "catalog-item-brand-reaches-line",
+        "given": "A catalog item with Brand Code B4 and no item yet",
+        "when": "The salesperson picks it on a sales line (ShowNonstock)",
+        "then": "The created Item has Brand Code B4 and the sales line has Brand Code B4",
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "id": "item-reference-brand",
+        "given": "An item with brand B1 and a customer item reference for it",
+        "when": "Item Reference No. is validated on a sales line",
+        "then": "Sales Line.Brand Code is B1",
+        "knowledge": [
+          "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md"
+        ]
+      },
+      {
+        "id": "posting-carries-route-and-brand",
+        "given": "A sales order with Delivery Route R1 and a substituted line (Brand Code B2, Requested Brand B1)",
+        "when": "The order is posted as ship and invoice, and a return order with the same values is posted",
+        "then": "Posted shipment, invoice and return receipt headers carry R1 and their lines carry B2 and B1; a posted credit memo does the same",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "archive-restore-keeps-brand",
+        "given": "A sales order with a line of brand B1 that is archived, after which the item's brand changes to B5",
+        "when": "The archived version is restored",
+        "then": "The restored line keeps Brand Code B1 and Requested Brand, and the header keeps Delivery Route",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Map of the field paths: selecting the sales, warehouse request and cross-cutting rows (master data defaults, catalog items and substitutions, archive and restore, privacy, tests).",
+      "constraints": [
+        "Plan one row group per process the request touches and open every linked article for the stages chosen.",
+        "Whether a field should reach a stage the request does not name, such as archives or ledger entries, is a question for the requester; raise one question per group of stages."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.md",
+      "used-for": "Delivery route on Warehouse Request, copied at release and filtered through the source document filter.",
+      "constraints": [
+        "A filter the warehouse uses must be on Warehouse Request; a field on Sales Header is invisible to Get Source Documents.",
+        "Copy the header value in OnBeforeCreateWhseRequest on each release codeunit the feature needs.",
+        "Add the filter field to Warehouse Source Filter and Source Document Filter Card and apply it in OnSetFiltersOnSourceTables.",
+        "Single-document shipments go through GetSingleOutboundDoc and are filtered in OnGetSingleOutboundDocOnAfterSetFilters.",
+        "The value is captured at release; if it can change on a released document, plan a reopen and release or update the request.",
+        "Do not drop documents with SkipRecord in OnAfterSalesHeaderOnAfterGetRecord, and do not write Warehouse Request from a Sales Header OnModify subscriber."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.good.al",
+        "microsoft/knowledge/warehouse/warehouse-requests-decide-which-source-documents-reach-warehouse-documents.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.md",
+      "used-for": "Brand defaults on catalog items and substitutes, and the requested brand on substitute lines.",
+      "constraints": [
+        "Keep the general item default in OnAfterAssignItemValues and do not guard it with IsTemporary.",
+        "Give items created from catalog items the value in OnCreateNewItemOnBeforeItemModify; CreateNewItem inserts without OnInsert.",
+        "Carry a value from the original item to the substitute line in OnItemSubstGetOnAfterSubstSalesLineItem: first parameter is the new line, second the line before substitution.",
+        "Do not default the line field from the page's No. validation or the item's OnInsert."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.good.al",
+        "microsoft/knowledge/inventory/catalog-items-substitutions-and-item-references-set-sales-lines-differently.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+      "used-for": "Line default of Brand Code from the item.",
+      "constraints": [
+        "Subscribe to OnAfterAssignItemValues on Sales Line and declare only the parameters used, with the publisher's names.",
+        "Copy with a plain assignment from the master record the event passes; never from the page."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Stages a sales field must reach, page extensions per stage and the posting test.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage.",
+        "Name the page extensions that show the field and a test that posts a document and reads the value from every target.",
+        "Copy Document copies posted and archived headers back with TransferFields; decide whether that is wanted and clear it in OnAfterCopySalesHeaderDone if not.",
+        "Do not fill ledger entries after posting by modifying them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring Delivery Route on posted headers and archive, and the brand fields on posted lines and line archive.",
+      "constraints": [
+        "Same field number, name, type and length on the source and every target the plan needs: all four posted header tables and the archive, and the line tables, unless the plan states a document type never needs it.",
+        "No subscriber is needed for these stages; keep the mirrored fields non-editable on posted tables."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length of mirrored fields.",
+      "constraints": [
+        "Define a mirrored field with the exact same field number, data type and length on every table in the TransferFields cascade."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+      "used-for": "Keeping the archived Brand Code when an archived order is restored.",
+      "constraints": [
+        "Mirror the field on Sales Header Archive and Sales Line Archive with the same number.",
+        "For a field defaulted from master data, reassign the archived value in OnAfterTransferFromArchToSalesHeader / OnAfterTransferFromArchToSalesLine without Modify.",
+        "Test restore with an item whose default changed after archiving."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of every added field.",
+      "constraints": [
+        "Every Normal field a tableextension adds must set its own DataClassification matching the data it stores; never leave ToBeClassified or under-classify as SystemMetadata."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for customers, items, sales orders and warehouse locations.",
+      "constraints": [
+        "Build fixtures with the Library codeunits, create parents first and Validate foreign keys; do not hand-roll Init/Insert."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "master-lists",
+      "question": "Should Delivery Route and Brand Code be validated against new lookup tables (a route list and a brand list)? If yes, those tables need their own design (table type, pages, permission set, classification), and the field lengths must match the related key.",
+      "affects": [
+        "sales-header-route",
+        "item-brand",
+        "nonstock-item-brand",
+        "sales-line-brand"
+      ]
+    },
+    {
+      "id": "route-source",
+      "question": "Where does the delivery route come from on a new sales order: typed by the user only, or defaulted from the customer or ship-to address?",
+      "affects": [
+        "sales-header-route"
+      ]
+    },
+    {
+      "id": "route-change-after-release",
+      "question": "May the route change on a released order? The design requires reopen and release; the alternative is to update the Warehouse Request directly when the route changes.",
+      "affects": [
+        "sales-header-route",
+        "route-change-requires-open-order"
+      ]
+    },
+    {
+      "id": "other-warehouse-entry-points",
+      "question": "Besides the source document filter, should the route also filter the single-document path (Get Source Doc. Outbound / Source Documents list, OnGetSingleOutboundDocOnAfterSetFilters) and inventory picks (Create Invt Put-away/Pick/Mvmt), and should the route be carried on purchase return orders or transfers through their own release codeunits?",
+      "affects": [
+        "route-whse-codeunit",
+        "source-doc-filter-card-route"
+      ]
+    },
+    {
+      "id": "route-on-warehouse-lines",
+      "question": "Should Delivery Route or Brand Code also appear on warehouse shipment lines, picks and posted warehouse shipments? That is a separate copy step not designed here.",
+      "affects": [
+        "route-whse-codeunit",
+        "sales-line-brand"
+      ]
+    },
+    {
+      "id": "posted-and-archive-mirrors",
+      "question": "The design mirrors Delivery Route on all posted sales headers and Sales Header Archive, and Brand Code / Requested Brand on all posted sales lines and Sales Line Archive. Are any of these document types (credit memos, return receipts, archives) not needed?",
+      "affects": [
+        "posted-headers-route",
+        "posted-invoice-header-route",
+        "posted-crmemo-header-route",
+        "return-receipt-header-route",
+        "sales-header-archive-route",
+        "posted-lines-brand",
+        "posted-invoice-line-brand",
+        "posted-crmemo-line-brand",
+        "return-receipt-line-brand",
+        "sales-line-archive-brand"
+      ]
+    },
+    {
+      "id": "ledger-entries",
+      "question": "Should the route or the brand reach customer ledger entries, item ledger entries or G/L entries? Not designed.",
+      "affects": [
+        "sales-line-brand",
+        "sales-header-route"
+      ]
+    },
+    {
+      "id": "copy-document",
+      "question": "When a document is copied, should Delivery Route flow back from posted or archived headers, and should Requested Brand survive Copy Document when lines are recalculated (it is dropped on that path; Brand Code is re-defaulted from the item)?",
+      "affects": [
+        "sales-header-route",
+        "sales-line-brand"
+      ]
+    },
+    {
+      "id": "item-template-brand",
+      "question": "Should new items get a brand from the item template (add Brand Code to Item Templ. with the same number, name, type and length)?",
+      "affects": [
+        "item-brand"
+      ]
+    },
+    {
+      "id": "requested-brand-scope",
+      "question": "Should Requested Brand be filled only on substituted lines, or on every line (equal to Brand Code when no substitution happened)? And should it be cleared if the user later changes No. manually?",
+      "affects": [
+        "sales-line-brand",
+        "substitute-keeps-requested-brand"
+      ]
+    },
+    {
+      "id": "back-fill",
+      "question": "Existing items, open orders and posted history will have blank route and brand. Is upgrade or install code needed to fill them?",
+      "affects": [
+        "item-brand",
+        "sales-line-brand",
+        "sales-header-route"
+      ]
+    },
+    {
+      "id": "other-documents",
+      "question": "Do quotes, blanket orders, return orders or purchase documents need the route or brand defaults, or only sales orders?",
+      "affects": [
+        "sales-header-route",
+        "sales-line-brand"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Target BC version, countries and application area are unknown; all cited articles apply to all versions and w1.",
+    "The rule that a second substitution keeps the first Requested Brand (subscription guard and test second-substitution-keeps-original-brand) rests on judgment; the article only states which parameter is the original line.",
+    "Field lengths (Code[20], filter Code[100]) rest on judgment pending the master-lists question.",
+    "Event signatures must be confirmed against the target version's symbols; no repository was supplied."
+  ]
+}

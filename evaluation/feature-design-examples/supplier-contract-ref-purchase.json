@@ -1,0 +1,988 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Purchase orders need a Supplier Contract Reference typed by the buyer. It must be visible on posted purchase invoices and on vendor ledger entries. When a purchase invoice is posted, the reference and the invoice number must be sent to the supplier's web portal.",
+    "business-process": "Purchase document posting (Purch.-Post creating posted purchase headers by TransferFields and vendor ledger entries through Gen. Journal Line), with follow-up integration after posting",
+    "candidates": 25,
+    "selected": 25
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "purchase-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Header",
+        "purpose": "Hold the Supplier Contract Reference the buyer types on the purchase order; source of every posting hop.",
+        "fields": [
+          {
+            "name": "Supplier Contract Reference",
+            "type": "Type and length to be confirmed (see open question field-type-and-length)",
+            "note": "Field number reused on every TransferFields target and on Gen. Journal Line and Vendor Ledger Entry. Explicit DataClassification, never ToBeClassified. Define the ToolTip on the table field when the target runtime is 13.0 or later."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "purch-inv-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Header",
+        "purpose": "Show the reference on posted purchase invoices; filled by the standard TransferFields from Purchase Header.",
+        "fields": [
+          {
+            "name": "Supplier Contract Reference",
+            "type": "Same type and length as the Purchase Header field (see open question field-type-and-length)",
+            "note": "Same field number, name, type and length as on Purchase Header so TransferFields copies it; Editable = false; explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purch-rcpt-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Header",
+        "purpose": "Mirror required by the article for every posted purchase header unless the plan excludes the document type.",
+        "fields": [
+          {
+            "name": "Supplier Contract Reference",
+            "type": "Same type and length as the Purchase Header field (see open question field-type-and-length)",
+            "note": "Same field number, name, type and length as on Purchase Header so TransferFields copies it; Editable = false; explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purch-cr-memo-hdr-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Hdr.",
+        "purpose": "Mirror required by the article for every posted purchase header unless the plan excludes the document type.",
+        "fields": [
+          {
+            "name": "Supplier Contract Reference",
+            "type": "Same type and length as the Purchase Header field (see open question field-type-and-length)",
+            "note": "Same field number, name, type and length as on Purchase Header so TransferFields copies it; Editable = false; explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "return-shipment-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Header",
+        "purpose": "Mirror required by the article for every posted purchase header unless the plan excludes the document type.",
+        "fields": [
+          {
+            "name": "Supplier Contract Reference",
+            "type": "Same type and length as the Purchase Header field (see open question field-type-and-length)",
+            "note": "Same field number, name, type and length as on Purchase Header so TransferFields copies it; Editable = false; explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purchase-header-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Header Archive",
+        "purpose": "Mirror required by the article so archived orders keep the reference.",
+        "fields": [
+          {
+            "name": "Supplier Contract Reference",
+            "type": "Same type and length as the Purchase Header field (see open question field-type-and-length)",
+            "note": "Same field number, name, type and length as on Purchase Header so TransferFields copies it; Editable = false; explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Carry the reference from Purchase Header to Vendor Ledger Entry during posting.",
+        "fields": [
+          {
+            "name": "Supplier Contract Reference",
+            "type": "Same type and length as the Purchase Header field (see open question field-type-and-length)",
+            "note": "Explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "vendor-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Vendor Ledger Entry",
+        "purpose": "Show the reference on vendor ledger entries; set while the entry is initialized, never by modifying a posted entry.",
+        "fields": [
+          {
+            "name": "Supplier Contract Reference",
+            "type": "Same type and length as the Purchase Header field (see open question field-type-and-length)",
+            "note": "Editable = false; explicit DataClassification."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purchase-order-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purchase Order",
+        "purpose": "Let the buyer type the reference on the purchase order.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "posted-purchase-invoice-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Purchase Invoice",
+        "purpose": "Show the reference on the posted purchase invoice (read-only).",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "vendor-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Vendor Ledger Entries",
+        "purpose": "Show the reference on vendor ledger entries (read-only).",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "supplier-ref-posting-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Supplier Ref. Posting (new)",
+        "purpose": "Event subscribers that copy the reference Purchase Header -> Gen. Journal Line -> Vendor Ledger Entry.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "id": "portal-outbox-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Supplier Portal Outbox (new)",
+        "purpose": "Work item inserted in the posting transaction; one row per posted purchase invoice to send. Its SystemId is the idempotency key.",
+        "fields": [
+          {
+            "name": "Entry No.",
+            "type": "BigInteger",
+            "note": "AutoIncrement primary key."
+          },
+          {
+            "name": "Purch. Invoice No.",
+            "type": "Code[20]",
+            "note": "Posted invoice number passed by OnAfterPostPurchaseDoc."
+          },
+          {
+            "name": "Supplier Contract Reference",
+            "type": "Same type and length as the Purchase Header field (see open question field-type-and-length)",
+            "note": "Optional snapshot; can instead be read from Purch. Inv. Header when sending."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.md",
+          "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "portal-notice-scheduler-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Supplier Portal Notice Scheduler (new)",
+        "purpose": "OnAfterPostPurchaseDoc subscriber that inserts an outbox row; no HTTP call and no Commit.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.md",
+          "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      },
+      {
+        "id": "portal-sender-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Supplier Portal Sender (new, TableNo = Job Queue Entry)",
+        "purpose": "Recurring job queue worker: reads committed outbox rows, sends reference and invoice number to the supplier portal with the outbox SystemId as idempotency key, deletes the row only after success.",
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+          "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md",
+          "microsoft/knowledge/security/secrettext-for-credentials.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/security/validate-user-configurable-urls.md",
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md"
+        ]
+      },
+      {
+        "id": "portal-setup-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Supplier Portal Setup (new)",
+        "purpose": "Singleton setup holding the portal URL and options; credentials are not stored here.",
+        "fields": [
+          {
+            "name": "Primary Key",
+            "type": "Code[10]",
+            "note": "Blank singleton key."
+          },
+          {
+            "name": "Portal URL",
+            "type": "Text (length to be decided)",
+            "note": "Validated against a fixed expected host or pattern before every call."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/security/validate-user-configurable-urls.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "portal-setup-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Supplier Portal Setup (new, Card)",
+        "purpose": "Card page over the singleton setup (InsertAllowed = false, DeleteAllowed = false, inserts the blank row on open); captures credentials into IsolatedStorage.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/security/secrettext-for-credentials.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "feature-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Supplier Contract Ref. (new)",
+        "purpose": "Explicit, non-wildcard grants for every new table, page and codeunit of the feature.",
+        "knowledge": [
+          "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Buyer",
+        "to": "Purchase Header.Supplier Contract Reference",
+        "mechanism": "user-entry",
+        "note": "Typed on the Purchase Order page.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "from": "Purchase Header",
+        "to": "Purch. Inv. Header",
+        "mechanism": "transferfields",
+        "note": "Standard Purch.-Post TransferFields; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header",
+        "to": "Purch. Rcpt. Header",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header",
+        "to": "Purch. Cr. Memo Hdr.",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header",
+        "to": "Return Shipment Header",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header",
+        "to": "Purchase Header Archive",
+        "mechanism": "transferfields",
+        "note": "ArchiveManagement copies the header with TransferFields.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header",
+        "to": "Gen. Journal Line",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyGenJnlLineFromPurchHeader.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line",
+        "to": "Vendor Ledger Entry",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyVendLedgerEntryFromGenJnlLine, while the entry is initialized.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "Purch.-Post (posted invoice number)",
+        "to": "Supplier Portal Outbox",
+        "mechanism": "other",
+        "note": "OnAfterPostPurchaseDoc subscriber inserts one outbox row per posted invoice.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.md",
+          "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      },
+      {
+        "from": "Supplier Portal Outbox + Purch. Inv. Header",
+        "to": "Supplier web portal",
+        "mechanism": "other",
+        "note": "Recurring job queue entry sends reference and invoice number over HTTP with the outbox SystemId as idempotency key.",
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+          "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Gen. Journal Line\"",
+        "event": "OnAfterCopyGenJnlLineFromPurchHeader",
+        "purpose": "Copy Supplier Contract Reference from Purchase Header to the vendor journal line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Vendor Ledger Entry\"",
+        "event": "OnAfterCopyVendLedgerEntryFromGenJnlLine",
+        "purpose": "Copy Supplier Contract Reference from the journal line to the vendor ledger entry while it is initialized.",
+        "guards": [
+          "Assign only; never find and Modify a posted vendor ledger entry"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Purch.-Post\"",
+        "event": "OnAfterPostPurchaseDoc",
+        "purpose": "Queue the portal notification by inserting an outbox row for the posted invoice.",
+        "guards": [
+          "Exit when \"Gen. Jnl.-Post Preview\".IsActive() (the event has no PreviewMode parameter; CommitIsSupressed is not a substitute)",
+          "Exit when PurchInvHdrNo is blank",
+          "No HTTP call and no Commit() in the subscriber",
+          "Confirm the event's parameters in the target version's symbols; do not copy the sales subscriber signature"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.md",
+          "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set an explicit DataClassification on every new field and table; resolve every ToBeClassified before release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Register a custom Privacy Notice for the supplier portal (CreatePrivacyNotice during setup or OnRegisterPrivacyNotices). The background sender checks GetPrivacyNoticeApprovalState and does not send without approval.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Singleton Supplier Portal Setup with a card page; validate the stored portal URL with Uri.AreURIsHaveSameHost or Uri.IsValidURIPattern against a fixed expected value before each call.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/security/validate-user-configurable-urls.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Store portal credentials only in IsolatedStorage (SetEncrypted when it fits) and carry them as SecretText; prefer OAuth2 via the OAuth2 codeunit if the portal supports it.",
+        "knowledge": [
+          "microsoft/knowledge/security/secrets-isolated-storage.md",
+          "microsoft/knowledge/security/secrettext-for-credentials.md",
+          "microsoft/knowledge/security/prefer-oauth2-over-api-keys-for-external-http-calls.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "Run Supplier Portal Sender as a recurring job queue entry: non-interactive, errors propagate to the job queue log, external call idempotent through the outbox SystemId, outbox row deleted only after the call and local updates succeed.",
+        "knowledge": [
+          "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship a permission set listing each new table (tabledata), page and codeunit explicitly, with no wildcard grants.",
+        "knowledge": [
+          "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "order-ref-reaches-posted-invoice",
+        "given": "A purchase order created with Library - Purchase with a Supplier Contract Reference",
+        "when": "The order is received and invoiced",
+        "then": "Purch. Inv. Header has the same Supplier Contract Reference",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "order-ref-reaches-receipt",
+        "given": "A purchase order with a Supplier Contract Reference",
+        "when": "The order is received",
+        "then": "Purch. Rcpt. Header has the same reference",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "return-order-ref-reaches-cr-memo-and-return-shipment",
+        "given": "A purchase return order with a Supplier Contract Reference",
+        "when": "It is shipped and invoiced",
+        "then": "Return Shipment Header and Purch. Cr. Memo Hdr. have the same reference",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "archived-order-keeps-ref",
+        "given": "A purchase order with a Supplier Contract Reference",
+        "when": "The order is archived",
+        "then": "Purchase Header Archive has the same reference",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "order-ref-reaches-vendor-ledger",
+        "given": "A purchase order with a Supplier Contract Reference",
+        "when": "The order is invoiced",
+        "then": "The Vendor Ledger Entry for the posted invoice has the same reference, written during posting",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "max-length-ref-posts",
+        "given": "A purchase order whose reference uses the full defined field length",
+        "when": "The order is invoiced",
+        "then": "Posting succeeds and every target holds the full value (no length mismatch)",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "posting-queues-outbox-row",
+        "given": "A purchase order with a Supplier Contract Reference",
+        "when": "The order is invoiced",
+        "then": "One Supplier Portal Outbox row exists for the posted invoice number",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.md",
+          "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md"
+        ]
+      },
+      {
+        "id": "preview-queues-nothing",
+        "given": "A purchase order with a Supplier Contract Reference",
+        "when": "Posting preview runs",
+        "then": "No outbox row exists and no portal call is made",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.md"
+        ]
+      },
+      {
+        "id": "receive-only-queues-nothing",
+        "given": "A purchase order",
+        "when": "It is received but not invoiced",
+        "then": "No outbox row is created (PurchInvHdrNo is blank)",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.md"
+        ]
+      },
+      {
+        "id": "sender-sends-and-deletes-on-success",
+        "given": "A committed outbox row and a portal stub returning success",
+        "when": "The sender job runs",
+        "then": "The request carries the invoice number, the reference and the outbox SystemId as idempotency key, and the row is deleted",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md"
+        ]
+      },
+      {
+        "id": "sender-fails-on-non-success-status",
+        "given": "A committed outbox row and a portal stub returning a non-success status",
+        "when": "The sender job runs",
+        "then": "The job errors, the row remains, and the response body is not parsed as success",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+          "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+          "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md"
+        ]
+      },
+      {
+        "id": "sender-blocks-without-privacy-approval",
+        "given": "A committed outbox row and the custom privacy notice not approved",
+        "when": "The sender job runs",
+        "then": "No request is sent and the row remains",
+        "knowledge": [
+          "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md"
+        ]
+      },
+      {
+        "id": "sender-rejects-unexpected-host",
+        "given": "Setup Portal URL pointing to a host other than the expected one",
+        "when": "The sender job runs",
+        "then": "The job errors before any HTTP call",
+        "knowledge": [
+          "microsoft/knowledge/security/validate-user-configurable-urls.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Checklist of cross-cutting decisions (privacy, permissions, setup) for new objects",
+      "constraints": [
+        "Plan classification, permissions and setup rows; a row the request does not settle is a question, not a default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Path map for a header field through document posting; purchases follow the same map",
+      "constraints": [
+        "Plan one step per stage the field must reach.",
+        "Copy Document copies posted and archived headers back with TransferFields; decide whether the value should flow back.",
+        "Do not copy a sales subscriber to purchases without checking the purchase event's parameters."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the field on posted purchase headers and the archive",
+      "constraints": [
+        "Same field number, name, type and length on Purchase Header and every target: all four posted headers and Purchase Header Archive unless the plan states a document type never needs it.",
+        "No subscriber for TransferFields stages.",
+        "Mirrored fields non-editable on posted tables."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.md",
+      "used-for": "Carrying the field to Vendor Ledger Entry",
+      "constraints": [
+        "Add the field to Gen. Journal Line and Vendor Ledger Entry and subscribe to OnAfterCopyGenJnlLineFromPurchHeader and OnAfterCopyVendLedgerEntryFromGenJnlLine.",
+        "Do not find and Modify the vendor entry from OnAfterPostPurchaseDoc."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-purchase-fields-to-vendor-ledger-through-the-journal-line.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.md",
+      "used-for": "Preview guard and outbox insertion in the purchase after-posting subscriber",
+      "constraints": [
+        "OnAfterPostPurchaseDoc has no PreviewMode parameter; detect preview with \"Gen. Jnl.-Post Preview\".IsActive() and exit before any external side effect.",
+        "CommitIsSupressed is not a preview substitute.",
+        "Do not call Commit(), do not rely on rollback, hand external calls to an outbox processed by a recurring job queue entry.",
+        "Confirm the event's parameters in the target version's symbols."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/onafterpostpurchasedoc-has-no-previewmode-parameter.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.md",
+      "used-for": "General rules for after-posting follow-up processing",
+      "constraints": [
+        "Subscriber errors do not undo posting.",
+        "No Commit() in the subscriber; outbox row plus recurring job queue entry for external calls; use the posted document number passed by the event."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/onafterpostsalesdoc-runs-after-the-posting-commit.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length agreement across the mirrored cascade",
+      "constraints": [
+        "Define the mirrored field with the exact same number, type and length on every table in the cascade."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Ruling out patching posted vendor ledger entries",
+      "constraints": [
+        "Do not persist changes to posted ledger content outside supported workflows; fill the extension field during posting instead."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.md",
+      "used-for": "Deferring the portal call out of the posting transaction",
+      "constraints": [
+        "No HttpClient after a write in the same transaction; insert an outbox row in the same transaction and process committed rows from a recurring job queue entry; delete after HTTP completes.",
+        "Do not use Commit() as a remedy."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/performance/httpclient-inside-write-transaction-holds-locks.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.md",
+      "used-for": "Retry safety of the portal call",
+      "constraints": [
+        "Send a stable request ID (outbox SystemId) the portal must enforce as unique.",
+        "Delete the outbox row only after the call and local updates succeed; a Processed flag does not close the failure window."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/performance/job-queue-external-effects-must-be-idempotent.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.md",
+      "used-for": "Failure reporting from the sender job",
+      "constraints": [
+        "Let errors that invalidate the run propagate; do not swallow TryFunction or Boolean failures."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/performance/job-queue-handlers-must-propagate-failures.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+      "used-for": "Background-safe sender",
+      "constraints": [
+        "No Confirm, RunModal, Message-as-result or other UI in the job queue handler."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.md",
+      "used-for": "Handling portal responses",
+      "constraints": [
+        "Check IsSuccessStatusCode() before treating the body as success; handle non-success explicitly."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/web-services/check-http-status-before-consuming-response-body.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/web-services/handle-httpclient-platform-failure-before-response-access.md",
+      "used-for": "Handling transport failures",
+      "constraints": [
+        "When the Boolean result is captured and false, do not read the response; omitting the Boolean for fail-fast is valid."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/secrettext-for-credentials.md",
+      "used-for": "Carrying portal credentials",
+      "constraints": [
+        "Credentials as SecretText end to end; never round-trip through Text."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/secrets-isolated-storage.md",
+      "used-for": "Storing portal credentials",
+      "constraints": [
+        "Credentials in IsolatedStorage, never a table field; prefer SetEncrypted."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/security/secrets-isolated-storage.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/prefer-oauth2-over-api-keys-for-external-http-calls.md",
+      "used-for": "Authentication choice for the portal",
+      "constraints": [
+        "When the partner supports OAuth, use the OAuth2 codeunit rather than API keys or basic auth."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/validate-user-configurable-urls.md",
+      "used-for": "Validating the stored portal URL",
+      "constraints": [
+        "Before any HttpClient call to a URL from a table field, validate it with Uri.AreURIsHaveSameHost or Uri.IsValidURIPattern against a fixed value and Error on mismatch."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/security/validate-user-configurable-urls.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.md",
+      "used-for": "Consent before sending data to the supplier portal",
+      "constraints": [
+        "Register a custom notice ID; no path sends without approval; use GetPrivacyNoticeApprovalState where no UI may be shown."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/privacy/privacy-notice-consent-for-external-data-transfer.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Data classification of new fields and tables",
+      "constraints": [
+        "Resolve every ToBeClassified to a real classification before release."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips on the new page fields",
+      "constraints": [
+        "Page fields need an explicit or inherited non-empty tooltip; on runtime 13.0 (BC24) or later define it on the table field; applies from BC24 for inheritance, otherwise page-level."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures",
+      "constraints": [
+        "Build vendors, items and purchase documents with the Library codeunits, parents first."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+      "used-for": "Portal setup table",
+      "constraints": [
+        "Singleton setup: Code[10] blank Primary Key, card page with InsertAllowed/DeleteAllowed false and open-time insert."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+      "used-for": "Permission set membership for new objects",
+      "constraints": [
+        "Every exposed object needs an explicit execute entry in a shipped permission set."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Permission set granularity",
+      "constraints": [
+        "Enumerate each tabledata and object explicitly; no wildcard grants; grant only needed letters."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "field-type-and-length",
+      "question": "Should Supplier Contract Reference be Code or Text, and what maximum length? The same type and length will be used on every mirrored table.",
+      "affects": [
+        "purchase-header-ext",
+        "purch-inv-header-ext",
+        "purch-rcpt-header-ext",
+        "purch-cr-memo-hdr-ext",
+        "return-shipment-header-ext",
+        "purchase-header-archive-ext",
+        "gen-journal-line-ext",
+        "vendor-ledger-entry-ext",
+        "portal-outbox-table",
+        "max-length-ref-posts"
+      ]
+    },
+    {
+      "id": "other-document-types",
+      "question": "Is the reference needed on receipts, return orders/credit memos, return shipments and archives? The mirroring article requires them unless you state a document type never needs it; the design currently includes all of them.",
+      "affects": [
+        "purch-rcpt-header-ext",
+        "purch-cr-memo-hdr-ext",
+        "return-shipment-header-ext",
+        "purchase-header-archive-ext"
+      ]
+    },
+    {
+      "id": "purchase-invoices-entered-directly",
+      "question": "Should buyers also type the reference on purchase invoices (and credit memos) entered directly, not only on purchase orders? Only the Purchase Order page is extended now.",
+      "affects": [
+        "purchase-order-page-ext"
+      ]
+    },
+    {
+      "id": "copy-document-flow-back",
+      "question": "When a user copies a posted or archived purchase document, should the reference flow back into the new document? If not, a clearing subscriber is needed; no purchase Copy Document event was confirmed in BCQuality knowledge.",
+      "affects": [
+        "purchase-header-ext"
+      ]
+    },
+    {
+      "id": "credit-memo-portal-notice",
+      "question": "Should posting a purchase credit memo also notify the portal, or only purchase invoices?",
+      "affects": [
+        "portal-notice-scheduler-codeunit",
+        "posting-queues-outbox-row"
+      ]
+    },
+    {
+      "id": "blank-reference",
+      "question": "Is the reference mandatory before posting, and should an invoice with a blank reference still be sent to the portal?",
+      "affects": [
+        "purchase-header-ext",
+        "portal-notice-scheduler-codeunit"
+      ]
+    },
+    {
+      "id": "portal-per-vendor",
+      "question": "Is there one supplier portal for all vendors or a different portal (URL, credentials) per vendor? This decides whether the setup is a singleton or per-vendor configuration.",
+      "affects": [
+        "portal-setup-table",
+        "portal-setup-page",
+        "portal-sender-codeunit"
+      ]
+    },
+    {
+      "id": "portal-api-contract",
+      "question": "What is the portal's endpoint, payload format and authentication method (OAuth2 supported?), and does it accept an idempotency key and treat repeats as the same request?",
+      "affects": [
+        "portal-sender-codeunit",
+        "portal-setup-table"
+      ]
+    },
+    {
+      "id": "portal-expected-host",
+      "question": "Which fixed host or URL pattern should the stored portal URL be validated against?",
+      "affects": [
+        "portal-sender-codeunit",
+        "sender-rejects-unexpected-host"
+      ]
+    },
+    {
+      "id": "job-queue-schedule",
+      "question": "How often should the sender job run, and who creates the recurring job queue entry (setup action, install code, or manual)?",
+      "affects": [
+        "portal-sender-codeunit"
+      ]
+    },
+    {
+      "id": "failure-visibility",
+      "question": "How should persistent send failures be surfaced to users beyond the job queue log?",
+      "affects": [
+        "portal-sender-codeunit"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Context dimensions bc-version, countries and application-area are unknown (no repository); the tooltip guidance depends on runtime 13.0 (BC24) or later.",
+    "The supplier portal API contract (endpoint, payload, authentication, idempotency support) is not covered by BCQuality knowledge; the sender's request shape rests on agent judgment until open question portal-api-contract is answered.",
+    "Standard page names Purchase Order, Posted Purchase Invoice and Vendor Ledger Entries are not confirmed by an opened article; confirm them in the target version's symbols.",
+    "How the recurring job queue entry is created is not covered by an opened article; see open question job-queue-schedule.",
+    "OnAfterPostPurchaseDoc parameter list must be confirmed in the target version's symbols, as the article requires."
+  ]
+}

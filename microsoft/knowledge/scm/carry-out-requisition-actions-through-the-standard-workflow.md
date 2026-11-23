@@ -25,6 +25,8 @@ The samples select an existing accepted New/Purchase item proposal with sales-de
 
 See sample: [`carry-out-requisition-actions-through-the-standard-workflow.good.al`](carry-out-requisition-actions-through-the-standard-workflow.good.al).
 
+To design a feature that carries its own data through this process, see [carry demand fields through planning lines to supply orders](../inventory/carry-demand-fields-through-planning-lines-to-supply-orders.md) and [copy routing line fields on both the refresh and the planning path](../manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md).
+
 ## Anti Pattern
 
 Manually creating or changing supply from a subset of an accepted persistent `"Requisition Line"`, then deleting or marking that proposal handled, skips the standard carry-out/source-reservation handoff. Purchase-field validation and the requisition delete trigger do not first move the proposal's demand links to the new purchase line.

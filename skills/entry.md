@@ -27,6 +27,7 @@ task-context:
     - file-path
     - folder-path
     - knowledge-query       # the caller's exact question without code scope
+    - feature-request       # experimental: a plain-language feature to design
   technologies: [al]
   bc-version: 28
   countries: [w1]

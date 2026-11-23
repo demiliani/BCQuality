@@ -23,6 +23,8 @@ The caller still owns document conversion and destination-line preparation; this
 
 See sample: [`transfer-item-tracking-through-source-reservation-codeunits.good.al`](transfer-item-tracking-through-source-reservation-codeunits.good.al).
 
+To design a feature that carries its own data through this process, see [assign lot and serial tracking from code through Create Reserv. Entry](../inventory/assign-lot-and-serial-tracking-from-code-through-create-reserv-entry.md) and [lot and serial on warehouse picks come from warehouse tracking and reach warehouse entries](../warehouse/lot-and-serial-on-warehouse-picks-come-from-whse-tracking-and-reach-warehouse-entries.md).
+
 ## Anti Pattern
 
 Direct rewrites of persistent `"Reservation Entry"` source type/subtype, ID, reference number, or quantities do not perform the source-line conversion or partial tracking-transfer workflow. Changing only `"Quantity (Base)"` and source keys can drop the remainder or leave the other tracking/reservation quantities attached to the wrong source.

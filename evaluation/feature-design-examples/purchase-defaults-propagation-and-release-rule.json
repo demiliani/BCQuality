@@ -1,0 +1,969 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Default a Handling Class on purchase orders from the buy-from vendor and on purchase lines from the item, push buyer changes on the order header to existing lines, and block release of a purchase order without a Handling Class.",
+    "business-process": "Purchasing: purchase order entry, release and posting",
+    "candidates": 25,
+    "selected": 17
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "vendor-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Vendor",
+        "purpose": "Holds the vendor's Handling Class, the source of the purchase order header default.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "id": "item-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item",
+        "purpose": "Holds the item's Handling Class, the source of the purchase line default.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "id": "purchase-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Header",
+        "purpose": "Holds the order's Handling Class. Its OnValidate calls UpdatePurchLinesByFieldNo(FieldNo(\"Handling Class\"), CurrFieldNo <> 0) so a change by the buyer is pushed to existing lines with the standard confirmation and Modify(true) per line, never ModifyAll.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). OnValidate: UpdatePurchLinesByFieldNo."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purchase-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line",
+        "purpose": "Holds the line's Handling Class, defaulted from the item and updated from the header.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purch-rcpt-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Header",
+        "purpose": "Mirrors Purchase Header \"Handling Class\" so the standard TransferFields copy reaches Purch. Rcpt. Header. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purch-inv-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Header",
+        "purpose": "Mirrors Purchase Header \"Handling Class\" so the standard TransferFields copy reaches Purch. Inv. Header. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purch-cr-memo-hdr-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Hdr.",
+        "purpose": "Mirrors Purchase Header \"Handling Class\" so the standard TransferFields copy reaches Purch. Cr. Memo Hdr.. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "return-shipment-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Header",
+        "purpose": "Mirrors Purchase Header \"Handling Class\" so the standard TransferFields copy reaches Return Shipment Header. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purchase-header-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Header Archive",
+        "purpose": "Mirrors Purchase Header \"Handling Class\" so the standard TransferFields copy reaches Purchase Header Archive. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purch-rcpt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Line",
+        "purpose": "Mirrors Purchase Line \"Handling Class\" so InitFromPurchLine or archiving TransferFields reaches Purch. Rcpt. Line. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purch-inv-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Line",
+        "purpose": "Mirrors Purchase Line \"Handling Class\" so InitFromPurchLine or archiving TransferFields reaches Purch. Inv. Line. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purch-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Line",
+        "purpose": "Mirrors Purchase Line \"Handling Class\" so InitFromPurchLine or archiving TransferFields reaches Purch. Cr. Memo Line. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "return-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Line",
+        "purpose": "Mirrors Purchase Line \"Handling Class\" so InitFromPurchLine or archiving TransferFields reaches Return Shipment Line. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "purchase-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line Archive",
+        "purpose": "Mirrors Purchase Line \"Handling Class\" so InitFromPurchLine or archiving TransferFields reaches Purchase Line Archive. Chosen by the mirroring article, not by the request (see q-posted-and-archive-stages). Non-editable.",
+        "fields": [
+          {
+            "name": "Handling Class",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length on every table that carries it; explicit DataClassification (no ToBeClassified). Type and length are open (see q-handling-class-type). Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "handling-class-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Purch. Handling Class Mgt.",
+        "purpose": "Static event subscribers: buy-from vendor default on the header, item default on the line, header-to-line propagation and the release restriction.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md"
+        ]
+      },
+      {
+        "id": "vendor-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Vendor Card",
+        "purpose": "Lets users maintain the vendor's Handling Class. Tooltip on the table field when the target runtime is 13.0 (BC24) or later, otherwise on the page control.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "item-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item Card",
+        "purpose": "Lets users maintain the item's Handling Class. Tooltip placement as for the Vendor Card.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "purchase-order-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purchase Order",
+        "purpose": "Lets the buyer change the order's Handling Class. ShowMandatory = true, because release enforces the value with TestField; the property is presentation only and the release check stays the guarantee.",
+        "knowledge": [
+          "microsoft/knowledge/ui/showmandatory-on-code-required-page-fields.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "purchase-order-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purchase Order Subform",
+        "purpose": "Shows the line's Handling Class so the buyer can see the item default and the propagated value.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Vendor.\"Handling Class\"",
+        "to": "Purchase Header.\"Handling Class\"",
+        "mechanism": "event-copy",
+        "note": "Plain assignment in a subscriber to OnAfterCopyBuyFromVendorFieldsFromVendor, raised when Buy-from Vendor No. is validated. Handling is delivery-type data, so it follows the buy-from party, not pay-to.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "from": "Item.\"Handling Class\"",
+        "to": "Purchase Line.\"Handling Class\"",
+        "mechanism": "event-copy",
+        "note": "Plain assignment in a subscriber to OnAfterAssignItemValues on Purchase Line, raised by CopyFromItem when No. is validated for an item.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "from": "Buyer (Purchase Order page)",
+        "to": "Purchase Header.\"Handling Class\"",
+        "mechanism": "user-entry",
+        "note": "Field is ShowMandatory on the Purchase Order page.",
+        "knowledge": [
+          "microsoft/knowledge/ui/showmandatory-on-code-required-page-fields.md"
+        ]
+      },
+      {
+        "from": "Purchase Header.\"Handling Class\"",
+        "to": "Purchase Line.\"Handling Class\" (existing lines)",
+        "mechanism": "validate",
+        "note": "Header OnValidate calls UpdatePurchLinesByFieldNo; subscriber to OnUpdatePurchLinesByChangedFieldName (plural \"Lines\") validates the line field from the header when ChangedFieldNo is the Handling Class field.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md"
+        ]
+      },
+      {
+        "from": "Purchase Header.\"Handling Class\"",
+        "to": "Purch. Rcpt. Header.\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header.\"Handling Class\"",
+        "to": "Purch. Inv. Header.\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header.\"Handling Class\"",
+        "to": "Purch. Cr. Memo Hdr..\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header.\"Handling Class\"",
+        "to": "Return Shipment Header.\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Header.\"Handling Class\"",
+        "to": "Purchase Header Archive.\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line.\"Handling Class\"",
+        "to": "Purch. Rcpt. Line.\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields (InitFromPurchLine or archiving) by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line.\"Handling Class\"",
+        "to": "Purch. Inv. Line.\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields (InitFromPurchLine or archiving) by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line.\"Handling Class\"",
+        "to": "Purch. Cr. Memo Line.\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields (InitFromPurchLine or archiving) by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line.\"Handling Class\"",
+        "to": "Return Shipment Line.\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields (InitFromPurchLine or archiving) by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line.\"Handling Class\"",
+        "to": "Purchase Line Archive.\"Handling Class\"",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields (InitFromPurchLine or archiving) by field number; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Purchase Header\"",
+        "event": "OnAfterCopyBuyFromVendorFieldsFromVendor",
+        "purpose": "Default the header Handling Class from the buy-from vendor with a plain assignment from the Vendor record the event passes.",
+        "guards": [
+          "Declare only the parameters used, with the names the publisher declares; confirm the signature in the target version's symbols."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Purchase Line\"",
+        "event": "OnAfterAssignItemValues",
+        "purpose": "Default the line Handling Class from the Item record the event passes.",
+        "guards": [
+          "Use the purchase-side parameters (CurrentFieldNo, PurchHeader), not the sales-side ones; declare only the parameters used."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Purchase Header\"",
+        "event": "OnUpdatePurchLinesByChangedFieldName",
+        "purpose": "Validate Purchase Line \"Handling Class\" from the header when the header field changes.",
+        "guards": [
+          "Act only when ChangedFieldNo = PurchHeader.FieldNo(\"Handling Class\").",
+          "Spell the event with plural \"Lines\" exactly as the purchase publisher declares it."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Purchase Header\"",
+        "event": "OnCheckPurchaseReleaseRestrictions",
+        "purpose": "Block release of a purchase order without a Handling Class: Sender.TestField(\"Handling Class\"). The header arrives as Sender (IncludeSender). Because posting releases an open document, this also stops posting an open order outside preview.",
+        "guards": [
+          "Act only when Sender.\"Document Type\" = Order.",
+          "Raised from Release Purchase Document; not raised in posting preview or when release restrictions are skipped.",
+          "Add the check; do not take over the standard release check with IsHandled."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/error-handling/fielderror-vs-testfield.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Give every Handling Class field added by a table extension an explicit DataClassification (table extensions inherit no table-level default) and resolve any ToBeClassified before release; decide the classification from what the field stores.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "If Handling Class becomes its own table with a TableRelation (q-handling-class-type), plan it as a new business entity (table type, pages, data classification, permission set, tests) and size every referencing field with the exact type and length of the related key.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "header-defaults-from-buy-from-vendor",
+        "given": "A vendor with a Handling Class, created with LibraryPurchase",
+        "when": "A purchase order is created and Buy-from Vendor No. is validated to that vendor",
+        "then": "Purchase Header.\"Handling Class\" equals the vendor's value",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "line-defaults-from-item",
+        "given": "A purchase order and an item with a Handling Class, created with library codeunits",
+        "when": "A purchase line of type Item is created and No. is validated to the item",
+        "then": "Purchase Line.\"Handling Class\" equals the item's value",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "header-change-updates-existing-lines",
+        "given": "A purchase order with several item lines",
+        "when": "The buyer changes Handling Class on the Purchase Order test page and confirms the line-update dialog",
+        "then": "Every existing line carries the new Handling Class; the ConfirmHandler is listed and executes",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "other-header-field-does-not-touch-lines",
+        "given": "A purchase order whose lines carry item Handling Class values that differ from the header",
+        "when": "A different header field that propagates to lines through UpdatePurchLinesByFieldNo is changed",
+        "then": "The lines' Handling Class values are unchanged (ChangedFieldNo guard)",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "release-blocked-without-handling-class",
+        "given": "A purchase order with lines and a blank Handling Class",
+        "when": "The order is released through Release Purchase Document",
+        "then": "asserterror, then Assert.ExpectedTestFieldError for the Handling Class caption; the order stays Open",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/error-handling/fielderror-vs-testfield.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "release-succeeds-with-handling-class",
+        "given": "A purchase order with lines and a Handling Class",
+        "when": "The order is released",
+        "then": "Status is Released",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "release-rule-limited-to-orders",
+        "given": "A purchase document of another type (for example an invoice) with a blank Handling Class",
+        "when": "It is released",
+        "then": "Release succeeds (Document Type guard)",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "posting-open-order-without-handling-class-fails",
+        "given": "An open purchase order with a blank Handling Class",
+        "when": "The order is posted (receive and invoice) outside preview",
+        "then": "Posting fails with the Handling Class TestField error and nothing is posted",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "receipt-and-invoice-carry-handling-class",
+        "given": "A released purchase order with a Handling Class on header and lines",
+        "when": "The order is received and invoiced",
+        "then": "Purch. Rcpt. Header/Line and Purch. Inv. Header/Line carry the same Handling Class values",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "return-order-carries-handling-class",
+        "given": "A released purchase return order with a Handling Class on header and lines",
+        "when": "It is shipped and invoiced",
+        "then": "Return Shipment Header/Line and Purch. Cr. Memo Hdr./Line carry the same Handling Class values",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "archive-carries-handling-class",
+        "given": "A purchase order with a Handling Class on header and lines",
+        "when": "The document is archived",
+        "then": "Purchase Header Archive and Purchase Line Archive carry the same Handling Class values",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+      "used-for": "Buy-from vendor default on the header and item default on the purchase line.",
+      "constraints": [
+        "Copy the value in a subscriber with a plain assignment from the master record the event passes, never from the page.",
+        "Delivery and contact data follows the buy-from party; payment, pricing and posting data follows pay-to.",
+        "Purchase Line OnAfterAssignItemValues passes CurrentFieldNo and PurchHeader, not the sales parameters; declare only the parameters used, with the publisher's names."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+      "used-for": "Pushing a changed header Handling Class to existing purchase lines.",
+      "constraints": [
+        "Call UpdatePurchLinesByFieldNo(FieldNo(<field>), CurrFieldNo <> 0) from the header field's OnValidate.",
+        "Subscribe to OnUpdatePurchLinesByChangedFieldName (plural) and Validate the line field when ChangedFieldNo is the custom field.",
+        "Do not use ModifyAll: it skips line OnValidate, gives no confirmation and runs for code-originated changes."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+      "used-for": "Placing the 'cannot release without Handling Class' rule.",
+      "constraints": [
+        "A release rule belongs in the release restriction event of that side (OnCheckPurchaseReleaseRestrictions), which passes the header as Sender.",
+        "The release restriction event is not raised in preview or when release restrictions are skipped; posting releases an open document, so the rule also stops posting an open document outside preview.",
+        "Do not check the rule in the page action or after posting."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the header and line field on posted receipt, invoice, credit memo, return shipment and archive tables.",
+      "constraints": [
+        "Same field number, name, type and length on Purchase Header/Line and on every target the plan needs; unless the plan excludes a document type, that means all four posted tables and the archive.",
+        "No subscriber is needed for these stages; keep mirrored fields non-editable on posted tables.",
+        "Do not patch posted headers in a subscriber with Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Purchase follows the same posting map as sales; tests post and read back from every target.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage; planning only the named tables leaves posted documents and archives blank.",
+        "Name page extensions and permission entries for new objects per stage and add a test that posts and reads the value back from every target.",
+        "Do not copy a sales subscriber to purchases without checking the purchase event's parameters; Copy Document copies posted and archived headers back with TransferFields, so decide whether that is wanted."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Keeping the mirrored Handling Class definitions identical across the TransferFields cascade.",
+      "constraints": [
+        "Define a mirrored field with the exact same field number, data type and length on every table in the cascade, at creation time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Conditional: applies only if Handling Class gets a TableRelation to its own table (q-handling-class-type).",
+      "constraints": [
+        "For an unconditional relation, give the field the same type and exact length as the related field; read the related length from its definition rather than assuming Code[10] or Code[20]."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Conditional: applies only if Handling Class becomes a new table (q-handling-class-type).",
+      "constraints": [
+        "Plan table type, numbering, setup, data rules, privacy, pages, permissions, install/upgrade and tests for a new entity; a decision the request does not settle is a question, not a default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Classifying the fields added by table extensions.",
+      "constraints": [
+        "A tableextension inherits no table-level DataClassification; every Normal field it adds needs an explicit valid DataClassification."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of the new fields.",
+      "constraints": [
+        "Resolve ToBeClassified to a real classification before shipping; decide from the data's content, not convenience."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/error-handling/fielderror-vs-testfield.md",
+      "used-for": "Choosing TestField for the release check.",
+      "constraints": [
+        "Use TestField for a simple presence check; it adds field and record context, so do not hand-build an Error naming the field."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/showmandatory-on-code-required-page-fields.md",
+      "used-for": "Marking Handling Class mandatory on the Purchase Order page.",
+      "constraints": [
+        "Set ShowMandatory = true on a visible, editable field the user must supply before an action can complete, and keep the enforcement in code; the property enforces nothing."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltip placement for the new page fields; the target runtime is unknown.",
+      "constraints": [
+        "On runtime 13.0 (BC24) or later define the tooltip on the table field and omit duplicate page-level tooltips; on earlier targets put the tooltip on the page control.",
+        "Tooltip text must say what the value is used for, without inventing effects."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for vendors, items and purchase documents.",
+      "constraints": [
+        "Create fixtures with library codeunits (LibraryPurchase, LibraryInventory, LibraryRandom), parents first, validating foreign-key fields; do not hand-roll Init/Insert records."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Structure of the test codeunit.",
+      "constraints": [
+        "[FEATURE] on the codeunit, [SCENARIO] as the first comment in each test, and [GIVEN]/[WHEN]/[THEN] marking setup, action and assertions."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+      "used-for": "Negative release and posting tests.",
+      "constraints": [
+        "Follow every asserterror with a check of the specific error; for a TestField failure use Assert.ExpectedTestFieldError."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+      "used-for": "The header-change test that goes through the line-update confirmation.",
+      "constraints": [
+        "List a handler for every UI call the scenario triggers and make each listed nonoptional handler execute; assert the semantic result, not just that the handler ran."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "q-handling-class-type",
+      "question": "What is Handling Class: a code that relates to a new Handling Class table (with its own page, permissions and setup), an enum, or a free code? The design assumes Code[10] without a relation.",
+      "affects": [
+        "vendor-ext",
+        "item-ext",
+        "purchase-header-ext",
+        "purchase-line-ext"
+      ]
+    },
+    {
+      "id": "q-posted-and-archive-stages",
+      "question": "Must Handling Class reach posted receipts, invoices, credit memos, return shipments and archives? The mirroring article requires them unless you exclude a document type; the request does not mention them.",
+      "affects": [
+        "purch-rcpt-header-ext",
+        "purch-inv-header-ext",
+        "purch-cr-memo-hdr-ext",
+        "return-shipment-header-ext",
+        "purchase-header-archive-ext",
+        "purch-rcpt-line-ext",
+        "purch-inv-line-ext",
+        "purch-cr-memo-line-ext",
+        "return-shipment-line-ext",
+        "purchase-line-archive-ext"
+      ]
+    },
+    {
+      "id": "q-line-type-scope",
+      "question": "Should a header change update all lines, or only lines of type Item? Should non-item lines get a Handling Class at all?",
+      "affects": [
+        "handling-class-subscribers",
+        "purchase-line-ext"
+      ]
+    },
+    {
+      "id": "q-new-line-after-header-change",
+      "question": "When a line is added after the buyer changed the header Handling Class, should the line take the item's value (as the request states) or the header's value?",
+      "affects": [
+        "handling-class-subscribers",
+        "purchase-line-ext"
+      ]
+    },
+    {
+      "id": "q-vendor-change-with-lines",
+      "question": "When Buy-from Vendor No. changes on an order that already has lines, should the new vendor's Handling Class also be pushed to the lines? The vendor default is a plain assignment and does not run the line update.",
+      "affects": [
+        "handling-class-subscribers",
+        "purchase-header-ext"
+      ]
+    },
+    {
+      "id": "q-other-document-types",
+      "question": "Should the defaults and the release rule also apply to purchase quotes, invoices, credit memos, return orders and blanket orders, or only to orders?",
+      "affects": [
+        "handling-class-subscribers"
+      ]
+    },
+    {
+      "id": "q-existing-data",
+      "question": "Existing vendors, items and open purchase orders will have a blank Handling Class after installation, so open orders cannot be released until it is filled. Is a data migration or default needed?",
+      "affects": [
+        "vendor-ext",
+        "item-ext",
+        "purchase-header-ext"
+      ]
+    },
+    {
+      "id": "q-copy-document",
+      "question": "Copy Document copies posted and archived headers back into Purchase Header. Should a copied order keep the source Handling Class or take the vendor's current value?",
+      "affects": [
+        "purchase-header-ext"
+      ]
+    },
+    {
+      "id": "q-downstream-stages",
+      "question": "Should Handling Class also reach warehouse receipt lines, item ledger entries or vendor ledger entries? Not designed because the request does not ask for it.",
+      "affects": [
+        "purchase-line-ext"
+      ]
+    },
+    {
+      "id": "q-posted-pages",
+      "question": "Should posted purchase documents and archives show Handling Class on their pages?",
+      "affects": [
+        "purch-rcpt-header-ext",
+        "purch-inv-header-ext",
+        "purch-cr-memo-hdr-ext",
+        "return-shipment-header-ext",
+        "purchase-header-archive-ext",
+        "purch-rcpt-line-ext",
+        "purch-inv-line-ext",
+        "purch-cr-memo-line-ext",
+        "return-shipment-line-ext",
+        "purchase-line-archive-ext"
+      ]
+    },
+    {
+      "id": "q-object-ids",
+      "question": "Which object ID range and field number should be used? No repository or app.json was supplied.",
+      "affects": [
+        "vendor-ext",
+        "item-ext",
+        "purchase-header-ext",
+        "purchase-line-ext",
+        "handling-class-subscribers"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version unknown (no repository): tooltip placement depends on runtime 13.0 / BC24.",
+    "countries and application-area not stated; all selected articles are w1 / all, so applicability is unaffected.",
+    "Handling Class type Code[10] follows the knowledge samples; the real type rests on q-handling-class-type.",
+    "Event parameter names for OnAfterCopyBuyFromVendorFieldsFromVendor are not shown in an opened sample; confirm in the target version's symbols."
+  ]
+}

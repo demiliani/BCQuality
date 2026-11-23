@@ -1,0 +1,979 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "partial",
+  "outcome-reason": "Material gap: copying the header Collection Group onto new sales lines needs a line-initialization event that no opened article or repository symbol confirms. All other stages are designed.",
+  "summary": {
+    "request": "Default Collection Group from the bill-to customer onto sales documents and Product Line Code from the item onto sales lines, keep line Collection Group in step with the header, split sales G/L entries by Product Line Code, and block posting of orders without a Collection Group.",
+    "business-process": "Sales document entry and sales posting (invoice posting buffer to G/L)",
+    "candidates": 21,
+    "selected": 15
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "customer-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Customer",
+        "purpose": "Holds the Collection Group master value that is defaulted from the bill-to customer onto sales documents.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Master value; TableRelation to the Collection Group source (q-lookup-tables). DataClassification set on the field, since a tableextension has no table-level value to inherit."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "item-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item",
+        "purpose": "Holds the Product Line Code master value that is defaulted onto sales lines.",
+        "fields": [
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (n = related key length)",
+            "note": "Master value; TableRelation to the Product Line source (q-lookup-tables). DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header",
+        "purpose": "Carries Collection Group on the document header. Its OnValidate calls UpdateSalesLinesByFieldNo(FieldNo(\"Collection Group\"), CurrFieldNo <> 0) so the standard routine confirms with the user and validates every line.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Defaulted from the bill-to customer; OnValidate propagates to lines through UpdateSalesLinesByFieldNo, never ModifyAll. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Carries Collection Group (follows the header) and Product Line Code (defaulted from the item) on each sales line.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Set from the header by the OnUpdateSalesLineByChangedFieldName subscriber. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          },
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (n = related key length)",
+            "note": "Defaulted from the item in OnAfterAssignItemValues. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Product Line key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Header",
+        "purpose": "TransferFields target of Sales Header: mirrors Collection Group with the same field number, type and length so the standard copy carries it. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Header",
+        "purpose": "TransferFields target of Sales Header: mirrors Collection Group with the same field number, type and length so the standard copy carries it. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Header",
+        "purpose": "TransferFields target of Sales Header: mirrors Collection Group with the same field number, type and length so the standard copy carries it. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "return-receipt-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Header",
+        "purpose": "TransferFields target of Sales Header: mirrors Collection Group with the same field number, type and length so the standard copy carries it. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-header-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header Archive",
+        "purpose": "TransferFields target of Sales Header: mirrors Collection Group with the same field number, type and length so the standard copy carries it. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "TransferFields target of Sales Line (InitFromSalesLine / archiving): mirrors Collection Group and Product Line Code with the same field numbers, types and lengths. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          },
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Product Line key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "TransferFields target of Sales Line (InitFromSalesLine / archiving): mirrors Collection Group and Product Line Code with the same field numbers, types and lengths. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          },
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Product Line key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "TransferFields target of Sales Line (InitFromSalesLine / archiving): mirrors Collection Group and Product Line Code with the same field numbers, types and lengths. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          },
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Product Line key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "return-receipt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "TransferFields target of Sales Line (InitFromSalesLine / archiving): mirrors Collection Group and Product Line Code with the same field numbers, types and lengths. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          },
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Product Line key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "sales-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "TransferFields target of Sales Line (InitFromSalesLine / archiving): mirrors Collection Group and Product Line Code with the same field numbers, types and lengths. No subscriber. Chosen by the mirroring article; see q-posted-targets.",
+        "fields": [
+          {
+            "name": "Collection Group",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Header/Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Collection Group key length (see open question q-lookup-tables)."
+          },
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (n = related key length)",
+            "note": "Non-editable mirror of the Sales Line field. Same field number, name, type and length on every table that mirrors it; Code length must equal the related Product Line key length (see open question q-lookup-tables)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "invoice-posting-buffer-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Invoice Posting Buffer",
+        "purpose": "Carries Product Line Code through the invoice posting buffer so it can be part of Group ID and reach the journal line.",
+        "fields": [
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (same as Sales Line)",
+            "note": "Temporary buffer field; DataClassification set on the field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Carries Product Line Code from the buffer to the G/L entry.",
+        "fields": [
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (same as Sales Line)"
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "gl-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "G/L Entry",
+        "purpose": "Stores Product Line Code on each G/L entry so Finance can split G/L by it. Chosen as a stored field because the request asks for G/L entries split by the code; the hot-ledger article allows a stored field only when the value must appear as a native list column and is read on almost every access, otherwise a related table keyed by Entry No. is preferred - confirm in q-gl-storage.",
+        "fields": [
+          {
+            "name": "Product Line Code",
+            "type": "Code[n] (same as Sales Line)",
+            "note": "Editable = false. A code value stays as copied on reversal."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-defaults-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Sales Defaults Propagation",
+        "purpose": "Event subscribers that default Collection Group from the bill-to customer, Product Line Code from the item, and push a changed header Collection Group to existing lines.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md"
+        ]
+      },
+      {
+        "id": "product-line-gl-posting",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Product Line G/L Posting",
+        "purpose": "Event subscribers that copy Product Line Code into the Invoice Posting Buffer, add it to Group ID, and carry it to Gen. Journal Line and G/L Entry.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      },
+      {
+        "id": "collection-group-posting-check",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Collection Group Posting Check",
+        "purpose": "Subscriber that stops posting (preview included) of a sales order whose Collection Group is blank.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/error-handling/prefer-errorinfo-for-actionable-errors.md"
+        ]
+      },
+      {
+        "id": "customer-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Customer Card",
+        "purpose": "Shows Collection Group on the customer. Tooltip defined on the table field and inherited (BC24/runtime 13.0+), otherwise on the page control.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "item-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Item Card",
+        "purpose": "Shows Product Line Code on the item, with an inherited or page-level tooltip.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "sales-document-pages-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order, Sales Invoice and their subforms",
+        "purpose": "Shows Collection Group on the header and Collection Group and Product Line Code on lines. No business logic on the page; defaults come from table events. Other document pages are an open question (q-pages).",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Customer.\"Collection Group\" (bill-to customer)",
+        "to": "Sales Header.\"Collection Group\"",
+        "mechanism": "event-copy",
+        "note": "Plain assignment in OnAfterSetFieldsBilltoCustomer on Sales Header; runs for every creation path, not on the page.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "from": "Item.\"Product Line Code\"",
+        "to": "Sales Line.\"Product Line Code\"",
+        "mechanism": "event-copy",
+        "note": "Plain assignment in OnAfterAssignItemValues on Sales Line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "from": "Sales Header.\"Collection Group\" (changed)",
+        "to": "Sales Line.\"Collection Group\" (existing lines)",
+        "mechanism": "validate",
+        "note": "Header OnValidate calls UpdateSalesLinesByFieldNo; subscriber to OnUpdateSalesLineByChangedFieldName validates the line field when ChangedFieldNo is Collection Group.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md"
+        ]
+      },
+      {
+        "from": "Sales Header.\"Collection Group\"",
+        "to": "Sales Line.\"Collection Group\" (new lines added after the header is set)",
+        "mechanism": "other",
+        "note": "No opened article or repository symbol confirms the line-initialization event that copies header values to a new line; see unresolved.",
+        "knowledge": []
+      },
+      {
+        "from": "Sales Header",
+        "to": "Sales Shipment Header, Sales Invoice Header, Sales Cr.Memo Header, Return Receipt Header, Sales Header Archive",
+        "mechanism": "transferfields",
+        "note": "Standard TransferFields by field number; mirrored field needs no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line, Sales Line Archive",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine and archiving call TransferFields; carries Collection Group and Product Line Code.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line.\"Product Line Code\"",
+        "to": "Invoice Posting Buffer.\"Product Line Code\" and Group ID",
+        "mechanism": "event-copy",
+        "note": "Filled in OnPrepareLineOnAfterFillInvoicePostingBuffer; appended to Group ID in OnAfterBuildPrimaryKey so lines with different codes do not merge.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "from": "Invoice Posting Buffer.\"Product Line Code\"",
+        "to": "Gen. Journal Line.\"Product Line Code\"",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyToGenJnlLine on Invoice Posting Buffer.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line.\"Product Line Code\"",
+        "to": "G/L Entry.\"Product Line Code\"",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyGLEntryFromGenJnlLine on G/L Entry. On reversal, Gen. Jnl.-Post Reverse copies the code unchanged, which is correct for a code value. VAT and bank entries are not extended.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Sales Header\"",
+        "event": "OnAfterSetFieldsBilltoCustomer",
+        "purpose": "Default Collection Group from the bill-to customer.",
+        "guards": [
+          "Use the bill-to event, not the sell-to event: collection data follows the bill-to party",
+          "Plain assignment from the Customer record the event passes",
+          "Do not copy on the page"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Sales Line\"",
+        "event": "OnAfterAssignItemValues",
+        "purpose": "Default Product Line Code from the item.",
+        "guards": [
+          "Declare only the parameters used, with the names the Sales Line publisher declares"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Sales Header\"",
+        "event": "OnUpdateSalesLineByChangedFieldName",
+        "purpose": "Validate Sales Line Collection Group from the header when the header field changes.",
+        "guards": [
+          "Act only when ChangedFieldNo = FieldNo(\"Collection Group\")",
+          "Validate the line field; never ModifyAll",
+          "Spell the sales event with singular \"Line\""
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Sales Post Invoice Events\"",
+        "event": "OnPrepareLineOnAfterFillInvoicePostingBuffer",
+        "purpose": "Copy Product Line Code from the sales line into the Invoice Posting Buffer.",
+        "guards": [
+          "Subscribe on \"Sales Post Invoice Events\" (825), not \"Sales Post Invoice\""
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Invoice Posting Buffer\"",
+        "event": "OnAfterBuildPrimaryKey",
+        "purpose": "Add Product Line Code to Group ID so lines with different codes post as separate G/L entries.",
+        "guards": [
+          "Pad the value with PadField as the standard key does",
+          "CopyStr to MaxStrLen of Group ID (Text[1000])"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Invoice Posting Buffer\"",
+        "event": "OnAfterCopyToGenJnlLine",
+        "purpose": "Copy Product Line Code to the Gen. Journal Line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "publisher": "Table \"G/L Entry\"",
+        "event": "OnAfterCopyGLEntryFromGenJnlLine",
+        "purpose": "Copy Product Line Code to the G/L Entry.",
+        "guards": [
+          "Never fill G/L entries after posting by finding and modifying them"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Sales-Post\"",
+        "event": "OnAfterCheckSalesDoc",
+        "purpose": "Stop posting a sales order whose Collection Group is blank, before any entry is written and also in posting preview.",
+        "guards": [
+          "Apply only when Document Type = Order (q-check-scope)",
+          "Do not check in a page action or in OnAfterPostSalesDoc",
+          "Raise an error that tells the user what to fix"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/error-handling/prefer-errorinfo-for-actionable-errors.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification on every field added by a tableextension (no table-level value to inherit); choose the value matching the stored data and leave nothing ToBeClassified.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Before release, define the Collection Group and Product Line sources the fields relate to and size every field to the exact related key length (q-lookup-tables).",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "Decide how existing open sales orders without a Collection Group are handled once the posting check ships (q-existing-orders). No BCQuality article was opened for this step.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "t-collection-group-from-bill-to",
+        "given": "Customer A (sell-to) with Collection Group X whose Bill-to Customer No. is customer B with Collection Group Y, created with LibrarySales",
+        "when": "A sales invoice is created for customer A",
+        "then": "Sales Header Collection Group is Y, not X",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-product-line-from-item",
+        "given": "An item with a Product Line Code, created with LibraryInventory",
+        "when": "A sales line is created for the item with LibrarySales.CreateSalesLine",
+        "then": "Sales Line Product Line Code equals the item's code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-header-change-updates-lines",
+        "given": "A sales order with two item lines and Collection Group X",
+        "when": "Collection Group on the header is validated to Y from code",
+        "then": "Both lines carry Collection Group Y",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-new-line-inherits-header",
+        "given": "A sales order header with Collection Group X",
+        "when": "A new item line is added",
+        "then": "The new line carries Collection Group X (depends on the unresolved line-initialization event)",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-posting-mirrors-values",
+        "given": "A sales order with Collection Group and lines with Product Line Codes, and a sales return order with the same values",
+        "when": "Both are posted (ship and invoice; receive and invoice) and the order is archived",
+        "then": "Shipment, invoice, credit memo, return receipt and archive headers carry Collection Group; their lines carry Collection Group and Product Line Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-gl-split-by-product-line",
+        "given": "A sales invoice with two lines on the same G/L account and posting groups but different Product Line Codes",
+        "when": "The invoice is posted",
+        "then": "Two sales G/L entries exist, each with its own Product Line Code and amount, instead of one merged entry",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-order-without-collection-group-blocked",
+        "given": "A sales order with a blank Collection Group",
+        "when": "The order is posted, and separately posting preview is run",
+        "then": "Both fail with the Collection Group mandatory-field error, verified with Assert.ExpectedTestFieldError (or ExpectedError with the full label text if ErrorInfo is used), and no entries exist",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+          "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Stage map for the custom sales fields: posted headers/lines and archives via TransferFields, ledger stages via field-by-field copy, tests and Copy Document decision.",
+      "constraints": [
+        "Decide which stages each field must reach and plan one step per stage",
+        "Name the page extensions, permission entries for new objects, and a test that posts and reads the value back from every target",
+        "Copy Document copies posted and archived headers back with TransferFields; decide whether that is wanted, otherwise clear the field in OnAfterCopySalesHeaderDone",
+        "Do not fill ledger entries after posting by finding and modifying them"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+      "used-for": "Defaulting Collection Group from the bill-to customer and Product Line Code from the item.",
+      "constraints": [
+        "Payment, pricing and posting data follows the bill-to party: use OnAfterSetFieldsBilltoCustomer",
+        "Line default from the item: subscribe to OnAfterAssignItemValues and declare only used parameters with the publisher's names",
+        "Copy with plain assignment from the master record the event passes",
+        "Do not copy master data on the page"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.good.al",
+        "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.md",
+      "used-for": "Making lines follow a changed header Collection Group.",
+      "constraints": [
+        "Call UpdateSalesLinesByFieldNo(FieldNo(field), CurrFieldNo <> 0) in the header field's OnValidate",
+        "Subscribe to OnUpdateSalesLineByChangedFieldName and Validate the line field when ChangedFieldNo is the field",
+        "Do not use ModifyAll: it skips the line OnValidate and the user confirmation"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.good.al",
+        "microsoft/knowledge/sales-purchase/propagate-sales-and-purchase-header-fields-to-lines.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+      "used-for": "Splitting G/L entries by Product Line Code through the Invoice Posting Buffer.",
+      "constraints": [
+        "Add the field to Invoice Posting Buffer, Gen. Journal Line and G/L Entry",
+        "Fill the buffer in OnPrepareLineOnAfterFillInvoicePostingBuffer on \"Sales Post Invoice Events\", not \"Sales Post Invoice\"",
+        "Add the field to Group ID in OnAfterBuildPrimaryKey with PadField, or lines with different values merge and keep the first line's value",
+        "Copy in OnAfterCopyToGenJnlLine and OnAfterCopyGLEntryFromGenJnlLine"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.good.al",
+        "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.md",
+      "used-for": "Blocking posting of an order without a Collection Group.",
+      "constraints": [
+        "A rule that must stop every posting, including preview, belongs in OnAfterCheckSalesDoc",
+        "Use the release restriction event only for rules about releasing; post restriction events only for rules that must not block preview",
+        "Do not check in the page action or after posting in OnAfterPostSalesDoc",
+        "Raise errors that tell the user what to fix"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.good.al",
+        "microsoft/knowledge/sales-purchase/validate-sales-and-purchase-documents-before-posting-or-release.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Carrying Collection Group and Product Line Code to posted documents and archives.",
+      "constraints": [
+        "Same field number, name, type and length on the source and every target table the plan needs: four posted header tables and the archive, and the line equivalents, unless the plan states a document type never needs it",
+        "No subscriber is needed for these stages",
+        "Keep mirrored fields non-editable on posted tables"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definitions across the TransferFields cascade.",
+      "constraints": [
+        "Mirrored fields must have the exact same field number, data type and length on every table in the cascade, set at creation time"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+      "used-for": "Gen. Journal Line to G/L Entry copy and reversal behavior of Product Line Code.",
+      "constraints": [
+        "Subscribe to the copy event of each entry table the design needs; do not extend VAT or bank entries unless their reports need the value",
+        "State what reversal does with each custom field: a code can stay as copied, a custom amount or quantity must be negated"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choosing between a stored G/L Entry field and a related table.",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by ledger Entry No.",
+        "Use a stored tableextension field only when the value must appear as a native list column and is read on almost every access"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing Collection Group and Product Line Code fields against their related tables.",
+      "constraints": [
+        "Read the related field's type and length before adding a TableRelation",
+        "An unconditional relation requires the same type and exact length as the related field"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of every added field.",
+      "constraints": [
+        "A tableextension field must set its own DataClassification",
+        "Choose the value matching the stored data at definition time; do not leave ToBeClassified"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips for the new page fields.",
+      "constraints": [
+        "On runtime 13.0 (BC24) or later define the tooltip on the table field and let bound page fields inherit it; earlier targets need page-level tooltips (applies from BC24)",
+        "Tooltip text must say what the value is used for, not just repeat the caption"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/error-handling/prefer-errorinfo-for-actionable-errors.md",
+      "used-for": "Shape of the posting-check error.",
+      "constraints": [
+        "For a recoverable failure use ErrorInfo with a recommended action only when the solution is genuinely known and the user can apply it"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Create customers, items and sales documents with the Library codeunits, parents first, and Validate foreign keys"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.md",
+      "used-for": "Negative test for the posting check.",
+      "constraints": [
+        "Follow every asserterror with a check of the specific expected error, e.g. Assert.ExpectedTestFieldError for a mandatory field",
+        "Do not rely on ExpectedErrorCode alone or on a fragment shared by other errors"
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/asserterror-needs-expectederror-and-code.good.al"
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "q-lookup-tables",
+      "question": "Are Collection Group and Product Line Code validated against existing tables (which, and what key length) or new setup tables to be created? If new tables are needed, they require their own design (table type, pages, permissions, classification).",
+      "affects": [
+        "customer-ext",
+        "item-ext",
+        "sales-header-ext",
+        "sales-line-ext"
+      ]
+    },
+    {
+      "id": "q-document-types",
+      "question": "The request says the Collection Group defaults on sales invoices, but the bill-to event fires for every sales document type. Should the default apply to all sales documents (orders, quotes, credit memos, return orders) or only invoices?",
+      "affects": [
+        "sales-defaults-subscribers",
+        "t-collection-group-from-bill-to"
+      ]
+    },
+    {
+      "id": "q-check-scope",
+      "question": "Must the blank-Collection-Group check apply only to orders, or also to invoices and other posted document types? Should it also block releasing the order (release restriction event)?",
+      "affects": [
+        "collection-group-posting-check",
+        "t-order-without-collection-group-blocked"
+      ]
+    },
+    {
+      "id": "q-bill-to-change",
+      "question": "When the bill-to customer is changed on a document that already has lines, must the lines take the new customer's Collection Group as well?",
+      "affects": [
+        "sales-defaults-subscribers",
+        "t-header-change-updates-lines"
+      ]
+    },
+    {
+      "id": "q-posted-targets",
+      "question": "The mirroring guidance puts the fields on all posted header/line tables and archives. Are any of shipments, credit memos, return receipts or archives not needed?",
+      "affects": [
+        "sales-shipment-header-ext",
+        "sales-cr-memo-header-ext",
+        "return-receipt-header-ext",
+        "sales-header-archive-ext",
+        "sales-shipment-line-ext",
+        "sales-cr-memo-line-ext",
+        "return-receipt-line-ext",
+        "sales-line-archive-ext"
+      ]
+    },
+    {
+      "id": "q-copy-document",
+      "question": "Copy Document copies posted and archived documents back with TransferFields, so the old Collection Group would flow into the new document. Is that wanted, or must the value be re-defaulted from the current bill-to customer?",
+      "affects": [
+        "sales-header-ext",
+        "sales-defaults-subscribers"
+      ]
+    },
+    {
+      "id": "q-gl-storage",
+      "question": "Must Product Line Code appear as a native column on G/L entry lists and be read on almost every access (stored field), or is a related table keyed by Entry No. acceptable? Does Finance also need it on customer ledger, VAT or item ledger entries?",
+      "affects": [
+        "gl-entry-ext",
+        "t-gl-split-by-product-line"
+      ]
+    },
+    {
+      "id": "q-existing-orders",
+      "question": "What happens to open orders that exist before the feature is installed and have no Collection Group: backfill from the bill-to customer, or require users to set it?",
+      "affects": [
+        "collection-group-posting-check"
+      ]
+    },
+    {
+      "id": "q-pages",
+      "question": "Which other pages must show the fields (quotes, credit memos, return orders, posted documents, General Ledger Entries)?",
+      "affects": [
+        "sales-document-pages-ext"
+      ]
+    },
+    {
+      "id": "q-purchase",
+      "question": "Is the feature sales-only, or must purchase documents also split G/L by Product Line Code?",
+      "affects": [
+        "product-line-gl-posting"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Material: the event that copies Sales Header Collection Group onto a newly inserted Sales Line is not confirmed by an opened article or repository symbols; the hop to new lines and test t-new-line-inherits-header cannot be finalized until it is confirmed.",
+    "Not covered by BCQuality knowledge: handling of existing open orders without a Collection Group at install or upgrade (lifecycle upgrade step).",
+    "Unknown applicability: bc-version, countries and application-area were not supplied and no repository was available; tooltip inheritance applies only from BC24."
+  ]
+}

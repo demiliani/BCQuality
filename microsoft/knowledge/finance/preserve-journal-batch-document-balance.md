@@ -21,6 +21,8 @@ Do not claim every document must always balance: when that template option is fa
 
 See sample: [`preserve-journal-batch-document-balance.good.al`](preserve-journal-batch-document-balance.good.al).
 
+To design a feature that carries its own data through this process, see [post finance journal lines from feature code in a dedicated batch](../finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md).
+
 ## Anti Pattern
 
 Replace a normal persisted journal batch's posting path with per-line posting or only an aggregate-total check, bypassing a demonstrated template/document/date policy. For the document-imbalance finding, require evidence that `Force Doc. Balance` applies and that separate document groups can be unbalanced; do not infer the setting from its name or a comment alone.

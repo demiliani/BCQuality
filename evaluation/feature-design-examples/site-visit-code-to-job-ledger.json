@@ -1,0 +1,444 @@
+{
+  "skill": { "id": "al-feature-design", "version": 1 },
+  "outcome": "completed",
+  "summary": {
+    "request": "Let technicians type a Site Visit Code on project journal lines and on purchase lines charged to a project, and carry it during posting onto every project ledger entry those lines create so project managers can analyze project costs per site visit.",
+    "business-process": "Project (job) usage posting: project journal posting and purchase document posting with a project, both creating project ledger entries through Job Journal Line, Job Transfer Line and Job Jnl.-Post Line",
+    "candidates": 12,
+    "selected": 10
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": ["al"],
+    "countries": [],
+    "application-area": [],
+    "unknown": ["bc-version", "countries", "application-area"]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "job-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Job Journal Line",
+        "purpose": "Hold the Site Visit Code typed by technicians in the project journal, and receive it from purchase lines when Job Transfer Line builds the project journal line for purchase usage. It is the single source the ledger copy reads from.",
+        "fields": [
+          {
+            "name": "Site Visit Code",
+            "type": "Code[N] (length to be confirmed; see open question field-length-and-relation)",
+            "note": "Same type and length as on Purchase Line and Job Ledger Entry so the event copies never truncate. Set DataClassification on the field itself (a tableextension has no table-level value to inherit). Define the ToolTip on the table field when the target runtime is 13.0 or later."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "purchase-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line",
+        "purpose": "Hold the Site Visit Code typed on purchase lines charged to a project; source for the project journal line built at posting and for the posted purchase line tables filled by TransferFields.",
+        "fields": [
+          {
+            "name": "Site Visit Code",
+            "type": "Code[N] (length to be confirmed; see open question field-length-and-relation)",
+            "note": "Field number, name, type and length identical on every TransferFields target (posted purchase lines and Purchase Line Archive). Explicit DataClassification. ToolTip on the table field when the target runtime is 13.0 or later."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "job-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Job Ledger Entry",
+        "purpose": "Store the Site Visit Code on each project ledger entry so project managers can filter and analyze costs per site visit. A stored tableextension field is chosen over a related table keyed by Entry No.: the hot-ledger article keeps stored fields for values that must appear as a native list column and are read on almost every access, which matches per-site-visit cost analysis; Job Ledger Entry is not among the hot ledgers the article names. If analysis only needs occasional lookups, revisit (see open question analysis-surface).",
+        "fields": [
+          {
+            "name": "Site Visit Code",
+            "type": "Code[N] (same type and length as Job Journal Line)",
+            "note": "Editable = false. Explicit DataClassification. Filled while the entry is built, never by modifying the inserted entry."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "posted-purchase-line-exts",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Line, Purch. Inv. Line, Purch. Cr. Memo Line, Return Shipment Line, Purchase Line Archive (one tableextension each)",
+        "purpose": "Mirror the purchase line field on every TransferFields target so posted and archived purchase lines keep the Site Visit Code. Chosen by the mirroring article, not by the request; the requester can exclude document types (see open question posted-purchase-lines).",
+        "fields": [
+          {
+            "name": "Site Visit Code",
+            "type": "Code[N] (identical field number, type and length to Purchase Line)",
+            "note": "Editable = false on the posted tables. Explicit DataClassification. No subscriber: the standard TransferFields call in InitFromPurchLine and archiving does the copy."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "site-visit-job-posting",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Site Visit Job Posting (new event subscriber codeunit)",
+        "purpose": "Hold the two Job Transfer Line subscribers: purchase line to project journal line, and project journal line to project ledger entry.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md"
+        ]
+      },
+      {
+        "id": "job-journal-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Job Journal",
+        "purpose": "Let technicians type the Site Visit Code on project journal lines.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "purchase-subform-page-exts",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purchase line subform pages the technicians use (for example Purchase Order Subform, Purch. Invoice Subform, Purch. Cr. Memo Subform)",
+        "purpose": "Let users type the Site Visit Code on purchase lines charged to a project. Which subforms are needed is an open question (purchase-documents-in-scope).",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "job-ledger-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Job Ledger Entries",
+        "purpose": "Show the Site Visit Code as a list column so project managers can filter and analyze costs per site visit.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Technician",
+        "to": "Job Journal Line.Site Visit Code",
+        "mechanism": "user-entry",
+        "note": "Typed on the Job Journal page.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+        ]
+      },
+      {
+        "from": "Technician",
+        "to": "Purchase Line.Site Visit Code",
+        "mechanism": "user-entry",
+        "note": "Typed on purchase lines that carry a project.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md"
+        ]
+      },
+      {
+        "from": "Purchase Line.Site Visit Code",
+        "to": "Job Journal Line.Site Visit Code",
+        "mechanism": "event-copy",
+        "note": "Job Post-Line.PostJobOnPurchaseLine builds a project journal line through Job Transfer Line.FromPurchaseLineToJnlLine; copy in OnAfterFromPurchaseLineToJnlLine.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md"
+        ]
+      },
+      {
+        "from": "Job Journal Line.Site Visit Code",
+        "to": "Job Ledger Entry.Site Visit Code",
+        "mechanism": "event-copy",
+        "note": "Job Jnl.-Post Line.CreateJobLedgEntry calls Job Transfer Line.FromJnlLineToLedgEntry; copy in OnAfterFromJnlLineToLedgEntry. One subscriber covers project journal and purchase sources because both post through CreateJobLedgEntry.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+        ]
+      },
+      {
+        "from": "Purchase Line.Site Visit Code",
+        "to": "Purch. Rcpt. Line, Purch. Inv. Line, Purch. Cr. Memo Line, Return Shipment Line, Purchase Line Archive",
+        "mechanism": "transferfields",
+        "note": "InitFromPurchLine and archiving call TransferFields; requires the same field number, type and length on each target.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Job Transfer Line\"",
+        "event": "OnAfterFromPurchaseLineToJnlLine",
+        "purpose": "Copy Purchase Line.Site Visit Code to the project journal line built for purchase usage on a project.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Job Transfer Line\"",
+        "event": "OnAfterFromJnlLineToLedgEntry",
+        "purpose": "Copy Job Journal Line.Site Visit Code to the Job Ledger Entry while it is being built, before insert.",
+        "guards": [
+          "Assign only; do not call Modify. Do not use OnAfterJobLedgEntryInsert with Modify, and do not rely on matching field numbers."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification explicitly on every Site Visit Code field in every tableextension; choose the value that matches what the code stores (CustomerContent is the likely value; confirm it holds no personal identifier) and never leave ToBeClassified or use SystemMetadata to silence the compiler.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Write the tooltip once on the table field when the target runtime is 13.0 (BC24) or later and let bound page fields inherit it; on earlier runtimes put the tooltip on each page field. Describe what the code is used for (analysis of project costs per site visit), not just its name.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "job-journal-to-job-ledger",
+        "given": "A project with a task and a resource or item, created with the test library codeunits, and a project journal line with a Site Visit Code",
+        "when": "The project journal line is posted",
+        "then": "Every Job Ledger Entry created for that line carries the same Site Visit Code",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "purchase-invoice-to-job-ledger",
+        "given": "A purchase invoice built with LibraryPurchase whose line has a project, project task and a Site Visit Code",
+        "when": "The purchase invoice is posted",
+        "then": "The project usage Job Ledger Entry for that line carries the Site Visit Code (proves the purchase line to project journal line hop and the ledger hop)",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "purchase-order-receive-and-invoice",
+        "given": "A purchase order line charged to a project with a Site Visit Code",
+        "when": "The order is received and invoiced",
+        "then": "Purch. Rcpt. Line, Purch. Inv. Line and the resulting Job Ledger Entry all carry the Site Visit Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "credit-memo-return-and-archive",
+        "given": "A purchase credit memo or return order line charged to a project with a Site Visit Code, and a purchase document that is archived",
+        "when": "The credit memo or return order is posted and the document is archived",
+        "then": "Purch. Cr. Memo Line, Return Shipment Line and Purchase Line Archive carry the Site Visit Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "max-length-value-survives-posting",
+        "given": "A purchase line with a Site Visit Code that uses the full declared field length",
+        "when": "The document is posted",
+        "then": "Posting succeeds and every target (posted lines, project ledger entry) holds the full value, proving identical type and length on all mirrored fields",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "ledger-entry-not-modified-after-insert",
+        "given": "A project journal line with a Site Visit Code",
+        "when": "The line is posted",
+        "then": "The Job Ledger Entry holds the value at insert; the implementation contains no OnAfterJobLedgEntryInsert subscriber that modifies the entry (code review check backing the guard)",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+      "used-for": "Journal-to-ledger hop: fields on Job Journal Line and Job Ledger Entry plus the OnAfterFromJnlLineToLedgEntry subscriber.",
+      "constraints": [
+        "Every Job Ledger Entry is created in Job Jnl.-Post Line.CreateJobLedgEntry, which copies fields one by one through Job Transfer Line.FromJnlLineToLedgEntry; matching field numbers do nothing.",
+        "Add the field to Job Journal Line and Job Ledger Entry and copy it in OnAfterFromJnlLineToLedgEntry; one subscriber covers every source.",
+        "OnBeforeJobLedgEntryInsert is acceptable only when the value is computed rather than copied.",
+        "Do not subscribe to OnAfterJobLedgEntryInsert and call Modify on the inserted entry."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.good.al",
+        "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+      "used-for": "Purchase-line-to-project-journal-line hop and the decision which project journal sources must carry the value.",
+      "constraints": [
+        "Project journal lines are built by Job Transfer Line from purchase lines, planning lines, planning lines invoiced through sales, and general journal lines; a field only on the project journal is empty for those.",
+        "Decide in the design which sources must carry the value and subscribe to the matching event; for purchase lines that is OnAfterFromPurchaseLineToJnlLine.",
+        "Do not design the field only on the project journal and project ledger assuming all usage is entered in project journals."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.good.al",
+        "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+      "used-for": "Posted and archived purchase line tables that receive the Purchase Line field by TransferFields.",
+      "constraints": [
+        "Posted lines are created by InitFromPurchLine with TransferFields into Purch. Rcpt. Line, Purch. Inv. Line, Purch. Cr. Memo Line and Return Shipment Line; archiving copies into Purchase Line Archive.",
+        "Use the same field number, name, type and length on every target the plan needs; unless the plan states a document type never needs the field, that means all four posted tables and the archive.",
+        "No subscriber is needed for these stages; keep the mirrored fields non-editable on the posted tables.",
+        "Do not use a different field number and patch posted records with Modify in a subscriber."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Planning method applied to the purchase side: decide every stage the field must reach, and plan page extensions and a post-and-read-back test per stage; also raises the Copy Document flow-back question.",
+      "constraints": [
+        "Before writing code, decide which stages the field must reach and plan one step per stage; do not plan only the tables the requester named.",
+        "For each stage name the page extensions that show the field and a test that posts a document and reads the value back from every target.",
+        "Copy Document copies posted and archived documents back with TransferFields, so a mirrored field flows back; decide in the plan whether that is wanted. Do not copy a sales subscriber to purchases without checking the purchase event.",
+        "Do not fill ledger entries after posting by finding and modifying them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definition consistency across the purchase TransferFields cascade.",
+      "constraints": [
+        "Define a mirrored field with the exact same field number, data type and length on every table in the cascade at creation time.",
+        "A shorter length on one side compiles and fails at runtime only when a longer value is copied."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choice between a stored field on Job Ledger Entry and a related table. Applies from BC23.",
+      "constraints": [
+        "Put optional, sparse or integration attributes on hot ledgers in a related table keyed by the ledger Entry No.",
+        "Use a tableextension stored field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "DataClassification on every new tableextension field.",
+      "constraints": [
+        "A tableextension has no table-level value to inherit, so every Normal field it adds must set its own DataClassification.",
+        "Choose the value that matches the data stored, at field definition time; ToBeClassified is not a safe default and SystemMetadata must not be used for customer data."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips for the Site Visit Code on journal, purchase and ledger pages.",
+      "constraints": [
+        "On runtime 13.0 or later define the tooltip on the table field and omit duplicate page-level tooltips; before runtime 13.0 user-facing page fields need page-level tooltips.",
+        "Tooltip text should say what the value is used for, without inventing behavior."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Tooltip inheritance for the bound page fields. Applies from BC24.",
+      "constraints": [
+        "A bound page field inherits a non-empty source field ToolTip on runtime 13.0 or later; do not add a duplicate page-level property unless the page needs different help."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for the posting tests.",
+      "constraints": [
+        "Build prerequisite records with the test Library codeunits (for example LibraryPurchase, LibraryRandom), not hand-rolled Init/Insert.",
+        "Create parents first and Validate foreign-key fields so table relations and validation run as in production."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "field-length-and-relation",
+      "question": "What is the Site Visit Code's length, and must it be validated against a list of site visits (a new Site Visit master table with a TableRelation) or is it free-form? A master table would add a table, pages, permission set and setup that this design does not cover.",
+      "affects": ["job-journal-line-ext", "purchase-line-ext", "job-ledger-entry-ext", "posted-purchase-line-exts"]
+    },
+    {
+      "id": "posted-purchase-lines",
+      "question": "The mirroring guidance puts the field on every posted purchase line table and Purchase Line Archive unless a document type never needs it. Should receipts, invoices, credit memos, return shipments and archives all keep the Site Visit Code, or should any be excluded?",
+      "affects": ["posted-purchase-line-exts", "credit-memo-return-and-archive", "purchase-order-receive-and-invoice"]
+    },
+    {
+      "id": "other-project-sources",
+      "question": "Project usage can also be posted from project planning lines, from planning lines invoiced through sales, and from general journal lines with a project. Must those sources carry a Site Visit Code too (each needs its own field and Job Transfer Line subscriber), or are project journals and purchase lines the only sources?",
+      "affects": ["site-visit-job-posting", "job-journal-line-ext"]
+    },
+    {
+      "id": "purchase-documents-in-scope",
+      "question": "Which purchase documents do technicians use for project costs (orders, invoices, credit memos, return orders)? This decides which subform pages get the field.",
+      "affects": ["purchase-subform-page-exts"]
+    },
+    {
+      "id": "copy-document-flow-back",
+      "question": "When a user copies a posted or archived purchase document, the mirrored Site Visit Code will flow back to the new purchase lines. Is that wanted?",
+      "affects": ["purchase-line-ext", "posted-purchase-line-exts"]
+    },
+    {
+      "id": "required-on-project-lines",
+      "question": "Is the Site Visit Code mandatory on project journal lines and project purchase lines, or optional?",
+      "affects": ["job-journal-page-ext", "purchase-subform-page-exts", "job-journal-line-ext", "purchase-line-ext"]
+    },
+    {
+      "id": "analysis-surface",
+      "question": "How will project managers analyze costs per site visit: filtering the Project Ledger Entries list, a report, a query or an analysis view? This confirms the stored-field choice and whether a key or further objects are needed.",
+      "affects": ["job-ledger-entry-ext", "job-ledger-entries-page-ext"]
+    },
+    {
+      "id": "historical-entries",
+      "question": "Should existing project ledger entries posted before the feature be back-filled, or stay blank?",
+      "affects": ["job-ledger-entry-ext"]
+    },
+    {
+      "id": "data-classification-value",
+      "question": "Does a Site Visit Code ever identify a person (for example a technician)? If not, CustomerContent is the likely classification.",
+      "affects": ["job-journal-line-ext", "purchase-line-ext", "job-ledger-entry-ext", "posted-purchase-line-exts"]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined (no repository or app.json); tooltip placement depends on whether the target runtime is 13.0 (BC24) or later.",
+    "The choice of purchase subform pages and the Job Journal and Job Ledger Entries page extensions rests on the agent's judgment of where users type and read the value; the cited articles govern tooltips, not page selection.",
+    "Purchase-side Copy Document handling has no confirmed purchase event in the opened knowledge; if flow-back must be prevented, the event must be confirmed in symbols before design."
+  ]
+}

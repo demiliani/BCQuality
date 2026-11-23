@@ -25,6 +25,8 @@ Exclude temporary buffers and the standard engine's own insertion points. A chec
 
 See sample: [`post-ledger-entries-through-posting-codeunits.good.al`](post-ledger-entries-through-posting-codeunits.good.al).
 
+To design a feature that carries its own data through this process, see [post finance journal lines from feature code in a dedicated batch](../finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md), [carry Gen. Journal Line fields to G/L, VAT and bank entries, and plan their reversal](../finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md) and [plan G/L account determination and posting for a finance feature](../feature-design/plan-gl-account-determination-for-a-finance-feature.md).
+
 ## Anti Pattern
 
 Create posted financial effects by directly inserting the Finance-owned records named above outside their owning posting workflow. Resolve the actual record type, operation, and lifecycle; do not match `*Ledger Entry` as a wildcard. Balanced debit/credit values, copied dimensions, `Insert(true)`, and a lock around entry-number allocation do not turn raw inserts into a complete posting.

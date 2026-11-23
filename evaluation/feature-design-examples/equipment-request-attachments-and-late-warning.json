@@ -1,0 +1,566 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Our app has an Equipment Request table with a card page, and posting creates a Posted Equipment Request with the same No. Users must attach photos and supplier quotes to a request, see them in a factbox, and still find them on the posted request after posting. When the Needed-By date is before the work date, warn the user on the card without blocking them, and let each user turn that warning off.",
+    "business-process": "Adds standard Document Attachment support (factbox, delete, rename and copy on posting) to the app's own Equipment Request document and its posting routine, and an advisory Needed-By Date notification on the Equipment Request Card that each user can switch off through the standard My Notifications page.",
+    "candidates": 18,
+    "selected": 15
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "equipment-request-attachments",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Equipment Request Attachments",
+        "purpose": "Static event subscriber codeunit that teaches Document Attachment Mgmt the key of Equipment Request and Posted Equipment Request (number field, record resolution, entity flag, copy from/to filters), plus a CopyToPosted procedure the posting codeunit calls. Static binding because the mapping must apply in every session.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/events/choose-static-vs-manual-subscribers-deliberately.md"
+        ]
+      },
+      {
+        "id": "equipment-request-table",
+        "action": "modify",
+        "object-type": "table",
+        "target": "Equipment Request",
+        "purpose": "Call DocumentAttachmentMgmt.DeleteAttachedDocuments from OnDelete and MoveAttachmentsWithinSameRecordType from OnRename, so deleting or renaming one request touches only that request's files. Requires the key to be a Code[20] No. field (see open question).",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md"
+        ]
+      },
+      {
+        "id": "posted-equipment-request-table",
+        "action": "modify",
+        "object-type": "table",
+        "target": "Posted Equipment Request",
+        "purpose": "Call DocumentAttachmentMgmt.DeleteAttachedDocuments from OnDelete so a deleted posted request does not leave orphaned attachments; its number field is mapped by the subscriber codeunit.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md"
+        ]
+      },
+      {
+        "id": "equipment-request-card",
+        "action": "modify",
+        "object-type": "page",
+        "target": "Equipment Request Card",
+        "purpose": "Add part Doc. Attachment List Factbox in area(FactBoxes) with SubPageLink Table ID = const(Database::Equipment Request), No. = field(No.). In OnAfterGetCurrRecord, and after Needed-By Date is validated on the page, call the late-warning codeunit to recall and, when needed, send the notification.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/ui/factbox-design.md",
+          "microsoft/knowledge/ui/notification-recall-needs-known-id.md",
+          "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md"
+        ]
+      },
+      {
+        "id": "posted-equipment-request-card",
+        "action": "modify",
+        "object-type": "page",
+        "target": "Posted Equipment Request",
+        "purpose": "Add part Doc. Attachment List Factbox with SubPageLink Table ID = const(Database::Posted Equipment Request), No. = field(No.) so users find the copied photos and quotes on the posted request.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/ui/factbox-design.md"
+        ]
+      },
+      {
+        "id": "equipment-request-posting",
+        "action": "modify",
+        "object-type": "codeunit",
+        "target": "Equipment Request Posting",
+        "purpose": "After the Posted Equipment Request is inserted, call Equipment Request Attachments.CopyToPosted (DocumentAttachmentMgmt.CopyAttachments(FromRecRef, ToRecRef)); do this before the open request is deleted, because its OnDelete removes the open request's attachments. Do not use CopyAttachmentsForPostedDocs, which fits sales and purchase headers only.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md"
+        ]
+      },
+      {
+        "id": "equipment-request-late-notification",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Equipment Request Late Notification",
+        "purpose": "Owns the fixed notification Guid; ShowIfLate exits when My Notifications.IsEnabled(Id) is false, sets the fixed Id, recalls, and sends a LocalScope notification with a Don't show again action only when Needed-By Date is not blank and earlier than WorkDate() (read only, never set). DontShowAgain calls MyNotifications.Disable(Id) and InsertDefault(..., false) when no row exists. Subscribes to OnInitializingNotificationWithDefaultState to register the notification, enabled by default.",
+        "knowledge": [
+          "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md",
+          "microsoft/knowledge/ui/notification-recall-needs-known-id.md",
+          "microsoft/knowledge/data-modeling/code-must-not-change-workdate.md"
+        ]
+      },
+      {
+        "id": "app-permission-set",
+        "action": "modify",
+        "object-type": "permissionset",
+        "target": "Equipment Request permission set",
+        "purpose": "Grant execute on the two new codeunits; keep posted-table and Document Attachment rights limited to what posting and attaching require, using indirect letters where users should write only through the posting codeunit.",
+        "knowledge": [
+          "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User upload on Equipment Request Card factbox",
+        "to": "Document Attachment (Table ID = Equipment Request, No. = request No.)",
+        "mechanism": "user-entry",
+        "note": "InitFieldsFromRecRef fills No. only because OnAfterTableHasNumberFieldPrimaryKey returns the number field.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "from": "Document Attachment of Equipment Request",
+        "to": "Document Attachment of Posted Equipment Request",
+        "mechanism": "other",
+        "note": "DocumentAttachmentMgmt.CopyAttachments called by the posting codeunit after the posted record is inserted; From filter on source No. and ToNo set by the copy subscribers.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md"
+        ]
+      },
+      {
+        "from": "Document Attachment of renamed Equipment Request",
+        "to": "Document Attachment with the new request No.",
+        "mechanism": "other",
+        "note": "MoveAttachmentsWithinSameRecordType from OnRename; filters on No. because OnAfterTableIsEntity returns true.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "from": "Equipment Request Needed-By Date compared with WorkDate()",
+        "to": "Notification on Equipment Request Card",
+        "mechanism": "other",
+        "note": "Fixed Id recalled before every send, so the warning clears when the date is corrected.",
+        "knowledge": [
+          "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md",
+          "microsoft/knowledge/ui/notification-recall-needs-known-id.md",
+          "microsoft/knowledge/data-modeling/code-must-not-change-workdate.md"
+        ]
+      },
+      {
+        "from": "Don't show again action / My Notifications page toggle",
+        "to": "My Notifications row for the current user",
+        "mechanism": "other",
+        "note": "Disable(Id), or InsertDefault(..., false) when the user has no row yet.",
+        "knowledge": [
+          "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnAfterTableHasNumberFieldPrimaryKey",
+        "purpose": "Return the No. field number for Equipment Request and Posted Equipment Request so filters, InitFieldsFromRecRef and delete use the record key.",
+        "guards": [
+          "Act only when TableNo is Equipment Request or Posted Equipment Request"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnAfterGetRefTable",
+        "purpose": "Get the Equipment Request or Posted Equipment Request from DocumentAttachment.No. so the factbox can resolve the source record and upload works.",
+        "guards": [
+          "Case on DocumentAttachment.Table ID",
+          "Use Get as a Boolean so a missing record leaves RecRef empty"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnAfterTableIsEntity",
+        "purpose": "Mark Equipment Request as an entity so a rename moves only that record's files.",
+        "guards": [
+          "Act only when TableNo is Equipment Request"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnCopyAttachmentsOnAfterSetFromParameters",
+        "purpose": "Filter the source attachments on the Equipment Request No. during CopyAttachments.",
+        "guards": [
+          "Act only when FromRecRef.Number is Equipment Request"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnCopyAttachmentsOnAfterSetToParameters",
+        "purpose": "Set ToFieldRef and ToNo to the Posted Equipment Request No. so copies are stored under the posted record.",
+        "guards": [
+          "Act only when ToRecRef.Number is Posted Equipment Request"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "My Notifications",
+        "event": "OnInitializingNotificationWithDefaultState",
+        "purpose": "Register the late Needed-By Date notification with name, description and default state enabled, so each user can turn it off on My Notifications.",
+        "guards": [
+          "Use the same fixed notification Guid as ShowIfLate"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "No install code: the notification row is created by the My Notifications subscriber or by Don't show again; gate sending with My Notifications.IsEnabled (true when no row exists), never with Instruction Mgt.IsMyNotificationEnabled alone.",
+        "knowledge": [
+          "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Add execute on Equipment Request Attachments and Equipment Request Late Notification to the app's permission set; grant only the table letters users need, indirect where writes must go through the posting codeunit, and confirm users who post hold insert rights on Document Attachment.",
+        "knowledge": [
+          "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "factbox-shows-only-own-attachments",
+        "given": "Two Equipment Requests, each with one attachment added through the attachment flow",
+        "when": "The Equipment Request Card is opened for the first request",
+        "then": "The Doc. Attachment List Factbox lists only the first request's attachment (TestPage test kept in a UI-layer codeunit)",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/ui/factbox-design.md",
+          "microsoft/knowledge/testing/ui-test-codeunit-naming.md"
+        ]
+      },
+      {
+        "id": "new-attachment-stores-request-no",
+        "given": "An Equipment Request created through library or app helpers",
+        "when": "An attachment is added for the request through Document Attachment InitFieldsFromRecRef",
+        "then": "The Document Attachment row has Table ID = Equipment Request and No. = the request No.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "posting-copies-attachments",
+        "given": "An Equipment Request with two attachments and a second request with one attachment",
+        "when": "The first request is posted through the posting codeunit",
+        "then": "Document Attachment rows exist for Posted Equipment Request with the same No., exactly two, and none for the second request",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "delete-removes-only-own-attachments",
+        "given": "Two Equipment Requests each with an attachment",
+        "when": "The first request is deleted with its OnDelete trigger",
+        "then": "Only the first request's attachments are gone; the second request keeps its attachment",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md"
+        ]
+      },
+      {
+        "id": "rename-moves-only-own-attachments",
+        "given": "Two Equipment Requests each with an attachment",
+        "when": "The first request is renamed",
+        "then": "Its attachment carries the new No.; the second request's attachment is unchanged",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "id": "late-needed-by-date-sends-notification",
+        "given": "WorkDate set deliberately by the test and an Equipment Request with Needed-By Date one day earlier",
+        "when": "The Equipment Request Card is opened",
+        "then": "The SendNotificationHandler captures the late-date notification with the fixed Id, and the card stays editable (no error or Confirm)",
+        "knowledge": [
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+          "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md",
+          "microsoft/knowledge/data-modeling/code-must-not-change-workdate.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "on-time-needed-by-date-sends-nothing",
+        "given": "WorkDate set by the test and a request whose Needed-By Date equals WorkDate",
+        "when": "The Equipment Request Card is opened",
+        "then": "No late-date notification is captured; the handler is listed as optional",
+        "knowledge": [
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "disabled-notification-is-not-sent",
+        "given": "A late request and a My Notifications row for the user with the notification disabled",
+        "when": "ShowIfLate runs for the request",
+        "then": "No notification is sent",
+        "knowledge": [
+          "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "dont-show-again-creates-disabled-row",
+        "given": "A user with no My Notifications row for the notification",
+        "when": "The DontShowAgain handler runs",
+        "then": "A My Notifications row exists for the user with Enabled = false",
+        "knowledge": [
+          "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md"
+        ]
+      },
+      {
+        "id": "posting-copies-attachments-with-app-permissions",
+        "given": "A request with an attachment and the test user lowered to the app's permission set (TestPermissions Restrictive)",
+        "when": "The request is posted",
+        "then": "Posting succeeds and the posted request has the attachment",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md",
+      "used-for": "Map for the custom posted document: selects the Attachments, Permissions and Tests decisions this request touches.",
+      "constraints": [
+        "Map the custom key for the open and posted tables and copy attachments on posting.",
+        "Tests post through the routine, not by inserting posted rows; one action per test.",
+        "A row the request does not settle is raised as an open question, not built or left out silently."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+      "used-for": "Document Attachment wiring for Equipment Request and Posted Equipment Request: subscribers, factbox, delete, rename and copy on posting.",
+      "constraints": [
+        "Subscribe to OnAfterTableHasNumberFieldPrimaryKey for the table and its posted counterpart, OnAfterGetRefTable, and OnAfterTableIsEntity.",
+        "Add Doc. Attachment List Factbox with SubPageLink Table ID = const(Database::<table>), No. = field(No.).",
+        "Call DeleteAttachedDocuments from OnDelete and MoveAttachmentsWithinSameRecordType from OnRename.",
+        "After the posted record is inserted, call CopyAttachments(FromRecRef, ToRecRef) and subscribe to OnCopyAttachmentsOnAfterSetFromParameters and OnCopyAttachmentsOnAfterSetToParameters.",
+        "CopyAttachmentsForPostedDocs is not an option for a custom table.",
+        "A key wider than Code[20], or not a code, cannot use No. directly; decide before choosing this mechanism.",
+        "Do not build a custom attachment table with its own BLOB field, and do not wire the factbox without the subscribers."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.good.al",
+        "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.md",
+      "used-for": "Advisory late Needed-By Date warning as a notification that each user can switch off in My Notifications.",
+      "constraints": [
+        "A warning that does not stop the user is a Notification, not Message or Confirm.",
+        "Keep a fixed notification Guid; subscribe to OnInitializingNotificationWithDefaultState and call InsertDefault with name, description and default state.",
+        "Exit before sending when My Notifications.IsEnabled(Id) is false; do not gate on Instruction Mgt.IsMyNotificationEnabled alone.",
+        "Set the Id, Recall() the previous one, set the message, then Send().",
+        "Add a Don't show again action that calls Disable(Id) and InsertDefault(..., false) when Disable returns false."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.good.al",
+        "microsoft/knowledge/ui/register-user-notifications-in-my-notifications.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/notification-recall-needs-known-id.md",
+      "used-for": "Recall of the late warning when the Needed-By Date is corrected or another record is shown.",
+      "constraints": [
+        "Keep the identity of every notification the code will recall and recall with that identity, such as a fixed Id recalled before re-sending.",
+        "Do not recall with a fresh Notification or a new CreateGuid() that cannot carry the sent Id."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/ui/notification-recall-needs-known-id.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/factbox-design.md",
+      "used-for": "Attachment factboxes on the open and posted request pages.",
+      "constraints": [
+        "Every ListPart FactBox has a SubPageLink to the host record; without it the part loads the whole source table.",
+        "Keep FactBox count modest and avoid heavy OnAfterGetRecord logic in the part."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/code-must-not-change-workdate.md",
+      "used-for": "Comparison of Needed-By Date with the work date, and the date context of tests.",
+      "constraints": [
+        "Read the work date to compare or default a value; business logic must never set WorkDate as a side effect.",
+        "A test may set WorkDate deliberately to establish its date context."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/code-must-not-change-workdate.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+      "used-for": "Removing a request's attachments when the open or posted request is deleted.",
+      "constraints": [
+        "The owning table implements OnDelete and deletes its dependents filtered on the foreign key; AL has no cascading delete.",
+        "Declare the rights the trigger needs on the dependent table so it does not fail for a non-SUPER user."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/events/choose-static-vs-manual-subscribers-deliberately.md",
+      "used-for": "Binding of the attachment and notification subscriber codeunits.",
+      "constraints": [
+        "Use a static subscriber for behaviour that applies all the time; use Manual binding only for scoped behaviour.",
+        "Keep subscriber methods local."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md",
+      "used-for": "Permission set changes for the new codeunits and attachment rights.",
+      "constraints": [
+        "Use lowercase indirect letters when a role may write a table only through a specific codeunit, and grant only the letters the role needs.",
+        "Do not grant direct RIMD on posted tables when users only reach them through the posting routine."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+      "used-for": "Notification tests.",
+      "constraints": [
+        "Every UI call on the executed path needs a matching handler listed in HandlerFunctions.",
+        "A notification the scenario may or may not raise uses an optional SendNotificationHandler(true).",
+        "Each executed handler must contribute evidence the test asserts."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/ui-test-codeunit-naming.md",
+      "used-for": "Split between factbox (TestPage) tests and logic tests.",
+      "constraints": [
+        "Keep TestPage-driven tests and logic-layer tests in separate codeunits."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for requests and related master data.",
+      "constraints": [
+        "Use the standard Library codeunits for prerequisite data and create parents before dependents.",
+        "Validate foreign-key fields so table relations and validation run as in production."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+      "used-for": "Dates in the late-warning tests.",
+      "constraints": [
+        "Create the records the test owns rather than looking up existing data.",
+        "Keep values that define the scenario, such as dates around the work-date boundary, explicit and deliberately chosen."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-one-when-per-test.md",
+      "used-for": "Shape of every test.",
+      "constraints": [
+        "Each test has one WHEN; precondition actions such as posting to get a posted record belong in GIVEN."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+      "used-for": "Permission test for posting with attachments.",
+      "constraints": [
+        "Use TestPermissions Restrictive and lower the test user with Permissions Mock or Library - Lower Permissions before the protected operation."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "request-key-type",
+      "question": "Are Equipment Request and Posted Equipment Request keyed by a single Code[20] No. field, and which field number holds it? Document Attachment Mgmt can map only such a key.",
+      "affects": [
+        "equipment-request-attachments",
+        "equipment-request-table",
+        "posted-equipment-request-table"
+      ]
+    },
+    {
+      "id": "posting-delete-path",
+      "question": "Does the posting codeunit delete the open Equipment Request after posting, and with or without its OnDelete trigger? The attachment copy must run before that delete, and a delete without the trigger would leave the open request's attachments orphaned.",
+      "affects": [
+        "equipment-request-posting",
+        "equipment-request-table"
+      ]
+    },
+    {
+      "id": "posted-request-deletion",
+      "question": "Can users delete posted equipment requests? If not, the OnDelete call on Posted Equipment Request only covers code paths, and attachments on posted requests could also be made read-only.",
+      "affects": [
+        "posted-equipment-request-table",
+        "posted-equipment-request-card"
+      ]
+    },
+    {
+      "id": "posted-page-name",
+      "question": "Which page shows a posted equipment request (a card, or only a list), so the attachment factbox is added there?",
+      "affects": [
+        "posted-equipment-request-card"
+      ]
+    },
+    {
+      "id": "attachment-rights",
+      "question": "Which permission set will users who attach files and post requests hold, and does it already grant Document Attachment rights, or must the app's permission set include them?",
+      "affects": [
+        "app-permission-set",
+        "posting-copies-attachments-with-app-permissions"
+      ]
+    },
+    {
+      "id": "warning-triggers",
+      "question": "Should the late Needed-By Date warning appear only when the card opens and the date is changed on it, or also on the list page, on release or on posting?",
+      "affects": [
+        "equipment-request-card",
+        "equipment-request-late-notification"
+      ]
+    },
+    {
+      "id": "blank-needed-by-date",
+      "question": "Should a blank Needed-By Date raise no warning (as designed), or a different one?",
+      "affects": [
+        "equipment-request-late-notification"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined: there is no repository or app.json; all cited articles apply to [all] versions and w1.",
+    "Creating Document Attachment rows in tests (without the file upload dialog) is not covered by BCQuality knowledge; the fixture approach rests on judgment.",
+    "Names of the existing posting codeunit, posted page and permission set are assumed from the request; confirm against the app."
+  ]
+}

@@ -1,0 +1,1638 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "We rent equipment to customers. Add a Rental Order document with a header and lines, numbered from its own series. When the rental ends the user posts it: the order becomes a Posted Rental Order with a number from a separate posting series, and the rental amount is posted to the G/L. Users must find posted rentals with Find entries, print and email them, and attach signed delivery forms.",
+    "business-process": "Adds a custom Rental Order document (header and lines, own number series) to the customer-facing rental process, with a posting routine that creates a Posted Rental Order from a separate series and posts the rental amount to the general ledger through the standard general journal posting engine, plus Find Entries, Report Selections printing/email and document attachments.",
+    "candidates": 65,
+    "selected": 56
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "rental-setup",
+        "action": "create",
+        "object-type": "table",
+        "target": "Rental Setup",
+        "purpose": "Setup-type singleton (Primary Key Code[10], blank) holding the rental document series, the posted rental series, the dedicated general journal template and batch, and the G/L account(s) the rental amount posts to. Every value is checked with TestField before use.",
+        "fields": [
+          {
+            "name": "Primary Key",
+            "type": "Code[10]",
+            "note": "Always blank; sole key."
+          },
+          {
+            "name": "Rental Order Nos.",
+            "type": "Code[20]",
+            "note": "TableRelation to No. Series; series for open Rental Orders."
+          },
+          {
+            "name": "Posted Rental Order Nos.",
+            "type": "Code[20]",
+            "note": "TableRelation to No. Series; separate series for Posted Rental Orders."
+          },
+          {
+            "name": "Rental Jnl. Template Name",
+            "type": "Code[10]",
+            "note": "General journal template reserved for rental posting."
+          },
+          {
+            "name": "Rental Jnl. Batch Name",
+            "type": "Code[10]",
+            "note": "General journal batch reserved for rental posting; users must not enter lines in it."
+          },
+          {
+            "name": "Rental Revenue Account",
+            "type": "Code[20]",
+            "note": "TableRelation to G/L Account; kept only if the open question on account source chooses a feature setup account."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md",
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md"
+        ]
+      },
+      {
+        "id": "rental-setup-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Rental Setup",
+        "purpose": "Card page over Rental Setup with InsertAllowed = false and DeleteAllowed = false; OnOpenPage inserts the blank row when it is missing.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md"
+        ]
+      },
+      {
+        "id": "rental-header",
+        "action": "create",
+        "object-type": "table",
+        "target": "Rental Header",
+        "purpose": "Document-type header. Primary key No. Code[20]. OnInsert assigns No. from Rental Setup.\"Rental Order Nos.\" through codeunit \"No. Series\" when No. is blank (TestField on the setup series first), stores the series in No. Series, then calls InitRecord, which sets the remaining defaults (Posting Date, Document Date). OnDelete deletes the Rental Lines of the order and calls DeleteAttachedDocuments; OnRename calls MoveAttachmentsWithinSameRecordType. The table declares Permissions = tabledata \"Rental Line\" = rd. Customer No. OnValidate gets the Customer and checks its Blocked value; the check is repeated before posting. Table-level DataClassification = CustomerContent.",
+        "fields": [
+          {
+            "name": "No.",
+            "type": "Code[20]",
+            "note": "Primary key; from Rental Order Nos.; No. OnValidate guards manual entry with NoSeries.TestManual/IsManual."
+          },
+          {
+            "name": "Customer No.",
+            "type": "Code[20]",
+            "note": "TableRelation to Customer; Blocked checked at use."
+          },
+          {
+            "name": "Customer Name",
+            "type": "Text[100]",
+            "note": "Copied from the customer on validate; same length as Customer.Name."
+          },
+          {
+            "name": "Posting Date",
+            "type": "Date",
+            "note": "Default set in InitRecord."
+          },
+          {
+            "name": "Document Date",
+            "type": "Date",
+            "note": "Default set in InitRecord."
+          },
+          {
+            "name": "Rental Start Date",
+            "type": "Date"
+          },
+          {
+            "name": "Rental End Date",
+            "type": "Date"
+          },
+          {
+            "name": "No. Series",
+            "type": "Code[20]",
+            "note": "Non-editable; series that produced No."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/initialize-document-defaults-in-initrecord.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md"
+        ]
+      },
+      {
+        "id": "rental-line",
+        "action": "create",
+        "object-type": "table",
+        "target": "Rental Line",
+        "purpose": "Document-type line owned by Rental Header. Primary key Document No. + Line No. Each line carries the rented equipment reference and the rental amount that is posted to the G/L. Table-level DataClassification = CustomerContent.",
+        "fields": [
+          {
+            "name": "Document No.",
+            "type": "Code[20]",
+            "note": "TableRelation to Rental Header.No."
+          },
+          {
+            "name": "Line No.",
+            "type": "Integer"
+          },
+          {
+            "name": "Equipment No.",
+            "type": "Code[20]",
+            "note": "What table it relates to (Item, Resource, Fixed Asset or a new equipment master) is an open question; its length must match the related key field; Blocked of that master is checked at use and before posting."
+          },
+          {
+            "name": "Description",
+            "type": "Text[100]"
+          },
+          {
+            "name": "Rental Amount",
+            "type": "Decimal",
+            "note": "Amount posted to the G/L; how it is calculated (entered, or rate x period) is an open question. AutoFormatType = 1."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "posted-rental-header",
+        "action": "create",
+        "object-type": "table",
+        "target": "Posted Rental Header",
+        "purpose": "Document History table created only by the posting codeunit, never user-editable. Mirrors every Rental Header field with the same field number, data type and length so TransferFields copies them, plus Rental Order No. (the original order number) in a field number that the open header does not use. Primary key No. Code[20] from the posted series. OnDelete (if deletion is allowed at all) calls DeleteAttachedDocuments and deletes its posted lines. Table-level DataClassification = CustomerContent.",
+        "fields": [
+          {
+            "name": "No.",
+            "type": "Code[20]",
+            "note": "From Rental Setup.\"Posted Rental Order Nos.\", assigned by the posting codeunit, not copied from the order."
+          },
+          {
+            "name": "Rental Order No.",
+            "type": "Code[20]",
+            "note": "Original Rental Header No.; not mirrored on the open header."
+          },
+          {
+            "name": "Customer No.",
+            "type": "Code[20]",
+            "note": "Same field number/type/length as Rental Header."
+          },
+          {
+            "name": "Customer Name",
+            "type": "Text[100]",
+            "note": "Same field number/type/length as Rental Header."
+          },
+          {
+            "name": "Posting Date",
+            "type": "Date",
+            "note": "Same field number as Rental Header; used by Find Entries."
+          },
+          {
+            "name": "Document Date",
+            "type": "Date"
+          },
+          {
+            "name": "Rental Start Date",
+            "type": "Date"
+          },
+          {
+            "name": "Rental End Date",
+            "type": "Date"
+          },
+          {
+            "name": "No. Series",
+            "type": "Code[20]",
+            "note": "Holds the posted series."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/data-modeling/transferfields-skip-type-mismatch-can-drop-data.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "posted-rental-line",
+        "action": "create",
+        "object-type": "table",
+        "target": "Posted Rental Line",
+        "purpose": "Document History lines; every Rental Line field mirrored with the same number, type and length; Document No. holds the posted header number. Table-level DataClassification = CustomerContent.",
+        "fields": [
+          {
+            "name": "Document No.",
+            "type": "Code[20]",
+            "note": "Posted Rental Header No."
+          },
+          {
+            "name": "Line No.",
+            "type": "Integer"
+          },
+          {
+            "name": "Equipment No.",
+            "type": "Code[20]"
+          },
+          {
+            "name": "Description",
+            "type": "Text[100]"
+          },
+          {
+            "name": "Rental Amount",
+            "type": "Decimal"
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/data-modeling/transferfields-skip-type-mismatch-can-drop-data.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "rental-order-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Rental Order",
+        "purpose": "Document page over Rental Header with a General FastTab, the lines subpage filtered to the header, the Doc. Attachment List Factbox (SubPageLink Table ID = const(Database::\"Rental Header\"), No. = field(No.)) and a Post action that calls the Rental-Post (Yes/No) codeunit. No business logic on the page.",
+        "knowledge": [
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/data-modeling/check-post-line-batch-pattern.md"
+        ]
+      },
+      {
+        "id": "rental-order-subform",
+        "action": "create",
+        "object-type": "page",
+        "target": "Rental Order Subform",
+        "purpose": "ListPart over Rental Line, SubPageLink to the header No., AutoSplitKey on Line No.",
+        "knowledge": [
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "rental-orders-list",
+        "action": "create",
+        "object-type": "page",
+        "target": "Rental Orders",
+        "purpose": "List page over Rental Header with CardPageID = Rental Order; the searchable entry point (UsageCategory = Lists).",
+        "knowledge": [
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md"
+        ]
+      },
+      {
+        "id": "posted-rental-order-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Posted Rental Order",
+        "purpose": "Non-editable Document page over Posted Rental Header with a lines ListPart, the Doc. Attachment List Factbox for Posted Rental Header (users attach signed delivery forms here), and Print, Email and Find Entries actions. Print calls ReportSelections.PrintWithDialogForCust and Email calls ReportSelections.SendEmailToCust with the Posted Rental Order usage and the customer number field; neither loads the customer's Document Sending Profile.",
+        "knowledge": [
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "posted-rental-order-subform",
+        "action": "create",
+        "object-type": "page",
+        "target": "Posted Rental Order Subform",
+        "purpose": "Non-editable ListPart over Posted Rental Line filtered to the posted header.",
+        "knowledge": [
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md"
+        ]
+      },
+      {
+        "id": "posted-rental-orders-list",
+        "action": "create",
+        "object-type": "page",
+        "target": "Posted Rental Orders",
+        "purpose": "Read-only list over Posted Rental Header, CardPageID = Posted Rental Order, default descending sort so the newest posted rentals come first; also the page Find Entries opens when several posted rentals match.",
+        "knowledge": [
+          "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+          "microsoft/knowledge/ui/default-descending-sort-on-historical-pages.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md"
+        ]
+      },
+      {
+        "id": "rental-post-yes-no",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental-Post (Yes/No)",
+        "purpose": "Called from the Post action. Asks for confirmation before any database write or lock, then runs Rental-Post. Pages never call Rental-Post directly, so Rental-Post can also run unattended.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/check-post-line-batch-pattern.md",
+          "microsoft/knowledge/performance/avoid-user-prompts-inside-transactions.md"
+        ]
+      },
+      {
+        "id": "rental-check",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental-Check",
+        "purpose": "Checks a rental order before posting and reports every blocking problem at once: an [ErrorBehavior(ErrorBehavior::Collect)] procedure runs the checks (customer not blocked, each line's equipment not blocked, required header fields, at least one line with an amount, required Rental Setup fields via TestField) and, if errors were collected, retrieves and clears them with GetCollectedErrors(true) and fails with all messages. Shows no UI other than errors.",
+        "knowledge": [
+          "microsoft/knowledge/error-handling/collect-validation-errors-with-errorbehavior.md",
+          "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/data-modeling/check-post-line-batch-pattern.md"
+        ]
+      },
+      {
+        "id": "rental-post",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental-Post",
+        "purpose": "Document posting routine with TableNo = Rental Header, run through Codeunit.Run so posting is atomic. Raises OnBeforePostRentalOrder(var RentalHeader, var IsHandled) and exits when handled; runs Rental-Check; gets the posted number from Rental Setup.\"Posted Rental Order Nos.\" through codeunit \"No. Series\"; inserts Posted Rental Header and Lines with TransferFields from the order; copies the order's attachments with Document Attachment Mgmt.CopyAttachments after the posted header is inserted; creates the G/L journal lines in the dedicated batch and posts them through Gen. Jnl.-Post Batch with SetSuppressCommit(true) so the posted document and the G/L entries commit or roll back together; deletes the open order and its lines; raises OnAfterPostRentalOrder(var RentalHeader, var PostedRentalHeader). No explicit Commit and no user prompts. Its Permissions property grants the direct rights on the posted tables. Publishers are empty [IntegrationEvent(false, false)] local procedures; events fired while uncommitted posting writes exist carry [CommitBehavior(CommitBehavior::Ignore)].",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/check-post-line-batch-pattern.md",
+          "microsoft/knowledge/performance/understand-implicit-transaction-boundary.md",
+          "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md",
+          "microsoft/knowledge/finance/post-ledger-entries-through-posting-codeunits.md",
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+          "microsoft/knowledge/events/publish-thin-onbefore-onafter-integration-events.md",
+          "microsoft/knowledge/events/use-ishandled-to-make-base-behaviour-overridable.md",
+          "microsoft/knowledge/security/commitbehavior-attribute-scopes-explicit-commits.md",
+          "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md",
+          "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md"
+        ]
+      },
+      {
+        "id": "rental-gen-jnl-posting",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental Gen. Jnl. Posting",
+        "purpose": "Called by Rental-Post. Gets Rental Setup and TestFields the journal template, the batch and every account the posting needs (including an account a posting setup getter returns, if posting groups are chosen). Errors if the dedicated batch already contains lines. Creates each Gen. Journal Line with SetUpNewLine from the previous line, Validates Account Type/No., Bal. Account Type/No. and Amount (never assigns them), keeps each document balanced, sets the description and the source posted rental number, and runs Gen. Jnl.-Post Batch after SetSuppressCommit(true). Never inserts G/L Entry rows itself.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/finance/post-ledger-entries-through-posting-codeunits.md",
+          "microsoft/knowledge/finance/preserve-journal-batch-document-balance.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md",
+          "microsoft/knowledge/finance/normal-vat-journal-amount-includes-vat.md"
+        ]
+      },
+      {
+        "id": "rental-navigate-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental Navigate Subscribers",
+        "purpose": "Adds Posted Rental Header to Find Entries: OnAfterFindRecords filters it by DocNoFilter and PostingDateFilter and calls InsertIntoDocEntry; OnBeforeShowRecords re-applies the filters, opens Posted Rental Order for one record or Posted Rental Orders for several, and sets IsHandled. Both are built as one unit. No extra key is needed because the filter is on the posted table's own No.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-find-entries-navigate-for-new-document-types.md"
+        ]
+      },
+      {
+        "id": "rental-attachment-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental Attachment Subscribers",
+        "purpose": "Maps Rental Header and Posted Rental Header to Document Attachment: returns field 1 (No. Code[20]) as the number field for both tables, resolves the record from DocumentAttachment.No., marks Rental Header as an entity so a rename moves only its files, and filters the copy source on the order No. and sets ToNo to the posted No. when the posting codeunit copies attachments.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "id": "report-selection-usage-ext",
+        "action": "create",
+        "object-type": "enumextension",
+        "target": "Report Selection Usage",
+        "purpose": "Adds the value Posted Rental Order so the posted document is registered in Report Selections.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md"
+        ]
+      },
+      {
+        "id": "custom-report-selection-sales-ext",
+        "action": "create",
+        "object-type": "enumextension",
+        "target": "Custom Report Selection Sales",
+        "purpose": "Adds the same Posted Rental Order value to the customer-side page enum so the usage can be used on Document Layouts. Customer side only: the rental is issued to customers, so Report Selection Usage Vendor is not extended.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "id": "rental-report-selection-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental Report Selection Subscribers",
+        "purpose": "Customer Report Selections triad for the Posted Rental Order usage: map the table value to the page value, map the picked page value back on validate, and append (never overwrite) the usage to the Copy from Report Selection filter.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "id": "posted-rental-order-report",
+        "action": "create",
+        "object-type": "report",
+        "target": "Posted Rental Order",
+        "purpose": "Document report over Posted Rental Header and Posted Rental Line. Layouts declared in the rendering section with Caption and Summary, DefaultRenderingLayout set to a Word layout. Dataset column names are a contract from the first release: add columns later, never rename or remove them.",
+        "knowledge": [
+          "microsoft/knowledge/reporting/declare-report-layouts-in-the-rendering-section.md",
+          "microsoft/knowledge/performance/document-report-word-layout.md",
+          "microsoft/knowledge/reporting/do-not-rename-or-remove-shipped-report-dataset-columns.md",
+          "microsoft/knowledge/feature-design/plan-a-printable-document-and-its-delivery.md"
+        ]
+      },
+      {
+        "id": "rental-install",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental Install",
+        "purpose": "Subtype = Install. On first install or reinstall per company registers the tenant-wide default with ReportSelections.InsertRecord(Posted Rental Order usage, '1', Report::\"Posted Rental Order\") when no row exists. Does not hard-code G/L accounts.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md"
+        ]
+      },
+      {
+        "id": "rental-upgrade",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental Upgrade",
+        "purpose": "Subtype = Upgrade, entered from OnUpgradePerCompany, for data changes in later versions; each step guarded with HasUpgradeTag and closed with SetUpgradeTag.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "id": "rental-objects-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Rental - Objects",
+        "purpose": "Assignable = false building block: execute on the rental codeunits, pages and report; tabledata Rental Setup and the open rental tables. Every object listed explicitly, no wildcards.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md"
+        ]
+      },
+      {
+        "id": "rental-user-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Rental - Post",
+        "purpose": "Assignable role that includes Rental - Objects. Grants RIMD on Rental Header and Rental Line, R on Rental Setup, and only indirect rights (r plus the letters posting needs, such as i and m) on Posted Rental Header and Posted Rental Line, so posted rentals are written only through Rental-Post.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "id": "rental-admin-permissionset",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Rental - Setup",
+        "purpose": "Assignable role that includes Rental - Objects and grants RIM on Rental Setup so an administrator can complete setup without SUPER.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "id": "rental-test-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Rental Posting Tests",
+        "purpose": "Test codeunit (Subtype = Test) with [FEATURE] tag and [SCENARIO]/[GIVEN]/[WHEN]/[THEN] per test; fixtures from library codeunits; posted data created only by posting.",
+        "knowledge": [
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/triage-posted-table-license-failures-against-baseline.md",
+          "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Rental Setup.Rental Order Nos.",
+        "to": "Rental Header.No.",
+        "mechanism": "other",
+        "note": "Rental Header.OnInsert: TestField the series, NoSeries.GetNextNo, store No. Series, then InitRecord.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/data-modeling/initialize-document-defaults-in-initrecord.md"
+        ]
+      },
+      {
+        "from": "Customer",
+        "to": "Rental Header.Customer No. / Customer Name",
+        "mechanism": "validate",
+        "note": "User picks the customer; OnValidate gets the customer, checks Blocked and copies the name.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Rental Line (Equipment No., Description, Rental Amount)",
+        "mechanism": "user-entry",
+        "note": "Equipment reference and amount rule depend on open questions.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md"
+        ]
+      },
+      {
+        "from": "Rental Setup.Posted Rental Order Nos.",
+        "to": "Posted Rental Header.No.",
+        "mechanism": "other",
+        "note": "Rental-Post: TestField and NoSeries.GetNextNo on the posted series; the order number goes to Rental Order No.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md"
+        ]
+      },
+      {
+        "from": "Rental Header",
+        "to": "Posted Rental Header",
+        "mechanism": "transferfields",
+        "note": "PostedRentalHeader.TransferFields(RentalHeader) then set No., No. Series and Rental Order No.; every mirrored field has the same number, type and length; SkipFieldsNotMatchingType is not used.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/data-modeling/transferfields-skip-type-mismatch-can-drop-data.md"
+        ]
+      },
+      {
+        "from": "Rental Line",
+        "to": "Posted Rental Line",
+        "mechanism": "transferfields",
+        "note": "Per line, then Document No. := posted header No.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/data-modeling/transferfields-skip-type-mismatch-can-drop-data.md"
+        ]
+      },
+      {
+        "from": "Rental Header / Rental Line",
+        "to": "Gen. Journal Line (dedicated rental batch)",
+        "mechanism": "validate",
+        "note": "SetUpNewLine from the previous line, then Validate account, balancing account and Amount; posting date and description from the order; amounts per open question on VAT and grouping.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/finance/preserve-journal-batch-document-balance.md",
+          "microsoft/knowledge/finance/normal-vat-journal-amount-includes-vat.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line",
+        "to": "G/L Entry",
+        "mechanism": "other",
+        "note": "Gen. Jnl.-Post Batch with SetSuppressCommit(true); the posting engine creates the entries and the register.",
+        "knowledge": [
+          "microsoft/knowledge/finance/post-ledger-entries-through-posting-codeunits.md",
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "from": "Document Attachment (Rental Header)",
+        "to": "Document Attachment (Posted Rental Header)",
+        "mechanism": "other",
+        "note": "Rental-Post calls CopyAttachments(FromRecRef, ToRecRef) after inserting the posted header; subscribers filter the source No. and set ToNo.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Document Attachment (Rental Header / Posted Rental Header)",
+        "mechanism": "user-entry",
+        "note": "Signed delivery forms uploaded through the Doc. Attachment List Factbox on either page.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "from": "Posted Rental Header",
+        "to": "Find Entries (Document Entry)",
+        "mechanism": "event-copy",
+        "note": "OnAfterFindRecords adds the count; OnBeforeShowRecords opens the posted pages.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-find-entries-navigate-for-new-document-types.md"
+        ]
+      },
+      {
+        "from": "Posted Rental Header",
+        "to": "Posted Rental Order report (print / email)",
+        "mechanism": "other",
+        "note": "Report Selections usage Posted Rental Order; PrintWithDialogForCust / SendEmailToCust.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Navigate",
+        "event": "OnAfterFindRecords",
+        "purpose": "Count Posted Rental Header records matching the document number and posting date filters and add them with InsertIntoDocEntry.",
+        "guards": [
+          "Filter on DocNoFilter and PostingDateFilter before counting"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-find-entries-navigate-for-new-document-types.md"
+        ]
+      },
+      {
+        "publisher": "Navigate",
+        "event": "OnBeforeShowRecords",
+        "purpose": "Open Posted Rental Order (one record) or Posted Rental Orders (several) for the rental row.",
+        "guards": [
+          "Exit unless TempDocumentEntry.\"Table ID\" = Database::\"Posted Rental Header\"",
+          "Set IsHandled := true only for the rental row"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-find-entries-navigate-for-new-document-types.md"
+        ]
+      },
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnAfterTableHasNumberFieldPrimaryKey",
+        "purpose": "Return field 1 (No.) as the number field for Rental Header and Posted Rental Header.",
+        "guards": [
+          "Only for the two rental table IDs"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnAfterGetRefTable",
+        "purpose": "Get the Rental Header or Posted Rental Header from DocumentAttachment.No. so the factbox can upload and open files.",
+        "guards": [
+          "Case on DocumentAttachment.\"Table ID\"; RecRef only set when Get succeeds"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnAfterTableIsEntity",
+        "purpose": "Mark Rental Header as an entity so a rename moves only that order's files.",
+        "guards": [
+          "Only for Rental Header"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnCopyAttachmentsOnAfterSetFromParameters",
+        "purpose": "Filter the copy source on the order's No. so only that order's attachments are copied on posting.",
+        "guards": [
+          "Only when FromRecRef.Number() = Database::\"Rental Header\""
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "Document Attachment Mgmt",
+        "event": "OnCopyAttachmentsOnAfterSetToParameters",
+        "purpose": "Set ToFieldRef and ToNo to the Posted Rental Header No.",
+        "guards": [
+          "Only when ToRecRef.Number() = Database::\"Posted Rental Header\""
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "publisher": "Customer Report Selections",
+        "event": "OnAfterOnMapTableUsageValueToPageValue",
+        "purpose": "Show the Posted Rental Order usage in the Usage column of Document Layouts.",
+        "guards": [
+          "Only for the Posted Rental Order usage"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "publisher": "Customer Report Selections",
+        "event": "OnValidateUsage2OnCaseElse",
+        "purpose": "Map the picked Posted Rental Order page value back to the Report Selection Usage value.",
+        "guards": [
+          "Only for the Posted Rental Order page value"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "publisher": "Customer Report Selections",
+        "event": "OnAfterFilterCustomerUsageReportSelections",
+        "purpose": "Append the Posted Rental Order usage to the Copy from Report Selection filter.",
+        "guards": [
+          "Append with StrSubstNo('%1|%2', existing filter, usage); never overwrite"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "Rental Setup card: users fill Rental Order Nos., Posted Rental Order Nos., the dedicated journal template and batch and the posting account(s); code TestFields each before use, and a test blanks each one to prove the error.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md"
+        ]
+      },
+      {
+        "concern": "install",
+        "step": "Install codeunit registers the tenant-wide Report Selections default for the Posted Rental Order usage on first install/reinstall; it creates no G/L accounts or number series (see open question).",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "Separate upgrade codeunit for later data migrations, each step behind its own upgrade tag.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship Rental - Objects (non-assignable), Rental - Post and Rental - Setup (assignable); posted tables granted indirectly to users, direct rights on Rental-Post's Permissions property; no wildcards; verify setup and posting as a non-SUPER user.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Table-level DataClassification = CustomerContent on Rental Setup, Rental Header/Line and Posted Rental Header/Line; field-level overrides only where a field stores a different kind of data; no ToBeClassified at release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Group all rental objects in one feature folder (for example src/Rental/) consistent with the app's convention.",
+        "knowledge": [
+          "microsoft/knowledge/style/source-organized-by-feature-not-object-type.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "post-creates-posted-rental-with-posting-series",
+        "given": "Rental Setup with distinct Rental Order Nos. and Posted Rental Order Nos. series, a customer from LibrarySales and a rental order with two lines",
+        "when": "The order is posted through Rental-Post",
+        "then": "A Posted Rental Header exists whose No. is the next number of the posted series, Rental Order No. equals the order number, the header fields and both lines equal the order values, and the open order and its lines no longer exist",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "post-writes-rental-amount-to-gl",
+        "given": "A rental order with a known total Rental Amount and configured posting accounts",
+        "when": "The order is posted",
+        "then": "G/L entries for the posting date and document number carry the rental amount on the revenue account and the balancing side, created by the posting engine (a G/L register exists)",
+        "knowledge": [
+          "microsoft/knowledge/finance/post-ledger-entries-through-posting-codeunits.md",
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "post-rolls-back-when-gl-posting-fails",
+        "given": "A rental order and a blank posting account that makes journal posting fail after the posted header was inserted",
+        "when": "The order is posted",
+        "then": "An error is raised and no Posted Rental Header, Posted Rental Line or G/L entry exists, and the open order is unchanged (SetSuppressCommit kept one transaction)",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+          "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md",
+          "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md"
+        ]
+      },
+      {
+        "id": "post-does-not-post-user-lines-in-batch",
+        "given": "A user line already exists in the dedicated rental journal batch",
+        "when": "A rental order is posted",
+        "then": "Posting fails with the batch-not-empty error and the user's line is not posted",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md"
+        ]
+      },
+      {
+        "id": "blank-setup-series-errors",
+        "given": "Rental Setup with a blank Posted Rental Order Nos.",
+        "when": "A rental order is posted",
+        "then": "The error names the Posted Rental Order Nos. field; a separate test blanks Rental Order Nos. and inserts an order",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md"
+        ]
+      },
+      {
+        "id": "check-reports-all-errors",
+        "given": "A rental order with a blocked customer and a line without an amount",
+        "when": "Rental-Check runs",
+        "then": "One error is raised whose text contains both problems, and nothing is posted",
+        "knowledge": [
+          "microsoft/knowledge/error-handling/collect-validation-errors-with-errorbehavior.md",
+          "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md"
+        ]
+      },
+      {
+        "id": "find-entries-finds-posted-rental",
+        "given": "A posted rental created by posting",
+        "when": "Find Entries is run for its No. and Posting Date",
+        "then": "The Document Entry list has a Posted Rental Header row with count 1, and Show Records opens Posted Rental Order on that record (page handler captures the No.)",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-find-entries-navigate-for-new-document-types.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "print-uses-report-selections",
+        "given": "A posted rental and the Posted Rental Order usage registered in Report Selections",
+        "when": "Print is invoked on the posted rental",
+        "then": "The report registered for the usage runs for that record (request page handler captures it); changing the registered report changes what runs",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+          "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "email-uses-report-selections",
+        "given": "A posted rental for a customer with an email address",
+        "when": "Email is invoked on the posted rental",
+        "then": "SendEmailToCust is used with the Posted Rental Order usage, independent of the customer's Document Sending Profile (email editor handled by a modal page handler)",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+          "microsoft/knowledge/breaking-changes/prefer-email-module.md",
+          "microsoft/knowledge/testing/ui-handlers-in-tests.md"
+        ]
+      },
+      {
+        "id": "document-layouts-shows-usage",
+        "given": "The Posted Rental Order usage and the customer page enum extension",
+        "when": "A user picks Posted Rental Order in Document Layouts for a customer",
+        "then": "The Custom Report Selection row stores the Posted Rental Order Report Selection Usage and shows it in the Usage column",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md"
+        ]
+      },
+      {
+        "id": "attachments-copied-on-posting",
+        "given": "Two rental orders, each with its own attachment",
+        "when": "One order is posted",
+        "then": "The posted rental has exactly that order's attachment with No. = posted No., and the other order's attachment is untouched",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "id": "delete-order-deletes-only-its-lines-and-files",
+        "given": "Two rental orders with lines and attachments",
+        "when": "One order is deleted",
+        "then": "Its lines and attachments are gone; the other order's lines and attachments remain",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md"
+        ]
+      },
+      {
+        "id": "post-as-rental-user-without-super",
+        "given": "A rental order and the test user lowered to the Rental - Post role (plus the standard posting rights the open question settles)",
+        "when": "The user posts the order",
+        "then": "Posting succeeds, and the user has no direct write permission on Posted Rental Header (WritePermission is false)",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md",
+          "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md"
+        ]
+      },
+      {
+        "id": "new-order-gets-defaults-on-every-path",
+        "given": "Rental Setup with a series",
+        "when": "A Rental Header is inserted from code with Insert(true) and no page",
+        "then": "No., No. Series, Posting Date and Document Date are set by OnInsert/InitRecord",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/initialize-document-defaults-in-initrecord.md",
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+      "used-for": "Rental Setup singleton and its card.",
+      "constraints": [
+        "Primary Key Code[10] blank is the sole key.",
+        "Card page with InsertAllowed = false, DeleteAllowed = false and an open-time guard that inserts the missing row."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Table types: Setup for Rental Setup, Document for Rental Header/Line, Document History for the posted tables.",
+      "constraints": [
+        "Document header key Code[20] No.; line key = header key renamed Document No. + Integer Line No.",
+        "Document History is a posted copy created during posting, mirrors the source fields and is never user-editable.",
+        "Setup has a blank Code[10] Primary Key and one record."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+      "used-for": "Guarding every setup value the posting needs.",
+      "constraints": [
+        "TestField a required setup field before use; never fall back to a default when it is blank.",
+        "Write a test that blanks the setup field and asserts the error."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-gl-account-determination-for-a-finance-feature.md",
+      "used-for": "Map for how the rental amount reaches the G/L: account source, missing-account check, dedicated batch, balance, dimensions, VAT, corrections.",
+      "constraints": [
+        "Choose posting groups or a feature setup account as the account source; never hard-code accounts.",
+        "Check every account before creating journal lines, including values a posting setup getter returns.",
+        "Which account the amount belongs to is an accounting decision for the requester."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.md",
+      "used-for": "Dedicated rental journal batch and how lines are created and posted.",
+      "constraints": [
+        "Give the feature its own journal template and batch named in setup; TestField them before creating lines.",
+        "Create lines with SetUpNewLine and Validate the account fields rather than assigning them.",
+        "Gen. Jnl.-Post Batch posts every line in the batch and commits unless SetSuppressCommit(true) was called; decide the transaction boundary in the design.",
+        "A document number must be the batch series' next number or allowed as a manual number by that series."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/post-finance-journal-lines-from-code-in-a-dedicated-batch.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/page-design-must-match-bc-page-type-conventions.md",
+      "used-for": "Page types and links for the rental pages.",
+      "constraints": [
+        "Document page has FastTabs plus a lines subpage filtered to the header.",
+        "List page sets CardPageID to its card when one exists.",
+        "ListPart subpage SubPageLink must filter to the host record."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+      "used-for": "Number assignment in Rental Header.OnInsert.",
+      "constraints": [
+        "When No. is blank, OnInsert reads setup, TestFields the series, stores it in No. Series and assigns No. from the series.",
+        "No. Code[20] is the key; do not use AutoIncrement, GUID or SystemId as the business key."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+      "used-for": "Codeunit \"No. Series\" for both the rental and the posted rental number.",
+      "constraints": [
+        "Use codeunit \"No. Series\" (GetNextNo, IsManual/TestManual); never NoSeriesManagement."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/initialize-document-defaults-in-initrecord.md",
+      "used-for": "Rental Header defaults set in InitRecord after the number is assigned.",
+      "constraints": [
+        "Assign the document number, then call InitRecord, which holds the remaining defaults.",
+        "Do not set defaults in page triggers."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+      "used-for": "Rental Header deletes its lines in OnDelete.",
+      "constraints": [
+        "The owning table deletes its dependents in OnDelete, filtered on the foreign key.",
+        "Declare Permissions = tabledata <dependent> = rd on the owning table."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.md",
+      "used-for": "Attaching signed delivery forms to rental orders and posted rentals, and copying them on posting.",
+      "constraints": [
+        "Subscribe OnAfterTableHasNumberFieldPrimaryKey, OnAfterGetRefTable and OnAfterTableIsEntity for the custom tables.",
+        "Add Doc. Attachment List Factbox with SubPageLink on Table ID and No.",
+        "Call DeleteAttachedDocuments in OnDelete and MoveAttachmentsWithinSameRecordType in OnRename.",
+        "After inserting the posted record call CopyAttachments and subscribe the copy From/To parameter events; CopyAttachmentsForPostedDocs is not an option for a custom table.",
+        "The key must be Code[20] No."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/enable-document-attachments-on-custom-tables.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md",
+      "used-for": "Blocked checks for the customer and the rented equipment at use and before posting.",
+      "constraints": [
+        "The referencing record checks the master's Blocked in OnValidate and again before posting.",
+        "An option-style Blocked needs the specific option compared at each path."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Data classification of the new tables.",
+      "constraints": [
+        "A table-level DataClassification is the default for its Normal fields; override per field only where the data differs."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-document-with-posting.md",
+      "used-for": "Map for the custom posted document: which parts to plan (numbering, posting structure, posted tables, Navigate, printing, attachments, permissions, tests) and which rows rest on judgment.",
+      "constraints": [
+        "Plan header and lines, numbering, posting structure, checks, ledger effects, posted tables, Navigate, printing, attachments and permissions before building.",
+        "Status/release, posting preview and archive have no article for a custom document and rest on judgment.",
+        "Whether the document needs an archive, a preview, approvals or ledger entries is for the requester; unsettled rows become open questions."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field mirroring between open and posted rental tables.",
+      "constraints": [
+        "Every mirrored field has the same field number, data type and length on every table in the TransferFields cascade."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-skip-type-mismatch-can-drop-data.md",
+      "used-for": "TransferFields from the order to the posted tables.",
+      "constraints": [
+        "Use TransferFields only when every required field shares number and type; do not use SkipFieldsNotMatchingType = true to hide mismatches.",
+        "Map fields the destination needs explicitly when they do not match."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+      "used-for": "Pages call codeunits.",
+      "constraints": [
+        "Business operations (posting, checks) live in codeunits or the table, not in page triggers."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips on rental pages.",
+      "constraints": [
+        "Every user-facing field has an explicit or inherited non-empty tooltip; on runtime 13.0+ define it on the table field (applies from BC24)."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/check-post-line-batch-pattern.md",
+      "used-for": "Shape of the posting codeunits and the Post action.",
+      "constraints": [
+        "A document posting routine calls line posting directly and skips batch posting.",
+        "A -Post document codeunit is never called directly from a page; the page calls a -Post (Yes/No) wrapper so -Post can run unattended.",
+        "Do not build one monolithic codeunit that validates, writes entries and shows dialogs."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/check-post-line-batch-pattern.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/page-name-must-match-source-table.md",
+      "used-for": "Page names.",
+      "constraints": [
+        "A page's name must match its source table's entity."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.md",
+      "used-for": "Print and Email actions on the posted rental.",
+      "constraints": [
+        "Ordinary Print/Email actions call PrintWithDialogForCust/SendEmailToCust (or the TrySendTo helpers) directly.",
+        "Do not load the customer's assigned Document Sending Profile for a plain Email action; reserve it for Post and Send."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/document-print-and-email-actions-call-report-selections-directly.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/custom-document-dispatch-must-not-bypass-report-selections.md",
+      "used-for": "No hard-coded report or hand-built email.",
+      "constraints": [
+        "Dispatch through Report Selections' Print/Email procedures; custom logic goes around the call, not instead of it."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/default-descending-sort-on-historical-pages.md",
+      "used-for": "Posted Rental Orders list sorting.",
+      "constraints": [
+        "History pages default to a descending sort so the newest records come first."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/avoid-user-prompts-inside-transactions.md",
+      "used-for": "Confirmation before posting writes.",
+      "constraints": [
+        "Ask the user before any database write that takes a lock; never prompt inside the write transaction."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/error-handling/collect-validation-errors-with-errorbehavior.md",
+      "used-for": "Rental-Check reports all blocking problems at once.",
+      "constraints": [
+        "Mark the orchestrating procedure [ErrorBehavior(ErrorBehavior::Collect)].",
+        "Retrieve and clear with GetCollectedErrors(true) and fail the operation with the collected messages; never replace failure with Message."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/understand-implicit-transaction-boundary.md",
+      "used-for": "No explicit Commit in rental posting.",
+      "constraints": [
+        "Default to no explicit Commit(); the runtime commits when execution completes and rolls back on error.",
+        "Use Commit() only with a specific reason."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/codeunit-run-as-atomic-sub-operation.md",
+      "used-for": "Atomic posting.",
+      "constraints": [
+        "Run work that must complete fully or not at all through Codeunit.Run and react to its return value; a caller already in a write transaction must commit first."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/post-ledger-entries-through-posting-codeunits.md",
+      "used-for": "G/L entries only through the posting engine.",
+      "constraints": [
+        "Create G/L entries through the owning journal posting workflow, for a persisted batch through Gen. Jnl.-Post Batch.",
+        "Never insert G/L Entry or other Finance-owned ledger records directly."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/events/publish-thin-onbefore-onafter-integration-events.md",
+      "used-for": "Events published by the rental posting routine.",
+      "constraints": [
+        "Raise OnBeforeX(var Rec, var IsHandled) and OnAfterX(var Rec) at the routine's boundaries.",
+        "Publishers are [IntegrationEvent(false, false)] local procedures with empty bodies."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/events/use-ishandled-to-make-base-behaviour-overridable.md",
+      "used-for": "Overridable posting entry.",
+      "constraints": [
+        "Raise OnBefore(..., var IsHandled) first and exit if IsHandled before any default logic."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/commitbehavior-attribute-scopes-explicit-commits.md",
+      "used-for": "Protecting the rental posting events from subscriber commits.",
+      "constraints": [
+        "Annotate publishers fired while uncommitted atomic writes exist with [CommitBehavior(CommitBehavior::Ignore)]; not every publisher needs it.",
+        "The attribute does not suppress the implicit commit of a nested Codeunit.Run."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/indirect-permissions-for-elevated-access.md",
+      "used-for": "Indirect rights on the posted rental tables.",
+      "constraints": [
+        "Grant lowercase (indirect) rights when a role writes a table only through a specific codeunit; that codeunit supplies the direct rights.",
+        "Do not grant RIMD on posted/system-of-record tables to users."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/preserve-journal-batch-document-balance.md",
+      "used-for": "Balance of the rental journal documents.",
+      "constraints": [
+        "Keep balancing lines in the same document/date group when the template forces document balance; post persisted batches through the batch workflow."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/normal-vat-journal-amount-includes-vat.md",
+      "used-for": "Open question on whether the rental posting carries VAT.",
+      "constraints": [
+        "With Automatic VAT Entry and Normal VAT, journal Amount includes VAT; supply the VAT-inclusive total in that mode.",
+        "Other VAT calculation types need their own analysis."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/extend-find-entries-navigate-for-new-document-types.md",
+      "used-for": "Find Entries support for posted rentals.",
+      "constraints": [
+        "Subscribe to Navigate OnAfterFindRecords and OnBeforeShowRecords together.",
+        "In OnBeforeShowRecords check the Table ID, re-apply the filters, open the page and set IsHandled."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/extend-find-entries-navigate-for-new-document-types.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.md",
+      "used-for": "Report Selections registration and Document Layouts wiring for the posted rental.",
+      "constraints": [
+        "Add a Report Selection Usage value and register the tenant-wide default with InsertRecord.",
+        "For each applicable counterparty side only, extend the page enum and subscribe the map, validate and filter events; append to filters, never overwrite."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/extend-report-selection-usage-for-new-document-types.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/reporting/declare-report-layouts-in-the-rendering-section.md",
+      "used-for": "Layout declaration of the Posted Rental Order report.",
+      "constraints": [
+        "Declare every layout in rendering with Caption and Summary and set DefaultRenderingLayout; do not use the legacy layout properties."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/document-report-word-layout.md",
+      "used-for": "Default layout type.",
+      "constraints": [
+        "Document reports prefer a Word layout over RDLC unless layout requirements favour RDLC."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/reporting/do-not-rename-or-remove-shipped-report-dataset-columns.md",
+      "used-for": "Report dataset contract.",
+      "constraints": [
+        "After release keep column names and columns; add new columns rather than renaming or removing."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-printable-document-and-its-delivery.md",
+      "used-for": "Map for printing and emailing the posted rental: report, layouts, Report Selections, print/email actions, attachments and tests.",
+      "constraints": [
+        "Register a custom document under its own Report Selection Usage and print/email through Report Selections.",
+        "Sending attachments with the email and document language have no article and rest on judgment.",
+        "Whether customers get their own layouts and whether the document must also be sent electronically are decisions for the requester."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+      "used-for": "Install vs upgrade code.",
+      "constraints": [
+        "Install code runs on first install/reinstall only; version migration goes in an Upgrade codeunit."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+      "used-for": "Upgrade steps.",
+      "constraints": [
+        "Guard each upgrade step with HasUpgradeTag and record SetUpgradeTag; no version checks."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Permission set structure.",
+      "constraints": [
+        "Small non-assignable building blocks composed into assignable role sets with IncludedPermissionSets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Explicit permission entries.",
+      "constraints": [
+        "Enumerate each tabledata and object; no * grants; only the letters needed."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/appsource/permission-sets-cover-setup-and-usage-without-super.md",
+      "used-for": "Coverage of setup and usage without SUPER.",
+      "constraints": [
+        "Permission sets must cover setup and normal usage; validate as a user with only the app roles."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Test codeunit structure.",
+      "constraints": [
+        "[FEATURE] on the codeunit; [SCENARIO], [GIVEN], [WHEN], [THEN] in each test."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Build customers, G/L accounts and values with library codeunits; create parents before dependents and Validate foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/triage-posted-table-license-failures-against-baseline.md",
+      "used-for": "Posted data in tests.",
+      "constraints": [
+        "Create posted data by posting through the standard routine, not by inserting posted rows."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/transactionmodel-attribute-governs-test-transactions.md",
+      "used-for": "Transaction model of posting tests.",
+      "constraints": [
+        "Do not declare AutoRollback on tests whose code under test calls Commit; use AutoCommit with a TestIsolation runner."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Corrections of posted rentals.",
+      "constraints": [
+        "Correct posted financial effects by reversal or a new posting, never by editing or deleting entries."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of classifications.",
+      "constraints": [
+        "No ToBeClassified in a released extension."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/source-organized-by-feature-not-object-type.md",
+      "used-for": "Source layout.",
+      "constraints": [
+        "Group the feature's files by feature folder, consistently with the project's convention."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-one-when-per-test.md",
+      "used-for": "Test shape.",
+      "constraints": [
+        "One [WHEN] action per test; posting as a precondition belongs in [GIVEN]."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/ui-handlers-in-tests.md",
+      "used-for": "Print, email and Find Entries tests.",
+      "constraints": [
+        "Every UI call needs a listed handler and every nonoptional handler must run; handlers capture values the test asserts."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/breaking-changes/prefer-email-module.md",
+      "used-for": "Email delivery of posted rentals.",
+      "constraints": [
+        "Build on the Email module (Email, Email Message) and route through an Email Scenario; do not use Codeunit Mail."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+      "used-for": "Permission test of rental posting.",
+      "constraints": [
+        "Use TestPermissions Restrictive and lower the user with Permissions Mock/Library - Lower Permissions to a context containing the permission set or a role including it; for indirect grants assert WritePermission is false."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "equipment-master",
+      "question": "What does a rental line rent: an Item, a Resource, a Fixed Asset, or a new Equipment master table that this feature must also create (with its own numbering, card, list and Blocked field)?",
+      "affects": [
+        "rental-line",
+        "posted-rental-line",
+        "check-reports-all-errors"
+      ]
+    },
+    {
+      "id": "rental-amount-calculation",
+      "question": "How is a line's Rental Amount determined: typed by the user, or calculated from a rate and the rental period (and from which price source)?",
+      "affects": [
+        "rental-line"
+      ]
+    },
+    {
+      "id": "gl-account-source",
+      "question": "Which G/L account does the rental amount post to, and where does it come from: a Rental Revenue Account in Rental Setup, or the customer's and equipment's posting groups through General Posting Setup?",
+      "affects": [
+        "rental-setup",
+        "rental-gen-jnl-posting"
+      ]
+    },
+    {
+      "id": "balancing-side",
+      "question": "What is the balancing side of the rental posting: the customer (creating a customer ledger entry / receivable), or a G/L balancing account? The request only says the amount is posted to the G/L.",
+      "affects": [
+        "rental-gen-jnl-posting",
+        "post-writes-rental-amount-to-gl"
+      ]
+    },
+    {
+      "id": "vat",
+      "question": "Does the rental posting carry VAT? If so, which VAT calculation type, and is Rental Amount VAT-inclusive or VAT-exclusive?",
+      "affects": [
+        "rental-line",
+        "rental-gen-jnl-posting"
+      ]
+    },
+    {
+      "id": "gl-document-no",
+      "question": "Should the G/L entries carry the Posted Rental Order No. as Document No. (so Find Entries shows them together with the posted rental)? That requires the dedicated batch's No. Series to allow it as a manual number; otherwise the batch series number is used.",
+      "affects": [
+        "rental-gen-jnl-posting",
+        "find-entries-finds-posted-rental"
+      ]
+    },
+    {
+      "id": "journal-grouping",
+      "question": "Should one journal document be posted per rental order (total amount) or one journal line per rental line?",
+      "affects": [
+        "rental-gen-jnl-posting"
+      ]
+    },
+    {
+      "id": "dimensions",
+      "question": "Must rental orders carry dimensions (from the customer, the equipment or both) and pass the complete Dimension Set ID to the journal lines and posted tables? Not designed until answered.",
+      "affects": [
+        "rental-header",
+        "rental-line",
+        "rental-gen-jnl-posting",
+        "posted-rental-header"
+      ]
+    },
+    {
+      "id": "customer-blocked-options",
+      "question": "Which Customer Blocked values (Ship, Invoice, All) must block creating and posting a rental order?",
+      "affects": [
+        "rental-header",
+        "rental-check"
+      ]
+    },
+    {
+      "id": "bill-to-customer",
+      "question": "Is a separate bill-to customer needed, or is one Customer No. enough for posting, printing and emailing?",
+      "affects": [
+        "rental-header",
+        "posted-rental-order-page"
+      ]
+    },
+    {
+      "id": "status-release",
+      "question": "Does the rental order need a status and a release step (Open/Released) before posting, and what does release check? No article covers a custom release routine.",
+      "affects": [
+        "rental-header",
+        "rental-post"
+      ]
+    },
+    {
+      "id": "approvals",
+      "question": "Must rental orders be approved before release or posting?",
+      "affects": [
+        "rental-header",
+        "rental-post"
+      ]
+    },
+    {
+      "id": "posting-preview",
+      "question": "Must the rental order support Preview Posting? No article covers preview for a custom posting routine.",
+      "affects": [
+        "rental-post"
+      ]
+    },
+    {
+      "id": "archive",
+      "question": "Must open rental orders be archived before change or deletion?",
+      "affects": [
+        "rental-header"
+      ]
+    },
+    {
+      "id": "open-order-print",
+      "question": "Must the open Rental Order (before posting) also be printable, for example as a delivery note, which would need its own Report Selection Usage?",
+      "affects": [
+        "report-selection-usage-ext",
+        "posted-rental-order-report"
+      ]
+    },
+    {
+      "id": "document-layouts",
+      "question": "Must customers get their own report or layout for posted rentals in Document Layouts? The design wires the customer-side enum and events; confirm or exclude.",
+      "affects": [
+        "custom-report-selection-sales-ext",
+        "rental-report-selection-subscribers",
+        "document-layouts-shows-usage"
+      ]
+    },
+    {
+      "id": "email-attachments",
+      "question": "Must the signed delivery forms be sent as email attachments together with the posted rental, or only stored on it?",
+      "affects": [
+        "posted-rental-order-page",
+        "email-uses-report-selections"
+      ]
+    },
+    {
+      "id": "email-scenario",
+      "question": "Should posted rentals be emailed from a dedicated email account (an Email Scenario of their own)?",
+      "affects": [
+        "posted-rental-order-page"
+      ]
+    },
+    {
+      "id": "electronic-delivery",
+      "question": "Must posted rentals also be sent as electronic documents (E-Documents)?",
+      "affects": [
+        "posted-rental-order-report"
+      ]
+    },
+    {
+      "id": "document-language",
+      "question": "Must the posted rental print in the customer's language?",
+      "affects": [
+        "posted-rental-order-report"
+      ]
+    },
+    {
+      "id": "corrections",
+      "question": "How is a wrongly posted rental corrected: a reversal of its G/L transaction, or a credit/cancellation document of its own?",
+      "affects": [
+        "rental-post",
+        "rental-gen-jnl-posting"
+      ]
+    },
+    {
+      "id": "install-defaults",
+      "question": "Should install create default number series and the dedicated journal template/batch, or does an administrator set them up?",
+      "affects": [
+        "rental-install",
+        "rental-setup"
+      ]
+    },
+    {
+      "id": "delete-posted",
+      "question": "May users delete posted rentals, and if so, what checks apply?",
+      "affects": [
+        "posted-rental-header",
+        "rental-user-permissionset"
+      ]
+    },
+    {
+      "id": "posting-rights",
+      "question": "Which standard permission sets must rental users also hold to post to the G/L (and customer ledger, if chosen)?",
+      "affects": [
+        "rental-user-permissionset",
+        "post-as-rental-user-without-super"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version is unknown: no repository or app.json; tooltip inheritance on table fields applies from BC24 (runtime 13.0) and the rendering section from runtime 9.0.",
+    "Status and release of the rental order: no BCQuality article covers a custom release routine; rests on judgment (open question status-release).",
+    "Posting preview for the custom Rental-Post routine: no BCQuality article covers it; not designed (open question posting-preview).",
+    "Archive of open rental orders: no BCQuality article covers a custom archive; not designed (open question archive).",
+    "Sending stored attachments with the email: no BCQuality article; rests on judgment (open question email-attachments).",
+    "Document language of the printed posted rental: no BCQuality article; rests on judgment.",
+    "Deleting the open Rental Order and its lines after posting follows the request ('the order becomes a Posted Rental Order'); no article states it for a custom document.",
+    "The Rental Order No. field on the posted header (link to the original order) rests on agent judgment."
+  ]
+}

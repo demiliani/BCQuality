@@ -1,0 +1,698 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Project planning lines get a Billing Milestone code. When we create sales invoices from the project, each invoice line must show the milestone of the planning line it came from. Finance also wants a new WIP method that recognizes sales as the milestone value reached on each project task.",
+    "business-process": "Project invoicing from planning lines (Job Create-Invoice, then Sales-Post) and project WIP calculation and posting (Job Calculate WIP, then Job Post WIP to G/L).",
+    "candidates": 11,
+    "selected": 8
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "tabext-job-planning-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Job Planning Line",
+        "purpose": "Holds the Billing Milestone code that the user assigns to each project planning line; it is the source of the value copied to the invoice line.",
+        "fields": [
+          {
+            "name": "Billing Milestone",
+            "type": "Code[20]",
+            "note": "DataClassification = CustomerContent. Whether it needs a TableRelation to a milestone master table is an open question (oq-milestone-master)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tabext-sales-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Carries the milestone on the project sales invoice and credit memo lines that Job Create-Invoice creates. Its field number is the one mirrored on every posted and archive line table.",
+        "fields": [
+          {
+            "name": "Billing Milestone",
+            "type": "Code[20]",
+            "note": "DataClassification = CustomerContent. Field number, type and length are reused exactly on every TransferFields target table below."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tabext-sales-invoice-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "Mirrors the milestone so the posted invoice line keeps it (InitFromSalesLine uses TransferFields).",
+        "fields": [
+          {
+            "name": "Billing Milestone",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false. Filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tabext-sales-cr-memo-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "Mirrors the milestone on posted credit memo lines: project credit memos created by Job Create-Invoice and corrective credit memos copied from a posted invoice.",
+        "fields": [
+          {
+            "name": "Billing Milestone",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false. Filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tabext-sales-shipment-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "Mirrors the milestone on the posted shipment line table. Chosen by the mirroring article, not by the request; the requester may exclude it (oq-posted-scope).",
+        "fields": [
+          {
+            "name": "Billing Milestone",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false. Filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tabext-return-receipt-line",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "Mirrors the milestone on the return receipt line table. Chosen by the mirroring article, not by the request; the requester may exclude it (oq-posted-scope).",
+        "fields": [
+          {
+            "name": "Billing Milestone",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false. Filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "tabext-sales-line-archive",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "Mirrors the milestone on archived sales lines. Chosen by the mirroring article, not by the request; the requester may exclude it (oq-posted-scope).",
+        "fields": [
+          {
+            "name": "Billing Milestone",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; DataClassification = CustomerContent; Editable = false. Filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "pageext-sales-invoice-subform",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Invoice Subform",
+        "purpose": "Shows the milestone on each line of the unposted project sales invoice.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "pageext-posted-sales-invoice-subform",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Sales Invoice Subform",
+        "purpose": "Shows the milestone, read-only, on each line of the posted sales invoice.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "id": "pageext-job-planning-lines",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Job Planning Lines",
+        "purpose": "Lets the user enter the Billing Milestone on project planning lines. Rests on judgment; no BCQuality article covers project pages.",
+        "knowledge": []
+      },
+      {
+        "id": "codeunit-project-invoice-milestone",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Project Invoice Milestone",
+        "purpose": "Subscriber codeunit that copies the milestone from the planning line to the sales line inside Job Create-Invoice.CreateSalesLine, before the line is inserted. One subscriber covers both entry points (CreateSalesInvoiceLines and CreateSalesInvoiceJobTask).",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md"
+        ]
+      },
+      {
+        "id": "tabext-job-task",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Job Task",
+        "purpose": "Holds the milestone value reached on each project task, which the new WIP method recognizes as sales. How it is filled is an open question (oq-milestone-value-source).",
+        "fields": [
+          {
+            "name": "Milestone Value Reached",
+            "type": "Decimal",
+            "note": "DataClassification = CustomerContent. Amount in the project's currency context; source of Recognized Sales Amount when the task's WIP method uses Milestone Value."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "pageext-job-task-lines",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Job Task Lines",
+        "purpose": "Shows (and, if it is user-entered, lets the user maintain) Milestone Value Reached per task. Rests on judgment; no BCQuality article covers project pages.",
+        "knowledge": []
+      },
+      {
+        "id": "enumext-wip-recognized-sales",
+        "action": "extend",
+        "object-type": "enumextension",
+        "target": "Job WIP Recognized Sales Type",
+        "purpose": "Adds the value 'Milestone Value' that a Job WIP Method can select in its Recognized Sales field.",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md"
+        ]
+      },
+      {
+        "id": "codeunit-milestone-wip-method",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Milestone WIP Method",
+        "purpose": "Subscriber codeunit that computes Recognized Sales Amount for tasks whose WIP method uses 'Milestone Value', inside Job Calculate WIP before the WIP buffers are built, so WIP entries and G/L postings agree with the task.",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md"
+        ]
+      },
+      {
+        "id": "permset-billing-milestone",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Billing Milestone",
+        "purpose": "Grants execute on the new codeunits; extend it if a milestone master table is added (oq-milestone-master).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "Job Planning Line.\"Billing Milestone\"",
+        "mechanism": "user-entry",
+        "note": "Entered on the Job Planning Lines page.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md"
+        ]
+      },
+      {
+        "from": "Job Planning Line.\"Billing Milestone\"",
+        "to": "Sales Line.\"Billing Milestone\"",
+        "mechanism": "event-copy",
+        "note": "Job Create-Invoice.OnBeforeInsertSalesLine, using the JobPlanningLine parameter of the line being invoiced; assignment only, the standard Insert(true) writes it. Covers invoices and credit memos created from planning lines and from report Job Create Sales Invoice.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md"
+        ]
+      },
+      {
+        "from": "Sales Line.\"Billing Milestone\"",
+        "to": "Sales Invoice Line.\"Billing Milestone\"",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine during Sales-Post; requires the same field number, type and length.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Line.\"Billing Milestone\"",
+        "to": "Sales Cr.Memo Line.\"Billing Milestone\"",
+        "mechanism": "transferfields",
+        "note": "Project credit memo lines posted by Sales-Post.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line.\"Billing Milestone\"",
+        "to": "Sales Shipment Line / Return Receipt Line.\"Billing Milestone\"",
+        "mechanism": "transferfields",
+        "note": "Article-chosen stage (oq-posted-scope).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line.\"Billing Milestone\"",
+        "to": "Sales Line Archive.\"Billing Milestone\"",
+        "mechanism": "transferfields",
+        "note": "Archiving copies lines with TransferFields; article-chosen stage (oq-posted-scope).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Invoice Line.\"Billing Milestone\"",
+        "to": "Sales Line.\"Billing Milestone\" (corrective credit memo)",
+        "mechanism": "transferfields",
+        "note": "Cancel/Correct copy the posted invoice lines with TransferFields and no recalculation, so the milestone (business data) returns on the corrective credit memo and is posted to Sales Cr.Memo Line. No code needed.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md"
+        ]
+      },
+      {
+        "from": "User or derivation (oq-milestone-value-source)",
+        "to": "Job Task.\"Milestone Value Reached\"",
+        "mechanism": "user-entry",
+        "note": "Mechanism depends on the answer to oq-milestone-value-source.",
+        "knowledge": []
+      },
+      {
+        "from": "Job Task.\"Milestone Value Reached\"",
+        "to": "Job Task.\"Recognized Sales Amount\"",
+        "mechanism": "event-copy",
+        "note": "Job Calculate WIP.OnBeforeCalcRecognizedSales when the task's Job WIP Method has Recognized Sales = Milestone Value; sets IsHandled.",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md"
+        ]
+      },
+      {
+        "from": "Job Task recognized amounts",
+        "to": "Job WIP Entry",
+        "mechanism": "other",
+        "note": "Standard CreateTempJobWIPBuffers and CreateWIPEntries build the buffers and entries from the amount set above; no custom code.",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md"
+        ]
+      },
+      {
+        "from": "Job WIP Entry",
+        "to": "Job WIP G/L Entry and G/L Entry",
+        "mechanism": "other",
+        "note": "Standard report Job Post WIP to G/L (CalcGLWIP) reverses earlier WIP and posts through Gen. Jnl.-Post Line; no custom G/L posting.",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Job Create-Invoice\"",
+        "event": "OnBeforeInsertSalesLine(var SalesLine, var SalesHeader, Job, JobPlanningLine, JobInvCurrency)",
+        "purpose": "Copy JobPlanningLine.\"Billing Milestone\" to SalesLine.\"Billing Milestone\" before the sales line is inserted.",
+        "guards": [
+          "Assign only; no Modify, the standard Insert(true) writes the value.",
+          "Read the value from the JobPlanningLine parameter; never look up a planning line by Job No. and Job Task No.",
+          "Do not subscribe to OnAfterCreateSalesInvoiceLines to patch lines afterwards."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Job Calculate WIP\"",
+        "event": "OnBeforeCalcRecognizedSales(var JobTask, var JobWIPTotal, var JobWIPMethod, var IsHandled)",
+        "purpose": "For the Milestone Value method, set JobTask.\"Recognized Sales Amount\" from JobTask.\"Milestone Value Reached\" and set IsHandled.",
+        "guards": [
+          "Exit unless JobWIPMethod.\"Recognized Sales\" is Milestone Value; leave IsHandled untouched for every other method.",
+          "Set the amount here, before the WIP buffers are built; never overwrite recognized amounts in OnAfterJobTaskCalcWIP or a separate action.",
+          "Do not post WIP to G/L from custom code; Job Post WIP to G/L must post and reverse it."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "A Job WIP Method record whose Recognized Sales is 'Milestone Value' must exist and be assigned to the projects/tasks that use it; users create it unless install code does (oq-wip-method-record).",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on every new table-extension field (Billing Milestone on all seven tables, Milestone Value Reached on Job Task); a tableextension has no table-level value to inherit.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship permission set Billing Milestone with execute entries for the two new codeunits (and any milestone master table/page if oq-milestone-master adds one).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "invoice-from-planning-lines-carries-milestone",
+        "given": "A project task with two billable planning lines carrying different Billing Milestone codes, built with the test Library codeunits",
+        "when": "Sales invoice lines are created from the planning lines (Job Create-Invoice.CreateSalesInvoiceLines)",
+        "then": "Each sales line has the milestone of the planning line it came from (matched by Job Contract Entry No.), not the other line's value",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "invoice-from-report-carries-milestone",
+        "given": "A project task with billable planning lines carrying Billing Milestone codes",
+        "when": "Report Job Create Sales Invoice is run for the task (CreateSalesInvoiceJobTask)",
+        "then": "Every created sales line carries the milestone of its own planning line",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "posted-invoice-line-keeps-milestone",
+        "given": "A project sales invoice created from planning lines with milestones",
+        "when": "The invoice is posted",
+        "then": "Each Sales Invoice Line carries the milestone, and the Job Planning Line Invoice rows are moved to Posted Invoice (Job Contract Entry No. path intact)",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "project-credit-memo-keeps-milestone",
+        "given": "Planning lines with milestones invoiced as a project credit memo",
+        "when": "The credit memo is created from the project and posted",
+        "then": "Sales Line and Sales Cr.Memo Line carry the planning line's milestone",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "cancel-posted-invoice-keeps-milestone",
+        "given": "A posted project sales invoice whose lines carry milestones",
+        "when": "The user runs Cancel on the posted invoice",
+        "then": "The posted corrective credit memo lines carry the same milestones",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "archive-keeps-milestone",
+        "given": "A project sales invoice with milestones on its lines",
+        "when": "The document is archived",
+        "then": "Sales Line Archive carries the milestones",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "wip-milestone-method-recognizes-milestone-value",
+        "given": "A project whose WIP method has Recognized Sales = Milestone Value and a posting task with Milestone Value Reached set",
+        "when": "Job Calculate WIP is run",
+        "then": "The task's Recognized Sales Amount equals Milestone Value Reached and the Job WIP Entry recognized-sales amounts are built from that value",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "wip-milestone-method-posts-to-gl-and-reverses",
+        "given": "WIP calculated with the Milestone Value method",
+        "when": "Job Post WIP to G/L is run, Milestone Value Reached is changed, and WIP is calculated and posted again",
+        "then": "Job WIP G/L Entries and G/L Entries match the task's recognized amount, and the earlier WIP posting is reversed",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "wip-standard-method-unaffected",
+        "given": "A project whose WIP method uses a standard Recognized Sales value and tasks with Milestone Value Reached filled",
+        "when": "Job Calculate WIP is run",
+        "then": "Recognized Sales Amount equals the standard method's result; the subscriber does not set IsHandled",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "wip-completed-project-uses-invoiced-price",
+        "given": "A completed project whose WIP method uses Milestone Value",
+        "when": "Job Calculate WIP is run",
+        "then": "Recognized sales come from the invoiced price, as standard, not from Milestone Value Reached",
+        "knowledge": [
+          "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.md",
+      "used-for": "Copying the planning line milestone to project sales invoice/credit memo lines and the guards on that subscriber.",
+      "constraints": [
+        "Add the field to Sales Line and copy it from JobPlanningLine in Job Create-Invoice.OnBeforeInsertSalesLine, so it is part of the insert with no extra write.",
+        "One subscriber covers both CreateSalesInvoiceLines and CreateSalesInvoiceJobTask, which both call CreateSalesLine.",
+        "Do not subscribe to OnAfterCreateSalesInvoiceLines and find the planning line by Job No. and Job Task No.: a task has several planning lines, so the wrong value is copied, and each line costs a Modify.",
+        "Never create project invoice lines in custom code without Job Contract Entry No.; posting then skips PostInvoiceContractLine, Job Planning Line Invoice and the Sale project ledger entry.",
+        "When posted documents or the project ledger need the value, keep following the path (TransferFields to posted lines; Job Transfer Line for the ledger)."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.good.al",
+        "microsoft/knowledge/projects/carry-job-planning-line-fields-to-project-sales-invoice-lines.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.md",
+      "used-for": "The new Milestone Value WIP method: enum extension, recognition subscriber, setup record, and the standard WIP entry and G/L posting path.",
+      "constraints": [
+        "Add the method value with an enumextension on Job WIP Recognized Sales Type; the CalcRecognizedSales case statement has no else branch, so a value with no code behind it leaves the amount at zero.",
+        "Subscribe to Job Calculate WIP.OnBeforeCalcRecognizedSales; when JobWIPMethod uses the new value, set JobTask.\"Recognized Sales Amount\" and set IsHandled.",
+        "Do not overwrite recognized amounts in OnAfterJobTaskCalcWIP or a separate action: WIP buffers already hold the old amounts and the next calculation's DeleteWIP clears them.",
+        "Do not post custom G/L journal lines for WIP; Job Post WIP to G/L does not know about them and never reverses them.",
+        "Users must still create a Job WIP Method record that uses the new value.",
+        "When the project is complete, CalcWIP sets amounts from invoiced price and usage cost and returns before the method is used."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.good.al",
+        "microsoft/knowledge/projects/add-custom-project-wip-methods-through-the-recognition-events.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Deciding which sales stages the line field must reach, plus page extensions, permission set entries and a post-and-read-back test per stage.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage; do not plan only the tables the requester named.",
+        "Posted lines and Sales Line Archive are reached by TransferFields from Sales Line.",
+        "Name the page extensions that show the field, the permission set entries for any new objects, and a test that posts a document and reads the value back from every target.",
+        "Do not plan to fill ledger entries after posting by finding and modifying them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring Billing Milestone on every posted and archive sales line table.",
+      "constraints": [
+        "Give the field the same field number, name, type and length on Sales Line and on every target line table the plan needs (posted shipment, invoice, credit memo, return receipt lines and Sales Line Archive), unless the plan states a document type never needs it.",
+        "No subscriber is needed for these stages; keep the mirrored fields non-editable on posted tables.",
+        "Do not use a different field number or copy the value in an OnAfter...Insert subscriber with Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definition consistency across the TransferFields cascade.",
+      "constraints": [
+        "Define a mirrored field with the exact same field number, data type and length on every table in the cascade, at creation time; a shorter length fails at runtime only when a long value appears."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+      "used-for": "Classifying the mirrored milestone as business data that should return on corrective credit memos.",
+      "constraints": [
+        "Every field mirrored on the posted invoice comes back on a Cancel/Correct credit memo; business data stays mirrored and needs no code.",
+        "Per-document state must be cleared in Copy Document Mgt.OnAfterCopySalesHeaderDone; the milestone is not such state.",
+        "Test Cancel on an invoice that has the custom fields filled and read the posted credit memo back."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "DataClassification on every new table-extension field.",
+      "constraints": [
+        "Every Normal field a tableextension adds must set its own DataClassification; ToBeClassified is not a safe default.",
+        "Choose the value that matches the data stored, at field definition time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Building project, customer and document fixtures in the tests.",
+      "constraints": [
+        "Create fixtures with the test Library codeunits, not hand-rolled Init/Insert with invented keys.",
+        "Create parents before dependents and Validate foreign-key fields so TableRelations run as in production."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.good.al"
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "oq-milestone-master",
+      "question": "Is Billing Milestone a free code, or must it reference a milestone master table (with description, value or a 'reached' status)? A master table adds a table, list page, TableRelation (same length) and permission set entries.",
+      "affects": [
+        "tabext-job-planning-line",
+        "permset-billing-milestone",
+        "tabext-job-task"
+      ]
+    },
+    {
+      "id": "oq-milestone-value-source",
+      "question": "How is the 'milestone value reached' on a task determined: entered manually on the task, or derived from planning lines (for example the line amounts of planning lines whose milestone is marked reached)? Who sets it and when, relative to running Job Calculate WIP?",
+      "affects": [
+        "tabext-job-task",
+        "pageext-job-task-lines",
+        "codeunit-milestone-wip-method"
+      ]
+    },
+    {
+      "id": "oq-recognized-costs",
+      "question": "Which Recognized Costs method should be paired with the Milestone Value sales method on the Job WIP Method, or is a matching custom cost method also needed?",
+      "affects": [
+        "enumext-wip-recognized-sales",
+        "codeunit-milestone-wip-method"
+      ]
+    },
+    {
+      "id": "oq-wip-method-record",
+      "question": "Should the app create the Job WIP Method record that uses Milestone Value (code, description, WIP posting options) at install, or will Finance create it?",
+      "affects": [
+        "enumext-wip-recognized-sales"
+      ]
+    },
+    {
+      "id": "oq-posted-scope",
+      "question": "Must the milestone also appear on posted shipment lines, return receipt lines and archived lines? The mirroring guidance adds them by default; confirm or exclude them.",
+      "affects": [
+        "tabext-sales-shipment-line",
+        "tabext-return-receipt-line",
+        "tabext-sales-line-archive"
+      ]
+    },
+    {
+      "id": "oq-copy-document",
+      "question": "Must the milestone survive Copy Document when lines are recalculated (for example copying a posted invoice without header)? If yes, a subscriber to Copy Document Mgt.OnAfterRecalculateSalesLine is needed.",
+      "affects": [
+        "tabext-sales-line"
+      ]
+    },
+    {
+      "id": "oq-job-ledger",
+      "question": "Should the Sale project ledger entries posted from the invoice also carry the milestone? That would need Job Transfer Line subscribers and a Job Ledger Entry field.",
+      "affects": [
+        "codeunit-project-invoice-milestone"
+      ]
+    },
+    {
+      "id": "oq-display-surfaces",
+      "question": "Where must the milestone be shown besides the invoice subforms: credit memo and posted credit memo subforms, the printed invoice layout, reports or APIs?",
+      "affects": [
+        "pageext-sales-invoice-subform",
+        "pageext-posted-sales-invoice-subform"
+      ]
+    },
+    {
+      "id": "oq-milestone-mandatory",
+      "question": "Is Billing Milestone mandatory on billable planning lines (blocking invoice creation when blank), and how should existing planning lines be handled?",
+      "affects": [
+        "tabext-job-planning-line",
+        "codeunit-project-invoice-milestone"
+      ]
+    },
+    {
+      "id": "oq-object-ids",
+      "question": "Which object and field ID range should the extension use? The Billing Milestone field number must be identical on all seven tables.",
+      "affects": [
+        "tabext-sales-line",
+        "tabext-sales-invoice-line",
+        "tabext-sales-cr-memo-line"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined from the request; all cited articles declare universal applicability.",
+    "Page extensions on Job Planning Lines and Job Task Lines rest on the agent's judgment; no BCQuality article covers project pages.",
+    "The source and data flow of Job Task \"Milestone Value Reached\" rest on the agent's judgment until oq-milestone-value-source is answered.",
+    "Whether Job WIP Method validation restricts combinations with a new Recognized Sales value is not covered by BCQuality knowledge."
+  ]
+}

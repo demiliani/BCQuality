@@ -1,0 +1,696 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "We service equipment for our customers and need to manage maintenance contracts. Each contract gets a number from a number series and has a customer, a start date, an end date and a status. Users must be able to find contracts in a list and open them on a card. Only the service team may create or change contracts; everyone else can only view them.",
+    "business-process": "Service management master data: a new custom Maintenance Contract entity (no posting process involved)",
+    "candidates": 31,
+    "selected": 26
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "contract-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Maintenance Contract",
+        "purpose": "Master table: one record per maintenance contract. Primary key \"No.\" Code[20] only; number assigned in OnInsert from the setup's number series through codeunit \"No. Series\" when \"No.\" is blank; \"No.\" OnValidate guards manual entry with NoSeries.IsManual before clearing \"No. Series\". Table-level DataClassification so every field inherits a real classification (no ToBeClassified).",
+        "fields": [
+          {
+            "name": "No.",
+            "type": "Code[20]",
+            "note": "Sole primary key; assigned from the number series in OnInsert when blank."
+          },
+          {
+            "name": "No. Series",
+            "type": "Code[20]",
+            "note": "Editable = false; TableRelation = \"No. Series\"; records the series that produced No."
+          },
+          {
+            "name": "Customer No.",
+            "type": "Code[20]",
+            "note": "TableRelation = Customer; type and length must equal Customer.\"No.\" exactly - confirm against the Customer table definition. OnValidate tests the customer's Blocked value (see open question customer-blocked)."
+          },
+          {
+            "name": "Starting Date",
+            "type": "Date"
+          },
+          {
+            "name": "Ending Date",
+            "type": "Date",
+            "note": "Relation to Starting Date is an open question (end-date-rule)."
+          },
+          {
+            "name": "Status",
+            "type": "Enum \"Maintenance Contract Status\""
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "status-enum",
+        "action": "create",
+        "object-type": "enum",
+        "target": "Maintenance Contract Status",
+        "purpose": "Named contract states for the Status field, instead of an Integer or magic numbers. Values are an open question.",
+        "knowledge": [
+          "microsoft/knowledge/style/fixed-choice-set-must-use-enum-not-integer.md"
+        ]
+      },
+      {
+        "id": "setup-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Maintenance Contract Setup",
+        "purpose": "Singleton setup table: \"Primary Key\" Code[10] left blank as the only key; holds the contract number series.",
+        "fields": [
+          {
+            "name": "Primary Key",
+            "type": "Code[10]",
+            "note": "Always blank; the only row."
+          },
+          {
+            "name": "Contract Nos.",
+            "type": "Code[20]",
+            "note": "TableRelation = \"No. Series\"; TestField before the contract table uses it."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "setup-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Maintenance Contract Setup",
+        "purpose": "Card page over the setup table with InsertAllowed = false, DeleteAllowed = false and an OnOpenPage guard that inserts the blank row if missing; searchable with UsageCategory = Administration.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "community/knowledge/appsource/set-usagecategory-on-searchable-entry-points.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "contract-list-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Maintenance Contract List",
+        "purpose": "List page users search for and open contracts from; UsageCategory = Lists with an object-level ApplicationArea; opens the card page. Name describes its source table. No business logic on the page.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "community/knowledge/appsource/set-usagecategory-on-searchable-entry-points.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "contract-card-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Maintenance Contract Card",
+        "purpose": "Card page for one contract. Field rules (numbering, customer validation, dates, status) live on the table, not in page triggers. Every user-facing field has an explicit or inherited tooltip.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "permset-read",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Maint. Contract - Read",
+        "purpose": "Building block, Assignable = false: R on tabledata Maintenance Contract and Maintenance Contract Setup, plus X on the contract table, the setup table and the list and card pages. Explicit entries, no wildcards.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md"
+        ]
+      },
+      {
+        "id": "permset-edit",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Maint. Contract - Edit",
+        "purpose": "Building block, Assignable = false, includes Maint. Contract - Read; adds the insert and modify rights on tabledata Maintenance Contract that the service team needs (delete is an open question). Explicit entries, no wildcards.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "id": "permset-view-role",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Maint. Contract View",
+        "purpose": "Role-shaped, Assignable = true, includes Maint. Contract - Read: everyone outside the service team can view contracts only.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/do-not-grant-rights-beyond-a-users-entitlement.md"
+        ]
+      },
+      {
+        "id": "permset-service-role",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Maint. Contract Service",
+        "purpose": "Role-shaped, Assignable = true, includes Maint. Contract - Edit: the service team creates and changes contracts.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/do-not-grant-rights-beyond-a-users-entitlement.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Maintenance Contract Setup.\"Contract Nos.\"",
+        "to": "Maintenance Contract.\"No.\" and \"No. Series\"",
+        "mechanism": "other",
+        "note": "OnInsert: if No. is blank, Get setup, TestField(\"Contract Nos.\"), store it in No. Series, assign No. with NoSeries.GetNextNo. Callers that create contracts in code use Insert(true).",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md"
+        ]
+      },
+      {
+        "from": "User (Maintenance Contract Setup page)",
+        "to": "Maintenance Contract Setup.\"Contract Nos.\"",
+        "mechanism": "user-entry",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md"
+        ]
+      },
+      {
+        "from": "User (Maintenance Contract Card)",
+        "to": "Maintenance Contract.\"Customer No.\"",
+        "mechanism": "validate",
+        "note": "TableRelation to Customer validates the value; OnValidate gets the customer and tests its Blocked value at this point of use.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md"
+        ]
+      },
+      {
+        "from": "User (Maintenance Contract Card)",
+        "to": "Maintenance Contract.\"Starting Date\", \"Ending Date\", Status",
+        "mechanism": "user-entry",
+        "note": "Any date or status rule belongs on the table fields, not on the page.",
+        "knowledge": [
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/fixed-choice-set-must-use-enum-not-integer.md"
+        ]
+      },
+      {
+        "from": "Maintenance Contract",
+        "to": "Maintenance Contract List and Card (search and open)",
+        "mechanism": "other",
+        "note": "Users find contracts through Tell Me on the list page (UsageCategory = Lists) and open them on the card.",
+        "knowledge": [
+          "community/knowledge/appsource/set-usagecategory-on-searchable-entry-points.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md"
+        ]
+      }
+    ],
+    "subscriptions": [],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "Setup card creates the singleton row on first open; an administrator assigns the contract number series before contracts are created. Contract insertion fails with a TestField error while the series is blank.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship two non-assignable building blocks (Read, Edit including Read) and two assignable roles (View, Service) composed with IncludedPermissionSets; enumerate every object explicitly with no wildcards; verify the grants fall within the entitlement the target users hold.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+          "microsoft/knowledge/security/do-not-grant-rights-beyond-a-users-entitlement.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Set a table-level DataClassification on both new tables and override only fields that store a different kind of data; no field may ship as ToBeClassified.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "install",
+        "step": "No install code is required for the design as requested. If the setup row or a default number series must exist after installation (open question default-number-series), put it in a Subtype = Install codeunit; install code does not run on version upgrade.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "First version needs no upgrade code. Any later data change to contracts or setup goes in a Subtype = Upgrade codeunit guarded by HasUpgradeTag/SetUpgradeTag with a per-feature tag, not DataVersion checks.",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+          "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Place all contract objects (tables, enum, pages, permission sets, tests) in one feature folder, consistent with the repository's existing layout convention.",
+        "knowledge": [
+          "microsoft/knowledge/style/source-organized-by-feature-not-object-type.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "insert-assigns-number-from-series",
+        "given": "Setup has a contract number series created through test library codeunits",
+        "when": "A contract is inserted with Insert(true) and a blank No.",
+        "then": "No. is the next number from that series and No. Series equals the setup's Contract Nos.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "insert-fails-without-setup-series",
+        "given": "Setup exists with Contract Nos. blank",
+        "when": "A contract is inserted with a blank No.",
+        "then": "A TestField error on Contract Nos. is raised and no contract is created",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "manual-number-rejected-when-series-not-manual",
+        "given": "The contract number series does not allow manual numbers",
+        "when": "A user validates a typed No. on a contract",
+        "then": "An error is raised and No. Series is not cleared",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "customer-no-validates-against-customer",
+        "given": "A customer created with LibrarySales.CreateCustomer",
+        "when": "Customer No. is validated with that customer's No., and separately with a value that is not a customer",
+        "then": "The existing customer is stored; the non-existent value is rejected by the table relation",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "blocked-customer-rejected",
+        "given": "A customer created with LibrarySales.CreateCustomer and blocked with the Blocked value(s) chosen in open question customer-blocked",
+        "when": "Customer No. on a contract is validated with that customer",
+        "then": "An error on the customer's Blocked field is raised",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "setup-page-creates-singleton",
+        "given": "No Maintenance Contract Setup record exists",
+        "when": "The Maintenance Contract Setup page is opened",
+        "then": "Exactly one setup record with a blank Primary Key exists",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "viewer-can-read-but-not-change",
+        "given": "TestPermissions = Restrictive and the test user lowered to the Maint. Contract View role, with an existing contract",
+        "when": "The user reads the contract, then tries to insert and to modify a contract",
+        "then": "Reading succeeds; insert and modify fail with a permission error",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "service-team-can-create-and-change",
+        "given": "TestPermissions = Restrictive and the test user lowered to the Maint. Contract Service role, with a contract number series in setup",
+        "when": "The user creates a contract and changes its Status",
+        "then": "Both operations succeed and the contract carries a number from the series",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Decision checklist for the new contract entity: table type, numbering, setup, data rules, privacy, pages, permissions, install/upgrade, tests, layout.",
+      "constraints": [
+        "Plan every decision row before building, not only the table and page.",
+        "A row the request does not settle is a question for the requester, not a default to assume."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Classify Maintenance Contract as a Master table and Maintenance Contract Setup as a Setup table.",
+      "constraints": [
+        "Master: primary key Code[20] named No.; Card + List pages.",
+        "Setup: exactly one record; primary key Code[10] named Primary Key, always blank; one page that creates the singleton on first open."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.md",
+      "used-for": "Contract numbering.",
+      "constraints": [
+        "No. Code[20] is the sole primary key; a non-editable No. Series Code[20] records the source series.",
+        "OnInsert checks No. is blank, reads setup, TestFields the series, stores it in No. Series and assigns No. from the series.",
+        "Not an Integer AutoIncrement, GUID or SystemId business key."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/master-table-no-from-number-series-in-oninsert.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.md",
+      "used-for": "Number-series API for assignment and manual-entry guard (applies from BC22).",
+      "constraints": [
+        "Assign with codeunit \"No. Series\" GetNextNo; guard manual No. entry with IsManual or TestManual.",
+        "Do not use obsolete NoSeriesManagement InitSeries/TestManual."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/use-no-series-codeunit-not-noseriesmanagement.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.md",
+      "used-for": "Maintenance Contract Setup table and page.",
+      "constraints": [
+        "Primary Key Code[10] is the sole key, value blank.",
+        "Card page with InsertAllowed = false, DeleteAllowed = false, and an open-time guard that inserts the blank row if missing.",
+        "No Integer key, no List page over the setup."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/setup-table-is-a-singleton.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/testfield-required-setup-field.md",
+      "used-for": "Guard on the contract number series before use.",
+      "constraints": [
+        "TestField the required setup field before use instead of falling back silently.",
+        "Write a test that blanks the setup field and asserts the error."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md",
+      "used-for": "How code and tests create contracts.",
+      "constraints": [
+        "Create master records with Insert(true) so OnInsert assigns the number, unless the caller itself does the trigger's work."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/check-blocked-in-referencing-code-not-in-master.md",
+      "used-for": "Customer No. validation on the contract.",
+      "constraints": [
+        "The referencing record tests the master's Blocked at the point of use (OnValidate of the reference field).",
+        "An option-style block needs the specific option compared at each relevant path."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing Customer No.",
+      "constraints": [
+        "For an unconditional TableRelation, the field has the same type and exact length as the related field, read from its table definition."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Classification of both new tables.",
+      "constraints": [
+        "A table-level DataClassification is inherited by Normal fields of that table; override at field level only where the field stores different data."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of the new fields.",
+      "constraints": [
+        "No field may ship as ToBeClassified; choose the classification from the data's content."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/page-name-must-match-source-table.md",
+      "used-for": "Naming of list, card and setup pages.",
+      "constraints": [
+        "A page name must describe the table it shows."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+      "used-for": "Where contract rules live.",
+      "constraints": [
+        "Business operations and cross-entry-point invariants belong in a codeunit or the table, not only in a page trigger.",
+        "A setup page reading and writing its own singleton record and the OnOpenPage singleton-initialization idiom are conventional."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips on the contract and setup pages.",
+      "constraints": [
+        "Every user-facing page field needs a non-empty explicit or inherited tooltip.",
+        "On runtime 13.0 (BC24) or later define the tooltip on the table field; before that, on the page field.",
+        "Do not invent effects, defaults or constraints in tooltip text."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/fixed-choice-set-must-use-enum-not-integer.md",
+      "used-for": "Type of the Status field.",
+      "constraints": [
+        "A fixed set of named, mutually exclusive states is an Enum, not an Integer."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/source-organized-by-feature-not-object-type.md",
+      "used-for": "Folder placement of the feature's objects.",
+      "constraints": [
+        "Group a feature's objects together consistently with the project's chosen convention; do not mix schemes."
+      ]
+    },
+    {
+      "path": "community/knowledge/appsource/set-usagecategory-on-searchable-entry-points.md",
+      "used-for": "Making the contract list (and setup page) findable.",
+      "constraints": [
+        "Pages users open directly set UsageCategory and an object-level ApplicationArea.",
+        "Supporting objects reached only through another page do not need to be searchable."
+      ],
+      "sample-paths": [
+        "community/knowledge/appsource/set-usagecategory-on-searchable-entry-points.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/exposed-objects-must-be-in-a-permission-set.md",
+      "used-for": "Execute entries for the new pages and tables.",
+      "constraints": [
+        "Give exposed objects an explicit execute entry in a permission set shipped by the app."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Structure of the view-only and service-team permission sets.",
+      "constraints": [
+        "Small building blocks marked Assignable = false; role-shaped Assignable = true sets reference them through IncludedPermissionSets."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/security/compose-permission-sets-with-included-sets.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Content of the permission sets.",
+      "constraints": [
+        "Enumerate each tabledata and table entry; no * wildcards.",
+        "Grant only the letters required: R for read-only consumers, RIM for editors that do not delete, RIMD only for owners of the data."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/do-not-grant-rights-beyond-a-users-entitlement.md",
+      "used-for": "Validating the permission sets against user licenses.",
+      "constraints": [
+        "Every right the set grants must be reachable within the target users' entitlement; grants beyond it are clipped silently at runtime."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/install-code-does-not-run-on-version-upgrade.md",
+      "used-for": "Install versus upgrade code.",
+      "constraints": [
+        "Install codeunits run on first install and reinstall only; version migration goes in a separate Subtype = Upgrade codeunit."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/use-upgrade-tags-not-version-checks.md",
+      "used-for": "Future data changes.",
+      "constraints": [
+        "Each upgrade procedure starts with HasUpgradeTag and ends with SetUpgradeTag; no DataVersion branching."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Create customers and other prerequisites with library codeunits such as LibrarySales.CreateCustomer and LibraryRandom; create parents before dependents and Validate foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+      "used-for": "Permission tests for viewer and service-team roles.",
+      "constraints": [
+        "Use TestPermissions::Restrictive and lower the test user with Permissions Mock or Library - Lower Permissions before the protected operation.",
+        "Lowering through a role that includes the permission set under test is adequate."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Test structure.",
+      "constraints": [
+        "[FEATURE] once per codeunit; [SCENARIO] first in each test; [GIVEN]/[WHEN]/[THEN] mark setup, action and assertions."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "status-values",
+      "question": "Which statuses can a contract have (for example draft, active, expired, cancelled), what is the initial status, and which transitions are allowed or automatic (e.g. when the end date passes)?",
+      "affects": [
+        "status-enum",
+        "contract-table"
+      ]
+    },
+    {
+      "id": "end-date-rule",
+      "question": "Must the end date be on or after the start date, and are both dates mandatory or may an open-ended contract have no end date?",
+      "affects": [
+        "contract-table"
+      ]
+    },
+    {
+      "id": "customer-blocked",
+      "question": "Which Customer Blocked values (Ship, Invoice, All) should prevent assigning a customer to a contract, and should existing contracts be affected when a customer is later blocked?",
+      "affects": [
+        "contract-table",
+        "blocked-customer-rejected"
+      ]
+    },
+    {
+      "id": "delete-contracts",
+      "question": "May the service team delete contracts, or should contracts only change status? This decides whether the Edit permission set grants D.",
+      "affects": [
+        "permset-edit",
+        "permset-service-role"
+      ]
+    },
+    {
+      "id": "setup-maintainer",
+      "question": "Who maintains the contract number series in Maintenance Contract Setup: the service team, or administrators only?",
+      "affects": [
+        "permset-edit",
+        "permset-read",
+        "setup-page"
+      ]
+    },
+    {
+      "id": "default-number-series",
+      "question": "Should installation create a default contract number series and setup row, or will an administrator configure it, and is a guided (assisted) setup wanted?",
+      "affects": [
+        "setup-table"
+      ]
+    },
+    {
+      "id": "manual-numbers",
+      "question": "May users type a contract number manually when the series allows it?",
+      "affects": [
+        "contract-table",
+        "manual-number-rejected-when-series-not-manual"
+      ]
+    },
+    {
+      "id": "more-contract-data",
+      "question": "Do contracts need further data such as a description, the serviced equipment or contract lines? Lines would make this a Document-type design.",
+      "affects": [
+        "contract-table",
+        "contract-card-page"
+      ]
+    },
+    {
+      "id": "target-version",
+      "question": "Which Business Central version, countries and application area does the app target? This decides the tooltip placement (table field from BC24/runtime 13.0) and confirms the No. Series codeunit (BC22+).",
+      "affects": [
+        "contract-card-page",
+        "contract-list-page",
+        "contract-table"
+      ]
+    },
+    {
+      "id": "data-classification",
+      "question": "Is CustomerContent the right table-level classification for contract data, or does any field hold personal data needing a different value?",
+      "affects": [
+        "contract-table",
+        "setup-table"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "context: bc-version, countries and application-area are unknown; no repository was supplied.",
+    "Customer.\"No.\" length (Code[20]) is assumed from standard Business Central and was not confirmed against repository symbols.",
+    "End-date and status-transition rules are not covered by BCQuality knowledge; any such validation rests on the agent's judgment and the answers to open questions.",
+    "Read-only access for non-service users relies on permission sets alone; no BCQuality article covers making the pages non-editable per role."
+  ]
+}

@@ -1,0 +1,771 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Each customer subscription contract line gets a Cost Center Reference. When recurring billing creates the invoices, every invoice line must show the reference, and it must still be visible on the posted invoice lines and archived billing lines.",
+    "business-process": "Subscription Billing recurring billing: billing proposal, contract invoice creation and sales invoice posting with billing line archiving",
+    "candidates": 14,
+    "selected": 13
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "contract-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Cust. Sub. Contract Line (Subscription Billing)",
+        "purpose": "Holds the Cost Center Reference the user enters per customer subscription contract line; the source of every later copy.",
+        "fields": [
+          {
+            "name": "\"Cost Center Reference\"",
+            "type": "Code[20] (provisional; see open question cc-ref-type)",
+            "note": "DataClassification = CustomerContent set on the field (a tableextension has no table-level value to inherit). Table-field ToolTip when the target runtime supports it."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "billing-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Billing Line (Subscription Billing)",
+        "purpose": "Carries the reference from the contract line into the billing proposal and, as a temporary record, into Create Billing Documents.",
+        "fields": [
+          {
+            "name": "\"Cost Center Reference\"",
+            "type": "Code[20] (provisional; see open question cc-ref-type)",
+            "note": "Same field number, name, type and length as on Cust. Sub. Contract Line; DataClassification = CustomerContent; Editable = false. Same number and type as on Billing Line Archive so TransferFields carries it on archiving."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "billing-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Billing Line Archive (Subscription Billing)",
+        "purpose": "Keeps the reference visible on archived billing lines; filled by the app's TransferFields from Billing Line when the invoice is posted.",
+        "fields": [
+          {
+            "name": "\"Cost Center Reference\"",
+            "type": "Code[20] (provisional; see open question cc-ref-type)",
+            "note": "Same field number, name, type and length as on Cust. Sub. Contract Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Shows the reference on every contract invoice and credit memo line; filled before insert from the temporary billing line.",
+        "fields": [
+          {
+            "name": "\"Cost Center Reference\"",
+            "type": "Code[20] (provisional; see open question cc-ref-type)",
+            "note": "Same field number, name, type and length as on Cust. Sub. Contract Line; DataClassification = CustomerContent. Same number and type as on the posted and archive line tables."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "Keeps the reference on posted invoice lines; filled by TransferFields in InitFromSalesLine.",
+        "fields": [
+          {
+            "name": "\"Cost Center Reference\"",
+            "type": "Code[20] (provisional; see open question cc-ref-type)",
+            "note": "Same field number, name, type and length as on Cust. Sub. Contract Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "Keeps the reference on posted credit memo lines: contract credit memos follow the same billing path, and corrective credit memos copy it from the posted invoice line. Chosen by the articles, not by the request (see open question article-chosen-targets).",
+        "fields": [
+          {
+            "name": "\"Cost Center Reference\"",
+            "type": "Code[20] (provisional; see open question cc-ref-type)",
+            "note": "Same field number, name, type and length as on Cust. Sub. Contract Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "Mirrors the field on the remaining posted sales line TransferFields target. Chosen by the mirroring article only (see open question article-chosen-targets).",
+        "fields": [
+          {
+            "name": "\"Cost Center Reference\"",
+            "type": "Code[20] (provisional; see open question cc-ref-type)",
+            "note": "Same field number, name, type and length as on Cust. Sub. Contract Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "Mirrors the field on the remaining posted sales line TransferFields target. Chosen by the mirroring article only (see open question article-chosen-targets).",
+        "fields": [
+          {
+            "name": "\"Cost Center Reference\"",
+            "type": "Code[20] (provisional; see open question cc-ref-type)",
+            "note": "Same field number, name, type and length as on Cust. Sub. Contract Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "Mirrors the field on the sales line archive TransferFields target. Chosen by the mirroring article only (see open question article-chosen-targets).",
+        "fields": [
+          {
+            "name": "\"Cost Center Reference\"",
+            "type": "Code[20] (provisional; see open question cc-ref-type)",
+            "note": "Same field number, name, type and length as on Cust. Sub. Contract Line; DataClassification = CustomerContent; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "cc-ref-billing-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "CC Ref Billing (new subscriber codeunit)",
+        "purpose": "Static event subscribers that copy the reference contract line -> billing line -> temporary billing line -> sales line, each before the respective insert, with no Modify and no UI.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/performance/use-setloadfields-for-partial-records.md"
+        ]
+      },
+      {
+        "id": "contract-line-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Customer contract line subpage (Subscription Billing; confirm object name in symbols)",
+        "purpose": "Lets the user enter the Cost Center Reference on each customer subscription contract line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Invoice Subform",
+        "purpose": "Shows the reference on every line of the contract invoice before posting.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "posted-sales-invoice-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Sales Invoice Subform",
+        "purpose": "Shows the reference on posted invoice lines.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "archived-billing-lines-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Archived billing lines page (Subscription Billing; confirm object name in symbols)",
+        "purpose": "Shows the reference on archived billing lines.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "Cust. Sub. Contract Line.\"Cost Center Reference\"",
+        "mechanism": "user-entry",
+        "note": "Entered on the customer contract line subpage extension.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md"
+        ]
+      },
+      {
+        "from": "Cust. Sub. Contract Line",
+        "to": "Billing Line",
+        "mechanism": "event-copy",
+        "note": "Billing Proposal OnAfterUpdateBillingLineFromSubscriptionLine: Get the contract line by SubscriptionLine.\"Subscription Contract No.\" and \"Subscription Contract Line No.\" (customer partner only) and assign; runs before the insert, no Modify.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/performance/use-setloadfields-for-partial-records.md"
+        ]
+      },
+      {
+        "from": "Billing Line",
+        "to": "Temporary Billing Line (Create Billing Documents)",
+        "mechanism": "event-copy",
+        "note": "Create Billing Documents OnBeforeInsertTempBillingLine. The temporary line groups all billing lines of one subscription line; the winner rule is open (cc-ref-period-conflict).",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md"
+        ]
+      },
+      {
+        "from": "Temporary Billing Line",
+        "to": "Sales Line (contract invoice / credit memo)",
+        "mechanism": "event-copy",
+        "note": "Create Billing Documents OnBeforeInsertSalesLineFromContractLine: assign from TempBillingLine; the line is inserted right after, so no Modify and no lookup by Document No.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Invoice Line",
+        "mechanism": "transferfields",
+        "note": "Standard posting, InitFromSalesLine; requires same field number and type.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Billing Line",
+        "to": "Billing Line Archive",
+        "mechanism": "transferfields",
+        "note": "The app archives billing lines with TransferFields when the invoice is posted.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Cr.Memo Line",
+        "mechanism": "transferfields",
+        "note": "Contract credit memos are created through the same events and posted with TransferFields.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Invoice Line",
+        "to": "Sales Line (corrective credit memo)",
+        "mechanism": "transferfields",
+        "note": "Cancel/Correct via Copy Document Mgt. copies the line with TransferFields; the reference is business data, so it stays mirrored with no code.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Shipment Line / Return Receipt Line",
+        "mechanism": "transferfields",
+        "note": "Article-chosen target; kept unless the requester excludes it.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Line Archive",
+        "mechanism": "transferfields",
+        "note": "Article-chosen target; kept unless the requester excludes it.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Billing Proposal\" (8062)",
+        "event": "OnAfterUpdateBillingLineFromSubscriptionLine(var BillingLine, SubscriptionLine)",
+        "purpose": "Copy the reference from the Cust. Sub. Contract Line to the new Billing Line.",
+        "guards": [
+          "Exit when SubscriptionLine.Partner is not Customer (vendor contract lines are a different table).",
+          "SetLoadFields on the contract line before Get; exit quietly when Get fails.",
+          "No Modify: the event runs before the insert.",
+          "No UI calls: billing can run from a job queue (Auto Contract Billing)."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/performance/use-setloadfields-for-partial-records.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Create Billing Documents\" (8060)",
+        "event": "OnBeforeInsertTempBillingLine(var TempBillingLine, var BillingLine)",
+        "purpose": "Copy the reference from the Billing Line to the grouping temporary billing line, which does not carry custom fields by itself.",
+        "guards": [
+          "Apply the agreed winner rule when grouped billing lines carry different references (open question cc-ref-period-conflict); otherwise the last line read silently wins.",
+          "No UI calls."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Create Billing Documents\" (8060)",
+        "event": "OnBeforeInsertSalesLineFromContractLine(var SalesLine, var TempBillingLine)",
+        "purpose": "Copy the reference from the temporary billing line to the Sales Line before it is inserted.",
+        "guards": [
+          "Read from TempBillingLine, never look up Billing Line by the sales line's Document No. (not yet linked).",
+          "No Modify and no later patch with Modify(true) after OnAfterInsertSalesLineFromBillingLine.",
+          "No UI calls: billing may run in a job queue; documents committed before an error stay."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "Add a dependency on the Subscription Billing app (publisher Microsoft, id 3099ffc7-4cf7-4df6-9b96-7e4bc2bb587c) in app.json.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on every Cost Center Reference field, since table extensions have no table-level value to inherit; never leave ToBeClassified.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Decide permission set entries for new objects; this design adds only table extensions, page extensions and a non-exposed subscriber codeunit.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "Keep all three subscribers non-interactive because Auto Contract Billing (codeunit 8014) runs Create Billing Documents from a job queue entry; let errors propagate.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "No data upgrade is designed: existing contract lines and already-created billing lines start blank. Whether to backfill is an open question (cc-ref-backfill).",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "contract-line-to-billing-line",
+        "given": "A customer subscription contract with a contract line whose Cost Center Reference is a random Code[20] value",
+        "when": "A billing proposal is created for the contract",
+        "then": "Every Billing Line for that contract line carries the same Cost Center Reference",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "billing-line-to-invoice-line",
+        "given": "Billing lines with a Cost Center Reference from the contract line",
+        "when": "Create Billing Documents creates the sales invoice",
+        "then": "Each contract invoice Sales Line carries the reference (proving the temporary-line and sales-line hops) and no error is raised by the contract-change checks",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "post-invoice-to-posted-and-archive",
+        "given": "A contract invoice whose lines carry the reference",
+        "when": "The invoice is posted",
+        "then": "Each Sales Invoice Line and each Billing Line Archive record for it carries the reference",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "max-length-value-reaches-all-targets",
+        "given": "A contract line with a Cost Center Reference of the full field length",
+        "when": "The proposal is created, the invoice created and posted",
+        "then": "The full value is read back unchanged on Billing Line, Sales Line, Sales Invoice Line and Billing Line Archive (no TransferFields length error)",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "contract-credit-memo-carries-reference",
+        "given": "A contract line with a reference and billing that produces a credit memo",
+        "when": "The credit memo is created and posted",
+        "then": "The Sales Line and the Sales Cr.Memo Line carry the reference",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "cancel-posted-contract-invoice",
+        "given": "A posted contract invoice whose lines carry the reference",
+        "when": "The posted invoice is cancelled (corrective credit memo)",
+        "then": "The posted Sales Cr.Memo Line carries the same reference",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "vendor-partner-guard",
+        "given": "A vendor subscription contract with billing lines",
+        "when": "A billing proposal is created",
+        "then": "The subscriber exits without error and does not try to read a customer contract line",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md"
+        ]
+      },
+      {
+        "id": "grouped-billing-periods-winner",
+        "given": "Two billing periods for one subscription line whose billing lines carry different references",
+        "when": "Create Billing Documents groups them into one sales line",
+        "then": "The sales line carries the reference chosen by the agreed winner rule (cc-ref-period-conflict)",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md"
+        ]
+      },
+      {
+        "id": "billing-without-ui",
+        "given": "Billing configured to run without a user (no UI handlers registered)",
+        "when": "Create Billing Documents runs as Auto Contract Billing would",
+        "then": "Documents are created with the reference and no UI callback is raised",
+        "knowledge": [
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md"
+        ]
+      },
+      {
+        "id": "article-chosen-targets",
+        "given": "A contract invoice line with the reference",
+        "when": "The document is archived (and, if kept, shipped or returned)",
+        "then": "Sales Line Archive (and Sales Shipment Line / Return Receipt Line if kept) carry the reference",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+      "used-for": "Defines the full path contract line -> billing line -> temporary billing line -> sales line -> posted line / billing line archive and the three events used.",
+      "constraints": [
+        "Add the field to Cust. Sub. Contract Line, Billing Line, Sales Line and Sales Invoice Line, and to Billing Line Archive when users need it on archived billing lines.",
+        "Use the same field number and type on Billing Line and Billing Line Archive, and on the sales and posted line tables.",
+        "Subscribe to OnAfterUpdateBillingLineFromSubscriptionLine, OnBeforeInsertTempBillingLine and OnBeforeInsertSalesLineFromContractLine; no Modify is needed because each runs before its insert.",
+        "Do not copy only in OnBeforeInsertSalesLineFromContractLine without filling the temporary line, and do not look up Billing Line by the sales line's Document No.",
+        "Decide which value wins when billing lines grouped into one temporary line differ; otherwise the last line read silently wins.",
+        "Credit memos follow the same path; the design needs a dependency on Subscription Billing (3099ffc7-4cf7-4df6-9b96-7e4bc2bb587c)."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.good.al",
+        "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+      "used-for": "Sets values before the sales line insert and rules out patching the created contract invoice; background-billing guard.",
+      "constraints": [
+        "Set line values in OnBeforeInsertSalesLineFromContractLine, read from TempBillingLine.",
+        "Do not adjust created contract invoice lines afterwards with Modify(true); Modify(false) to bypass checks is no better.",
+        "Subscribers in this path must not need UI; an error stops the run but documents committed before it stay.",
+        "Own extension fields that the app does not check can still be changed later."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.good.al",
+        "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the line field on every sales TransferFields target (posted lines and Sales Line Archive).",
+      "constraints": [
+        "Give the field the same number, name, type and length on the source and every target table the plan needs.",
+        "For a line field, cover the line tables: Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line and Sales Line Archive, unless the plan states a document type never needs it.",
+        "No subscriber is needed for these stages; keep mirrored fields non-editable on posted tables.",
+        "Do not patch posted lines with an OnAfter insert subscriber and Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Stage map for a custom sales field: posted lines, archive, page extensions, permission entries and read-back tests.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage.",
+        "Name the page extensions that show the field and permission set entries for any new objects.",
+        "Test by posting a document and reading the value back from every target."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length agreement across all mirrored tables.",
+      "constraints": [
+        "Define the mirrored field with exactly the same field number, data type and length on every table in the cascade, at creation time.",
+        "A shorter length on one side compiles but fails at runtime once a value exceeds it."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+      "used-for": "Billing can run from Auto Contract Billing in a job queue, so subscribers must be non-interactive.",
+      "constraints": [
+        "No Confirm, Page/Report RunModal, upload/download or Message-based notification in code reached from the job queue.",
+        "Let failures propagate to the job queue log."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.md",
+      "used-for": "Corrective credit memos copy mirrored line fields from the posted invoice.",
+      "constraints": [
+        "Mirrored business data comes back on the corrective credit memo and needs no code.",
+        "Per-document state must be cleared in OnAfterCopySalesHeaderDone; the reference is treated here as business data.",
+        "Test Cancel on an invoice with the field filled and read the posted credit memo back."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/corrective-credit-memo-copies-custom-fields-from-the-posted-invoice.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltip placement for the new page fields.",
+      "constraints": [
+        "From runtime 13.0 (BC24) define the tooltip on the table field and let bound page fields inherit it; before that, page-level tooltips are needed.",
+        "Tooltip text must say what the value is used for, not just repeat the caption, and must not invent behavior."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Confirms bound page fields inherit the table-field tooltip; applies from BC24.",
+      "constraints": [
+        "Do not duplicate a page-level ToolTip when the source table field supplies one (runtime 13.0 or later).",
+        "Add a page-level ToolTip only when none can be inherited or different help is needed."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of the new table extension fields.",
+      "constraints": [
+        "Every Normal field added by a tableextension must set its own DataClassification.",
+        "Choose the classification matching the stored data at definition time; ToBeClassified is not a safe default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/use-setloadfields-for-partial-records.md",
+      "used-for": "Partial load of the contract line in the billing-line subscriber.",
+      "constraints": [
+        "Call SetLoadFields with the fields read immediately before the Get.",
+        "Skip it where the read path reads most fields or the table is temporary."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for customers, items and sales documents.",
+      "constraints": [
+        "Build prerequisite records with Library codeunits (LibrarySales, LibraryInventory, LibraryRandom), parents first, validating foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+      "used-for": "Test values for the reference.",
+      "constraints": [
+        "Generate incidental values with library codeunits; do not depend on existing records.",
+        "Use deliberately chosen values when the scenario depends on length, such as a full-length reference."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "cc-ref-type",
+      "question": "What is the Cost Center Reference: free Code[20] text, a relation to an existing table (for example cost centers or a dimension value), or another type/length? Is it mandatory on a contract line before billing?",
+      "affects": [
+        "contract-line-ext",
+        "billing-line-ext",
+        "billing-line-archive-ext",
+        "sales-line-ext",
+        "sales-invoice-line-ext",
+        "sales-cr-memo-line-ext",
+        "sales-shipment-line-ext",
+        "return-receipt-line-ext",
+        "sales-line-archive-ext",
+        "max-length-value-reaches-all-targets"
+      ]
+    },
+    {
+      "id": "cc-ref-period-conflict",
+      "question": "When billing lines of several periods for one subscription line are grouped into one invoice line and carry different references (the contract line changed between proposals), which reference wins: the latest billing line, the earliest, the current contract line value, or should billing stop with an error?",
+      "affects": [
+        "cc-ref-billing-codeunit",
+        "grouped-billing-periods-winner"
+      ]
+    },
+    {
+      "id": "article-chosen-targets",
+      "question": "The articles also mirror the field on Sales Cr.Memo Line (contract and corrective credit memos), Sales Shipment Line, Return Receipt Line and Sales Line Archive. Keep all of them, or exclude any?",
+      "affects": [
+        "sales-cr-memo-line-ext",
+        "sales-shipment-line-ext",
+        "return-receipt-line-ext",
+        "sales-line-archive-ext",
+        "contract-credit-memo-carries-reference",
+        "cancel-posted-contract-invoice",
+        "article-chosen-targets"
+      ]
+    },
+    {
+      "id": "cc-ref-edit-after-creation",
+      "question": "May a user change the reference on an unposted contract invoice line, or should it be read-only there (the app's change checks do not cover extension fields)? Should changing it on the contract line update billing lines already proposed?",
+      "affects": [
+        "sales-line-ext",
+        "sales-invoice-subform-ext",
+        "billing-line-ext"
+      ]
+    },
+    {
+      "id": "cc-ref-backfill",
+      "question": "Must existing contract lines or already-created billing lines and open contract invoices be filled when the extension is installed, or does the reference apply only to billing created afterwards?",
+      "affects": [
+        "contract-line-ext",
+        "billing-line-ext"
+      ]
+    },
+    {
+      "id": "cc-ref-other-pages",
+      "question": "Should the reference also be shown on the billing proposal (billing lines) page, posted credit memo subform or reports, in addition to the contract line, invoice line, posted invoice line and archived billing line pages?",
+      "affects": [
+        "contract-line-subform-ext",
+        "archived-billing-lines-page-ext"
+      ]
+    },
+    {
+      "id": "target-bc-version",
+      "question": "Which BC version / runtime does the app target? From BC24 (runtime 13.0) the tooltip goes on the table field and is inherited by pages; earlier targets need page-level tooltips.",
+      "affects": [
+        "contract-line-subform-ext",
+        "sales-invoice-subform-ext",
+        "posted-sales-invoice-subform-ext",
+        "archived-billing-lines-page-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined (no repository supplied); ui/bound-page-field-inherits-source-field-tooltip applies from BC24 only.",
+    "Page object names for the customer contract line subpage and the archived billing lines page are not named in BCQuality knowledge; confirm them in Subscription Billing symbols.",
+    "Upgrade/backfill step rests on agent judgment; not covered by BCQuality knowledge (see open question cc-ref-backfill).",
+    "Subscription Billing test library codeunits for creating contracts and running billing are not covered by BCQuality knowledge; tests rely on agent judgment for contract fixtures."
+  ]
+}

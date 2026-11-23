@@ -1,0 +1,627 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Customers need a default Delivery Window code. New customers are created from customer templates or from contacts, and the code should come from the template. Sales quotes take the code from the customer, and when a quote or blanket order becomes an order the order must keep the code the quote or blanket order had, even if it was changed by hand.",
+    "business-process": "Add a customer default Delivery Window code, filled from customer templates (including customers created from contacts), defaulted onto sales quotes from the sell-to customer, and kept unchanged when Sales-Quote to Order or Blanket Sales Order to Order creates the order; this changes customer creation and the sales document process of the base application.",
+    "candidates": 15,
+    "selected": 13
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "customer-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Customer",
+        "purpose": "Holds the customer's default Delivery Window code, the source of the sales document default.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code",
+            "note": "Length must equal the length of the related Delivery Window key field (see open question delivery-window-source). DataClassification = CustomerContent. Field number, name, type and length are reused on every table below."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "customer-templ-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Customer Templ.",
+        "purpose": "Template field that ApplyTemplate copies to new customers created from a template or from a contact; it is copied only because number, name, type and length match the Customer field. Save as template fills it back with TransferFields.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code",
+            "note": "Same field number, name, type and length as on Customer; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header",
+        "purpose": "Holds the Delivery Window on quotes, blanket orders and orders. Record assignment in quote and blanket order conversion carries it to the order with no copy subscriber.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code",
+            "note": "Same field number, name, type and length as on Customer; editable so the user can change it by hand; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/quote-and-blanket-order-conversion-copies-custom-fields-by-assignment.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-header-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Header Archive",
+        "purpose": "Mirror target of the archive TransferFields, so an archived quote, blanket order or order keeps the value and restore can put it back. Chosen by the mirroring article; see open question mirror-targets.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Header",
+        "purpose": "Mirror target of the posting TransferFields from Sales Header. Chosen by the mirroring article; see open question mirror-targets.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Header",
+        "purpose": "Mirror target of the posting TransferFields from Sales Header. Chosen by the mirroring article; see open question mirror-targets.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Header",
+        "purpose": "Mirror target of the posting TransferFields from Sales Header. Chosen by the mirroring article; see open question mirror-targets.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-header-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Header",
+        "purpose": "Mirror target of the posting TransferFields from Sales Header. Chosen by the mirroring article; see open question mirror-targets.",
+        "fields": [
+          {
+            "name": "Delivery Window",
+            "type": "Code",
+            "note": "Same field number, name, type and length as on Sales Header; non-editable; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "customer-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Customer Card",
+        "purpose": "Shows the customer's Delivery Window. Tooltip defined once on the table field and inherited (runtime 13.0 / BC24 or later); page-level tooltip only on older targets. No business logic on the page.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "customer-templ-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Customer Templ. Card",
+        "purpose": "Shows the template's Delivery Window so users can set the value new customers receive.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "sales-quote-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Quote",
+        "purpose": "Shows and allows editing the quote's Delivery Window.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "blanket-sales-order-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Blanket Sales Order",
+        "purpose": "Shows and allows editing the blanket order's Delivery Window.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "sales-order-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order",
+        "purpose": "Shows the order's Delivery Window carried from the quote or blanket order.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "delivery-window-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Delivery Window Subscribers",
+        "purpose": "Event subscribers: copy the sell-to customer's Delivery Window to the sales header, and restore the archived value after an archive restore revalidates the customer. Contains no OnAfterInitRecord default, so conversion never overwrites the value carried from the quote or blanket order.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+          "microsoft/knowledge/sales-purchase/quote-and-blanket-order-conversion-copies-custom-fields-by-assignment.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Customer Templ.\"Delivery Window\"",
+        "to": "Customer.\"Delivery Window\" (customer created from a template)",
+        "mechanism": "other",
+        "note": "Customer Templ. Mgt. ApplyTemplate copies by RecordRef, field by field, without Validate, only into an empty customer field. No subscriber; requires the mirrored template field.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md"
+        ]
+      },
+      {
+        "from": "Customer Templ.\"Delivery Window\"",
+        "to": "Customer.\"Delivery Window\" (customer created from a contact)",
+        "mechanism": "other",
+        "note": "Contact inserts the customer, then calls ApplyCustomerTemplate; same RecordRef copy as the template path.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md"
+        ]
+      },
+      {
+        "from": "Customer.\"Delivery Window\"",
+        "to": "Sales Header.\"Delivery Window\" (quote, and every other document type when Sell-to Customer No. is validated)",
+        "mechanism": "event-copy",
+        "note": "Plain assignment in OnAfterCopySellToCustomerAddressFieldsFromCustomer; delivery data follows the sell-to party.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md"
+        ]
+      },
+      {
+        "from": "Sales Header (quote)",
+        "to": "Sales Header (order) via Sales-Quote to Order",
+        "mechanism": "other",
+        "note": "Record assignment of the quote header; Insert(true) then runs InitRecord, so no subscriber may default the field there. A hand-changed value survives.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/quote-and-blanket-order-conversion-copies-custom-fields-by-assignment.md"
+        ]
+      },
+      {
+        "from": "Sales Header (blanket order)",
+        "to": "Sales Header (order) via Blanket Sales Order to Order",
+        "mechanism": "other",
+        "note": "Record assignment of the blanket header; same InitRecord rule. Header field, so OnAfterResetQuantityFields does not apply.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/quote-and-blanket-order-conversion-copies-custom-fields-by-assignment.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Sales Header Archive",
+        "mechanism": "transferfields",
+        "note": "ArchiveManagement, including the optional archive of the quote during conversion.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      },
+      {
+        "from": "Sales Header Archive",
+        "to": "Sales Header (restored document)",
+        "mechanism": "event-copy",
+        "note": "TransferFields back, then customer revalidation overwrites the value; OnAfterTransferFromArchToSalesHeader reassigns the archived value.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      },
+      {
+        "from": "Sales Header",
+        "to": "Sales Shipment Header, Sales Invoice Header, Sales Cr.Memo Header, Return Receipt Header",
+        "mechanism": "transferfields",
+        "note": "Sales-Post TransferFields; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Sales Header",
+        "event": "OnAfterCopySellToCustomerAddressFieldsFromCustomer",
+        "purpose": "Copy SellToCustomer.\"Delivery Window\" to the sales header with a plain assignment when the sell-to customer is validated.",
+        "guards": [
+          "Assign from the SellToCustomer record the event passes; no page-level default",
+          "Do not default in OnAfterInitRecord; if a fallback default is ever added there, set it only when the field is empty so converted orders keep the source value"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/sales-purchase/quote-and-blanket-order-conversion-copies-custom-fields-by-assignment.md"
+        ]
+      },
+      {
+        "publisher": "ArchiveManagement",
+        "event": "OnAfterTransferFromArchToSalesHeader",
+        "purpose": "Reassign SalesHeaderArchive.\"Delivery Window\" after restore revalidated the sell-to customer and replaced it with the current customer default.",
+        "guards": [
+          "Assign only; no Modify (the record is modified right after the event)"
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on the Delivery Window field in every table extension (tableextensions cannot inherit a table-level value).",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "No InitValue is designed, so no upgrade code is required for new rows. Existing customers, templates and open documents stay blank after installation; back-filling them needs upgrade code guarded by an upgrade tag (open question existing-data).",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "customer-from-template-gets-delivery-window",
+        "given": "A Customer Templ. with Delivery Window set",
+        "when": "A customer is created from that template through Customer Templ. Mgt.",
+        "then": "The new customer's Delivery Window equals the template value",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "customer-from-contact-gets-delivery-window",
+        "given": "A company contact and a Customer Templ. with Delivery Window set",
+        "when": "A customer is created from the contact with that template",
+        "then": "The new customer's Delivery Window equals the template value",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "quote-takes-customer-delivery-window",
+        "given": "A customer (LibrarySales.CreateCustomer) with Delivery Window set",
+        "when": "A sales quote is created and Sell-to Customer No. is validated",
+        "then": "The quote header's Delivery Window equals the customer's",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "quote-to-order-keeps-hand-changed-value",
+        "given": "A quote whose Delivery Window was changed by hand to a value different from the customer's",
+        "when": "Sales-Quote to Order runs",
+        "then": "The created order's Delivery Window equals the quote's hand-changed value, not the customer default",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/quote-and-blanket-order-conversion-copies-custom-fields-by-assignment.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "blanket-to-order-keeps-hand-changed-value",
+        "given": "A blanket sales order whose Delivery Window was changed by hand",
+        "when": "Blanket Sales Order to Order runs",
+        "then": "The created order's Delivery Window equals the blanket order's value",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/quote-and-blanket-order-conversion-copies-custom-fields-by-assignment.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "posting-carries-delivery-window",
+        "given": "A sales order with Delivery Window set, and a return order with Delivery Window set",
+        "when": "They are posted (ship and invoice; receive and credit memo)",
+        "then": "Sales Shipment Header, Sales Invoice Header, Return Receipt Header and Sales Cr.Memo Header each hold the same value",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "archive-restore-keeps-archived-value",
+        "given": "A quote archived with Delivery Window A, after which the customer's Delivery Window is changed to B",
+        "when": "The archived version is restored",
+        "then": "Sales Header Archive held A and the restored quote holds A, not B",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Process map that selected the sales, quote/blanket conversion, template default, archive and upgrade rows.",
+      "constraints": [
+        "Plan one row group per process the field touches and open every linked article for the chosen stages",
+        "Whether the field reaches stages the request does not name is a question for the requester, one per group of stages"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Posted-header stages reached by Sales-Post TransferFields, and the Copy Document flow-back decision.",
+      "constraints": [
+        "Posted headers and archive receive the field only through same-number fields",
+        "Copy Document copies posted and archived headers back with TransferFields; decide whether the field should flow back, and if not clear it on ToSalesHeader in OnAfterCopySalesHeaderDone",
+        "Never fill ledger entries by modifying them after posting"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/quote-and-blanket-order-conversion-copies-custom-fields-by-assignment.md",
+      "used-for": "Quote and blanket order to order conversion carrying the hand-changed value.",
+      "constraints": [
+        "Keep the field on Sales Header and let the record assignment carry it; no copy subscriber",
+        "Default logic in OnAfterInitRecord must fill the field only when empty",
+        "Do not write a subscriber that copies the field from quote to order and calls Modify"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/templates-apply-custom-master-data-fields-by-matching-field.md",
+      "used-for": "Customer template and contact creation paths.",
+      "constraints": [
+        "Template field must have the same number, name, type and length as the Customer field, or it is skipped silently",
+        "ApplyTemplate does not overwrite a value set on insert; do not default the field on Customer insert or on the card page",
+        "Template values are assigned without Validate; call Validate in OnApplyTemplateOnBeforeCustomerModify if validation must run",
+        "Test every creation path: from template and from contact"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/default-sales-and-purchase-fields-from-master-data.md",
+      "used-for": "Quote default from the customer.",
+      "constraints": [
+        "Delivery data follows the sell-to party: OnAfterCopySellToCustomerAddressFieldsFromCustomer on Sales Header",
+        "Copy with a plain assignment from the master record the event passes",
+        "Never copy master data from the page"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Archive and posted-header mirror targets.",
+      "constraints": [
+        "Same field number, name, type and length on Sales Header and on all four posted header tables and Sales Header Archive, unless the plan states a document type never needs it",
+        "No subscriber for these stages; keep the mirrored fields non-editable on posted tables"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definitions across the TransferFields cascade.",
+      "constraints": [
+        "Exact same field number, data type and length on every table in the cascade"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+      "used-for": "Archive restore of a field defaulted from the customer.",
+      "constraints": [
+        "Subscribe to OnAfterTransferFromArchToSalesHeader and reassign the archived value, without Modify",
+        "Test restore with a customer whose default changed after archiving"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of the new field.",
+      "constraints": [
+        "Every Normal field a tableextension adds must set its own DataClassification matching the stored data"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+      "used-for": "Existing customers and documents after installation.",
+      "constraints": [
+        "InitValue does not back-fill existing rows; when a back-filled value matters, ship upgrade code guarded by an upgrade tag"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Build customers, templates and sales documents with library codeunits, parents first, validating foreign keys"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Length of the Delivery Window code field.",
+      "constraints": [
+        "With an unconditional TableRelation the field must have the exact type and length of the related key field; read it from the related table definition"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Page extensions showing the field.",
+      "constraints": [
+        "On runtime 13.0 (BC24) or later define the tooltip on the table field and let pages inherit it; on earlier targets add page-level tooltips",
+        "Tooltip text must say what the value is used for, not repeat the caption"
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "delivery-window-source",
+      "question": "Does a Delivery Window table (code list) already exist, and in which app? If not, should one be created as a new Supplemental code table with its own page and permissions? Its key field type and length fix the length of every Delivery Window field.",
+      "affects": [
+        "customer-ext",
+        "customer-templ-ext",
+        "sales-header-ext",
+        "sales-header-archive-ext",
+        "sales-shipment-header-ext",
+        "sales-invoice-header-ext",
+        "sales-cr-memo-header-ext",
+        "return-receipt-header-ext"
+      ]
+    },
+    {
+      "id": "mirror-targets",
+      "question": "Should the Delivery Window also reach Sales Header Archive and the posted shipment, invoice, credit memo and return receipt headers? The design mirrors it on all of them as the mirroring article requires; any can be excluded.",
+      "affects": [
+        "sales-header-archive-ext",
+        "sales-shipment-header-ext",
+        "sales-invoice-header-ext",
+        "sales-cr-memo-header-ext",
+        "return-receipt-header-ext",
+        "archive-restore-keeps-archived-value",
+        "posting-carries-delivery-window"
+      ]
+    },
+    {
+      "id": "document-types-defaulted",
+      "question": "The sell-to event defaults the code on every sales document type (orders, blanket orders, invoices, credit memos, return orders), not only quotes. Is that wanted, or should the default be restricted to quotes and blanket orders?",
+      "affects": [
+        "delivery-window-subscribers",
+        "quote-takes-customer-delivery-window"
+      ]
+    },
+    {
+      "id": "fallback-default",
+      "question": "When the template has no Delivery Window, should new customers get a fallback value, or stay blank? A fallback belongs in OnApplyTemplateOnBeforeCustomerModify only when the field is empty.",
+      "affects": [
+        "customer-templ-ext",
+        "customer-from-template-gets-delivery-window"
+      ]
+    },
+    {
+      "id": "copy-document-flow-back",
+      "question": "Copy Document copies posted and archived headers back into Sales Header with TransferFields. Should the copied document keep the source's Delivery Window, or take it from the customer (requiring a clear in OnAfterCopySalesHeaderDone)?",
+      "affects": [
+        "sales-header-ext"
+      ]
+    },
+    {
+      "id": "existing-data",
+      "question": "Should existing customers, customer templates and open quotes, blanket orders and orders be back-filled with a Delivery Window on installation, and from what value?",
+      "affects": [
+        "customer-ext",
+        "customer-templ-ext",
+        "sales-header-ext"
+      ]
+    },
+    {
+      "id": "posted-pages",
+      "question": "Should the Delivery Window be shown on posted document pages, archive pages or reports?",
+      "affects": [
+        "sales-shipment-header-ext",
+        "sales-invoice-header-ext",
+        "sales-cr-memo-header-ext",
+        "return-receipt-header-ext",
+        "sales-header-archive-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown (no repository); tooltip placement depends on whether the target is runtime 13.0 / BC24 or later",
+    "Page extensions for Customer Card, Sales Quote, Blanket Sales Order and Sales Order rest on the agent's judgment for placement; only tooltip guidance is cited",
+    "Permission sets: no new table is designed; if the Delivery Window table must be created (open question delivery-window-source), its table type, page and permission set are not designed here"
+  ]
+}

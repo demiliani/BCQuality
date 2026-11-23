@@ -1,0 +1,765 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "outcome-reason": "Every stage the request names (sales order line, warehouse shipment line, posted warehouse shipment line, warehouse entry) is reached by a confirmed hop; open questions remain for the requester.",
+  "summary": {
+    "request": "Sales order lines need a Handling Code chosen by the order taker, for example fragile or refrigerated. Warehouse staff must see it on the warehouse shipment lines and on posted warehouse shipments, and the code must be stored on the warehouse entries so we can analyse handling by bin.",
+    "business-process": "Sales order fulfilment through warehouse shipment posting at bin locations (sales posting and warehouse handling).",
+    "candidates": 29,
+    "selected": 21
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "handling-code-table",
+        "action": "create",
+        "object-type": "table",
+        "target": "Handling Code",
+        "purpose": "Supplemental table holding the handling codes the order taker chooses from (for example FRAGILE, REFRIGERATED). Supplemental type: primary key Code[10] named Code, plus a description; table-level DataClassification. Whether a lookup table or a fixed enum is wanted is an open question.",
+        "fields": [
+          {
+            "name": "Code",
+            "type": "Code[10]",
+            "note": "Primary key."
+          },
+          {
+            "name": "Description",
+            "type": "Text[100]",
+            "note": "Length rests on judgment."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "handling-codes-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Handling Codes",
+        "purpose": "List page for the Handling Code table, plural name matching the source table, set as the table's LookupPageID. Field tooltips defined on the table fields.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Source field entered by the order taker. Unconditional TableRelation to \"Handling Code\".Code, so the field has the exact type and length Code[10]. Explicit DataClassification (a table extension inherits none). Table-field ToolTip.",
+        "fields": [
+          {
+            "name": "Handling Code",
+            "type": "Code[10]",
+            "note": "TableRelation = \"Handling Code\".Code; DataClassification = CustomerContent; ToolTip on the table field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "sales-order-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order Subform",
+        "purpose": "Shows the editable Handling Code on sales order lines for the order taker; inherits the table-field tooltip on runtime 13.0 or later.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "whse-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Warehouse Shipment Line",
+        "purpose": "Carries the code onto warehouse shipment lines, filled by subscriber when the line is created from the sales line. Same field number as Sales Line so the next hop can copy it by TransferFields.",
+        "fields": [
+          {
+            "name": "Handling Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line (number to be chosen from the app's ID range). DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "whse-shipment-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Whse. Shipment Subform",
+        "purpose": "Shows the Handling Code to warehouse staff on warehouse shipment lines (confirm the subform page name in the target version's symbols).",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "posted-whse-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Posted Whse. Shipment Line",
+        "purpose": "Posted warehouse shipment line is filled by TransferFields from Warehouse Shipment Line, so the mirrored field with the same number, name, type and length needs no subscriber. Non-editable. The code is line-level, so Posted Whse. Shipment Header (filled field by field) is not extended.",
+        "fields": [
+          {
+            "name": "Handling Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line (number to be chosen from the app's ID range). Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "posted-whse-shipment-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Whse. Shipment Subform",
+        "purpose": "Shows the Handling Code to warehouse staff on posted warehouse shipment lines (confirm the subform page name in the target version's symbols).",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "item-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Item Journal Line",
+        "purpose": "Intermediate carrier: document posting builds the warehouse journal line from the item journal line, so the value must be on the item journal line first. Item Ledger Entry itself is not extended unless the requester asks (open question).",
+        "fields": [
+          {
+            "name": "Handling Code",
+            "type": "Code[10]",
+            "note": "DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "whse-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Warehouse Journal Line",
+        "purpose": "Intermediate carrier from which Whse. Jnl.-Register Line creates the warehouse entry.",
+        "fields": [
+          {
+            "name": "Handling Code",
+            "type": "Code[10]",
+            "note": "DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "warehouse-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Warehouse Entry",
+        "purpose": "Stored, non-editable field so the code can be filtered and analysed by bin as the request requires. The hot-ledger article prefers a related table for optional attributes and allows a stored field only when the value must appear as a native list column and is read on almost every access (applies from BC23); the request asks for the code to be stored on the entries for by-bin analysis, so a stored field is chosen and the trade-off is raised as an open question.",
+        "fields": [
+          {
+            "name": "Handling Code",
+            "type": "Code[10]",
+            "note": "Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "warehouse-entries-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Warehouse Entries",
+        "purpose": "Shows the Handling Code as a list column next to Bin Code for analysis by bin.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "posted-sales-lines-mirror",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line, Sales Line Archive",
+        "purpose": "Chosen by article, not by the request: posted sales lines and the line archive are filled by TransferFields from Sales Line, so the field is mirrored with the same number, name, type and length on each (one table extension per table), non-editable on posted tables. The requester may exclude any of these (open question).",
+        "fields": [
+          {
+            "name": "Handling Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line (number to be chosen from the app's ID range). Editable = false; DataClassification = CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "handling-code-posting-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Handling Code Whse. Posting",
+        "purpose": "Event subscriber codeunit holding the four copy subscribers listed under subscriptions. Assign only; no Modify.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md"
+        ]
+      },
+      {
+        "id": "handling-code-permissions",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Handling Code (non-assignable building block) and role-shaped assignable set(s)",
+        "purpose": "Explicit grants for the new table, list page and subscriber codeunit, no wildcards: RIMD on tabledata Handling Code for whoever maintains the codes, R for order takers and warehouse staff. Non-assignable building block included in assignable role sets.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User (order taker)",
+        "to": "Sales Line.Handling Code",
+        "mechanism": "user-entry",
+        "note": "Validated against the Handling Code table relation on the sales order subform.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Handling Code",
+        "to": "Warehouse Shipment Line.Handling Code",
+        "mechanism": "event-copy",
+        "note": "OnBeforeCreateShptLineFromSalesLine on Sales Warehouse Mgt., before the line is inserted.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md"
+        ]
+      },
+      {
+        "from": "Warehouse Shipment Line.Handling Code",
+        "to": "Posted Whse. Shipment Line.Handling Code",
+        "mechanism": "transferfields",
+        "note": "Whse.-Post Shipment creates the posted line with TransferFields; same field number required.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Handling Code",
+        "to": "Item Journal Line.Handling Code",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyItemJnlLineFromSalesLine on Item Journal Line, raised when posting the warehouse shipment posts the sales line.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md"
+        ]
+      },
+      {
+        "from": "Item Journal Line.Handling Code",
+        "to": "Warehouse Journal Line.Handling Code",
+        "mechanism": "event-copy",
+        "note": "OnAfterCreateWhseJnlLine on WMS Management, during document posting at a location that uses bins. Item-tracking splits copy the whole record.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md"
+        ]
+      },
+      {
+        "from": "Warehouse Journal Line.Handling Code",
+        "to": "Warehouse Entry.Handling Code",
+        "mechanism": "event-copy",
+        "note": "OnBeforeInsertWhseEntry on Whse. Jnl.-Register Line; covers every path that creates warehouse entries, but only paths that put the value on the warehouse journal line carry it.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Handling Code",
+        "to": "Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line, Sales Line Archive",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine and archiving use TransferFields; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Sales Warehouse Mgt.\"",
+        "event": "OnBeforeCreateShptLineFromSalesLine",
+        "purpose": "Copy Sales Line.Handling Code to the warehouse shipment line before insert.",
+        "guards": [
+          "Assign the field only; do not call Modify (the record is inserted after the event).",
+          "Confirm the event signature in the target version's symbols."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Item Journal Line\"",
+        "event": "OnAfterCopyItemJnlLineFromSalesLine",
+        "purpose": "Copy Sales Line.Handling Code to the item journal line built during sales posting.",
+        "guards": [
+          "Assign the field only; do not call Modify (the record is inserted after the event)."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"WMS Management\"",
+        "event": "OnAfterCreateWhseJnlLine",
+        "purpose": "Copy Item Journal Line.Handling Code to the warehouse journal line.",
+        "guards": [
+          "Assign the field only; do not call Modify (the record is inserted after the event)."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Whse. Jnl.-Register Line\"",
+        "event": "OnBeforeInsertWhseEntry",
+        "purpose": "Copy Warehouse Journal Line.Handling Code to the new warehouse entry.",
+        "guards": [
+          "Assign the field only; do not call Modify (the record is inserted after the event).",
+          "Never patch warehouse entries after posting."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "permissions",
+        "step": "Ship a non-assignable building-block permission set for the Handling Code table, Handling Codes page and subscriber codeunit, with explicit least-privilege grants and no wildcards, and include it in assignable role sets for code maintainers, order takers and warehouse staff.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Give every field added by a table extension an explicit DataClassification; use a table-level classification on the new Handling Code table; no ToBeClassified left at release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Users maintain handling codes on the Handling Codes list page before order takers can choose them; whether the app ships default codes (for example FRAGILE, REFRIGERATED) is an open question, so no install code is designed.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "code-reaches-warehouse-shipment-line",
+        "given": "A handling code, an item, a customer and a location that requires shipment, created with the library codeunits; a released sales order whose line has the handling code.",
+        "when": "A warehouse shipment is created from the sales order.",
+        "then": "The warehouse shipment line has the sales line's handling code.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "code-reaches-posted-whse-shipment-line",
+        "given": "A warehouse shipment created from a sales order line with a handling code.",
+        "when": "The warehouse shipment is posted (ship).",
+        "then": "The posted warehouse shipment line has the same handling code.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "code-reaches-warehouse-entries-by-bin",
+        "given": "A location that requires shipment and uses bins, inventory in a bin, and a released sales order line with a handling code; a warehouse shipment created from it.",
+        "when": "The warehouse shipment is posted (ship).",
+        "then": "Every warehouse entry created for the sales line carries the handling code, together with its bin code, including when the line is split by item tracking.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "other-paths-leave-entry-blank",
+        "given": "A bin location with inventory and no sales document.",
+        "when": "A warehouse or item journal adjustment that does not come from a sales line is posted or registered.",
+        "then": "The created warehouse entries have a blank handling code and posting succeeds.",
+        "knowledge": [
+          "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "code-mirrored-on-posted-sales-lines",
+        "given": "A sales order line with a handling code.",
+        "when": "The order is shipped and invoiced, and archived.",
+        "then": "The Sales Shipment Line, Sales Invoice Line and Sales Line Archive carry the same handling code.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "unknown-handling-code-rejected",
+        "given": "A sales order line and a code that does not exist in Handling Code.",
+        "when": "The code is validated into Sales Line.Handling Code.",
+        "then": "Validation fails with the table-relation error.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "order-taker-role-can-choose-code",
+        "given": "A test user lowered with Permissions Mock or Library - Lower Permissions to the order-taker role that includes the Handling Code building block.",
+        "when": "The user sets a handling code on a sales order line.",
+        "then": "The value is saved; a user without the role cannot insert handling codes.",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Overall path of the Sales Line field through posting, page extensions, permissions and the read-back test.",
+      "constraints": [
+        "Decide which stages the field must reach and plan one step per stage before writing code.",
+        "For each stage name the page extensions that show the field, permission set entries for new objects, and a test that posts and reads the value back from every target.",
+        "Do not plan only the tables the requester named; do not fill ledger entries after posting by finding and modifying them."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.md",
+      "used-for": "Sales Line to Warehouse Shipment Line hop.",
+      "constraints": [
+        "Add the field to the warehouse line with the same number and type as on the source line.",
+        "Copy it in OnBeforeCreateShptLineFromSalesLine on Sales Warehouse Mgt., which runs just before the insert.",
+        "Plan one subscriber per source type and confirm each event in the target version's symbols.",
+        "Do not copy in OnAfterCreateShptLineFromSalesLine with Modify, and do not re-read the source line in OnBeforeWhseShptLineInsert."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.good.al",
+        "microsoft/knowledge/warehouse/carry-source-line-fields-to-warehouse-receipt-and-shipment-lines.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.md",
+      "used-for": "Warehouse Shipment Line to Posted Whse. Shipment Line hop; decision not to extend the posted shipment header.",
+      "constraints": [
+        "Posted Whse. Shipment Line is filled by TransferFields: give the field the same number, name, type and length; no subscriber needed.",
+        "Posted Whse. Shipment Header is filled field by field and would need OnBeforePostedWhseShptHeaderInsert; it is not used because the code is line-level.",
+        "Do not patch posted warehouse documents with Modify after posting."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.good.al",
+        "microsoft/knowledge/warehouse/carry-warehouse-document-fields-to-posted-warehouse-documents.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.md",
+      "used-for": "Item Journal Line to Warehouse Journal Line to Warehouse Entry hops.",
+      "constraints": [
+        "Add the field to Warehouse Journal Line and Warehouse Entry and copy it in OnBeforeInsertWhseEntry on Whse. Jnl.-Register Line.",
+        "For document posting, put the value on the item journal line first, then copy it to the warehouse journal line in OnAfterCreateWhseJnlLine on WMS Management.",
+        "For any other path, such as registering a pick, confirm in the target version where its warehouse journal line is built; do not assume it passes through CreateWhseJnlLine.",
+        "Do not modify warehouse entries after posting, and do not expect the value on the warehouse shipment line to reach warehouse entries."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.good.al",
+        "microsoft/knowledge/warehouse/carry-fields-to-warehouse-entries-through-the-warehouse-journal-line.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.md",
+      "used-for": "Sales Line to Item Journal Line hop that feeds the warehouse journal line.",
+      "constraints": [
+        "Copy the value from the sales line to the item journal line in OnAfterCopyItemJnlLineFromSalesLine on Item Journal Line.",
+        "Journal lines from other paths leave the field empty, so the entry stays empty; no source-document filter is needed.",
+        "Value entries, warehouse entries and other inventory records are separate stages; extend them only when the plan names them.",
+        "Do not find and modify ledger entries after posting."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-line-fields-to-item-ledger-through-the-item-journal-line.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the line field on posted sales lines and the line archive.",
+      "constraints": [
+        "Give the field the same number, name, type and length on every TransferFields target the plan needs, unless the plan states a document type never needs it.",
+        "No subscriber is needed for these stages; keep the mirrored fields non-editable on posted tables.",
+        "Do not use a different field number and patch with an OnAfter...Insert subscriber and Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.good.al",
+        "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definitions on every TransferFields-linked table.",
+      "constraints": [
+        "Define a mirrored field with the exact same field number, data type and length on every table in the cascade, at creation time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Shape of the new Handling Code table and its page.",
+      "constraints": [
+        "Identify the table type first: a Supplemental table has primary key Code[10] named Code and one List page with a plural name set as LookupPageID."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Length of the Handling Code field on Sales Line and its relation.",
+      "constraints": [
+        "With an unconditional TableRelation, give the field the same type and exact length as the related field (Code[10]); read the related field's declared length before adding the relation."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choice between a stored Warehouse Entry field and a related table (applies from BC23; target version unknown).",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by the ledger entry number.",
+        "Use a stored table extension field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "DataClassification on every new field.",
+      "constraints": [
+        "Every Normal field added by a table extension must declare its own DataClassification; table extensions inherit nothing.",
+        "Use a table-level classification on the new table when it describes its fields."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of classifications.",
+      "constraints": [
+        "Resolve every ToBeClassified to a real classification before release, decided from the data's content."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Permission set structure.",
+      "constraints": [
+        "Use small non-assignable building blocks and assignable role-shaped sets that include them through IncludedPermissionSets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Permission grants.",
+      "constraints": [
+        "Enumerate each tabledata and table entry explicitly with only the letters required; no wildcard grants."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Decisions for the new Handling Code table: classification, pages, permissions, tests.",
+      "constraints": [
+        "Plan table type, privacy, pages, permissions and tests for a new kind of record; a decision the request does not settle is a question for the requester, not a default.",
+        "Do not design only the table and its page."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips on the new page and page extensions.",
+      "constraints": [
+        "On runtime 13.0 or later, define shared tooltip text on the table field and omit duplicate page-level tooltips; before that, add page-level tooltips.",
+        "Tooltip text must say what the value is used for, without inventing behavior."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Tooltip inheritance on page extensions (applies from BC24; target version unknown).",
+      "constraints": [
+        "A bound page field inherits the source table field's ToolTip on runtime 13.0 or later; add a page-level override only when different help is needed."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/page-name-must-match-source-table.md",
+      "used-for": "Name of the Handling Codes list page.",
+      "constraints": [
+        "The page name must describe its source table."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Build customers, items, sales documents and random values with the library codeunits, creating parents before dependents and validating foreign-key fields."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Test codeunit structure.",
+      "constraints": [
+        "Tag the test codeunit with [FEATURE] and each test with [SCENARIO], [GIVEN], [WHEN] and [THEN] comments."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+      "used-for": "Permission test for the order-taker role.",
+      "constraints": [
+        "Use TestPermissions Restrictive and lower the test user with Permissions Mock or Library - Lower Permissions before the protected operation."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "lookup-table-or-enum",
+      "question": "Should handling codes be a user-maintained list (a Handling Code table, as designed) or a fixed set defined in code (an enum)? Should the app ship default codes such as FRAGILE and REFRIGERATED?",
+      "affects": [
+        "handling-code-table",
+        "handling-codes-page",
+        "sales-line-ext",
+        "handling-code-permissions"
+      ]
+    },
+    {
+      "id": "field-number-and-id-range",
+      "question": "Which object ID range and field number should the app use? The same field number must be used on every table in the path.",
+      "affects": [
+        "sales-line-ext",
+        "whse-shipment-line-ext",
+        "posted-whse-shipment-line-ext",
+        "item-journal-line-ext",
+        "whse-journal-line-ext",
+        "warehouse-entry-ext",
+        "posted-sales-lines-mirror"
+      ]
+    },
+    {
+      "id": "pick-registration-path",
+      "question": "Do the locations involved require picks (or use directed put-away and pick)? Warehouse entries created when registering picks are built from warehouse journal lines in other code; if handling by storage bin must include pick entries, that path must be confirmed in the target version and designed separately.",
+      "affects": [
+        "warehouse-entry-ext",
+        "handling-code-posting-subscribers"
+      ]
+    },
+    {
+      "id": "stored-vs-related-table",
+      "question": "Is a stored Handling Code column on Warehouse Entry acceptable for the by-bin analysis, or should it live in a related table keyed by Entry No. to avoid the companion-table cost on posting?",
+      "affects": [
+        "warehouse-entry-ext"
+      ]
+    },
+    {
+      "id": "exclude-posted-sales-lines",
+      "question": "Should the code also be kept on posted sales shipment, invoice, credit memo and return receipt lines and on the sales line archive (designed because standard TransferFields would otherwise drop it), or can any of these be excluded? Should it be shown on those pages?",
+      "affects": [
+        "posted-sales-lines-mirror"
+      ]
+    },
+    {
+      "id": "item-ledger-entry",
+      "question": "Should the code also be stored on Item Ledger Entry? It is currently only carried on the item journal line to reach the warehouse journal line.",
+      "affects": [
+        "item-journal-line-ext"
+      ]
+    },
+    {
+      "id": "other-source-documents",
+      "question": "Is the code needed only for sales orders, or also for other outbound sources such as purchase return orders and transfer orders, which create warehouse shipment lines through their own events?",
+      "affects": [
+        "whse-shipment-line-ext",
+        "handling-code-posting-subscribers"
+      ]
+    },
+    {
+      "id": "change-after-shipment-created",
+      "question": "If the order taker changes the code after the warehouse shipment line exists, must the change reach the open shipment line? The designed copy runs only when the shipment line is created.",
+      "affects": [
+        "whse-shipment-line-ext",
+        "handling-code-posting-subscribers"
+      ]
+    },
+    {
+      "id": "existing-open-documents",
+      "question": "Must existing open sales orders, warehouse shipments or historical warehouse entries be backfilled, or does the code apply only to new orders?",
+      "affects": [
+        "sales-line-ext",
+        "warehouse-entry-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version is unknown (no repository or app.json supplied): prefer-related-table-over-extension-on-hot-ledgers applies from BC23 and bound-page-field-inherits-source-field-tooltip from BC24; tooltip placement depends on the target runtime.",
+    "countries and application-area are unknown; all cited articles are w1 / all and therefore apply.",
+    "Warehouse entries created by registering picks or other warehouse activities are not designed: the request does not state whether picks are used, and the path that builds those warehouse journal lines is not confirmed by BCQuality knowledge.",
+    "Handling Code table fields beyond the primary key (Description length) and the setup concern of maintaining codes rest on the agent's judgment, not on BCQuality knowledge.",
+    "Page object names Sales Order Subform, Whse. Shipment Subform, Posted Whse. Shipment Subform and Warehouse Entries are not confirmed by BCQuality knowledge; confirm them in the target version's symbols."
+  ]
+}

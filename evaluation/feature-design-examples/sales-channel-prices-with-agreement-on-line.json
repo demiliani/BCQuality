@@ -1,0 +1,979 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 2
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "We sell through the web shop and through field sales, and sales prices for an item must be able to differ per sales channel. A price list line without a channel applies to every channel. The order taker picks the channel on each sales order line and the price must follow when the channel changes. The sales line must also show the price agreement number of the price list line that set its price. Pricing staff maintain these prices in the price worksheet.",
+    "business-process": "Make sales prices on price list lines depend on a sales channel picked on each sales order line, and show the applied line's price agreement number on the sales line; this extends the standard price list calculation (Sales Line - Price, Price Calculation - V16) and price worksheet maintenance.",
+    "candidates": 23,
+    "selected": 21
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "obj-sales-channel",
+        "action": "create",
+        "object-type": "table",
+        "target": "Sales Channel",
+        "purpose": "Supplemental table listing the sales channels (for example web shop and field sales) that price list lines and sales lines refer to. Primary key Code[10] named Code, one list page set as LookupPageID. Whether a table (rather than an enum) is wanted is open question q-channel-values.",
+        "fields": [
+          {
+            "name": "Code",
+            "type": "Code[10]",
+            "note": "Primary key."
+          },
+          {
+            "name": "Description",
+            "type": "Text[100]"
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "obj-sales-channels-page",
+        "action": "create",
+        "object-type": "page",
+        "target": "Sales Channels",
+        "purpose": "List page for Sales Channel, plural name, set as LookupPageID and DrillDownPageID of the table; tooltips on the table fields.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "obj-sales-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Adds the channel the order taker picks and the agreement number of the price list line that set the unit price. Validating the channel recalculates the price through UpdateUnitPrice(FieldNo(\"Sales Channel Code\")), which plans and then runs the recalculation.",
+        "fields": [
+          {
+            "name": "Sales Channel Code",
+            "type": "Code[10]",
+            "note": "TableRelation \"Sales Channel\"; length equals the related key. OnValidate: if Type = Item and No. <> '' then UpdateUnitPrice(FieldNo(\"Sales Channel Code\")). DataClassification CustomerContent declared explicitly."
+          },
+          {
+            "name": "Price Agreement No.",
+            "type": "Code[20]",
+            "note": "Editable = false; set only by the OnAfterSetPrice subscriber. DataClassification CustomerContent declared explicitly."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/data-modeling/new-price-source-must-add-candidate-and-trigger-recalculation.md",
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "obj-price-list-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Price List Line",
+        "purpose": "Adds the channel a sales price applies to (blank = every channel) and the price agreement number carried to the sales line.",
+        "fields": [
+          {
+            "name": "Sales Channel Code",
+            "type": "Code[10]",
+            "note": "TableRelation \"Sales Channel\". Same field number as on Price Worksheet Line, Price Calculation Buffer and Sales Line. Blank means the line is generic."
+          },
+          {
+            "name": "Price Agreement No.",
+            "type": "Code[20]",
+            "note": "Same field number as on Price Worksheet Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "obj-price-worksheet-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Price Worksheet Line",
+        "purpose": "Twins of the custom Price List Line fields with the same field numbers, names and types, so CopyToWorksheetLine and ImplementNewPrices carry them with TransferFields.",
+        "fields": [
+          {
+            "name": "Sales Channel Code",
+            "type": "Code[10]",
+            "note": "Same number, name, type and length as on Price List Line."
+          },
+          {
+            "name": "Price Agreement No.",
+            "type": "Code[20]",
+            "note": "Same number, name, type and length as on Price List Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md",
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "obj-price-calc-buffer-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Price Calculation Buffer",
+        "purpose": "Carries the sales line's channel into the calculation, which never reads the document line directly.",
+        "fields": [
+          {
+            "name": "Sales Channel Code",
+            "type": "Code[10]",
+            "note": "Filled in OnAfterFillBuffer of Sales Line - Price. Buffer table is temporary."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md"
+        ]
+      },
+      {
+        "id": "obj-sales-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "Mirror of the two Sales Line fields so posting (InitFromSalesLine) or archiving keeps the channel and the agreement number. Chosen by the mirroring rule, not by the request; see open question q-mirror-targets.",
+        "fields": [
+          {
+            "name": "Sales Channel Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          },
+          {
+            "name": "Price Agreement No.",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "obj-sales-invoice-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "Mirror of the two Sales Line fields so posting (InitFromSalesLine) or archiving keeps the channel and the agreement number. Chosen by the mirroring rule, not by the request; see open question q-mirror-targets.",
+        "fields": [
+          {
+            "name": "Sales Channel Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          },
+          {
+            "name": "Price Agreement No.",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "obj-sales-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "Mirror of the two Sales Line fields so posting (InitFromSalesLine) or archiving keeps the channel and the agreement number. Chosen by the mirroring rule, not by the request; see open question q-mirror-targets.",
+        "fields": [
+          {
+            "name": "Sales Channel Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          },
+          {
+            "name": "Price Agreement No.",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "obj-return-receipt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "Mirror of the two Sales Line fields so posting (InitFromSalesLine) or archiving keeps the channel and the agreement number. Chosen by the mirroring rule, not by the request; see open question q-mirror-targets.",
+        "fields": [
+          {
+            "name": "Sales Channel Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          },
+          {
+            "name": "Price Agreement No.",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "obj-sales-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "Mirror of the two Sales Line fields so posting (InitFromSalesLine) or archiving keeps the channel and the agreement number. Chosen by the mirroring rule, not by the request; see open question q-mirror-targets.",
+        "fields": [
+          {
+            "name": "Sales Channel Code",
+            "type": "Code[10]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          },
+          {
+            "name": "Price Agreement No.",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as on Sales Line; non-editable on this table; filled by the standard TransferFields call, no subscriber."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      },
+      {
+        "id": "obj-sales-order-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Order Subform",
+        "purpose": "Lets the order taker pick Sales Channel Code on each line and shows Price Agreement No. read-only. Tooltips are defined on the table fields and inherited where the target runtime supports it (BC24+); otherwise declared on the page.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "obj-price-list-lines-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Price List Lines",
+        "purpose": "Shows Sales Channel Code and Price Agreement No. on the price list lines so pricing staff can maintain them on sales price lists.",
+        "knowledge": []
+      },
+      {
+        "id": "obj-price-worksheet-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Price Worksheet",
+        "purpose": "Shows Sales Channel Code and Price Agreement No. on the price worksheet, where pricing staff maintain the prices.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "obj-channel-pricing-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Sales Channel Pricing",
+        "purpose": "Holds the event subscribers: fill the buffer, filter price list lines by channel with a blank fallback, add the channel to the duplicate key, and copy the applied line's agreement number to the sales line.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md",
+          "microsoft/knowledge/pricing/document-line-price-selection-runs-by-source-level-then-best-price.md"
+        ]
+      },
+      {
+        "id": "obj-permset-objects",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Sales Channel - Objects",
+        "purpose": "Assignable = false building block: execute on the new table, page and codeunit, listed object by object without wildcards.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      },
+      {
+        "id": "obj-permset-edit",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Sales Channel - Edit",
+        "purpose": "Assignable set for pricing staff: includes Sales Channel - Objects and grants tabledata Sales Channel = RIMD.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      },
+      {
+        "id": "obj-permset-read",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Sales Channel - Read",
+        "purpose": "Assignable set for order takers: includes Sales Channel - Objects and grants tabledata Sales Channel = R.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Sales Channel",
+        "to": "Price List Line.Sales Channel Code",
+        "mechanism": "user-entry",
+        "note": "Pricing staff pick the channel on a sales price list line; blank leaves the line generic.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md"
+        ]
+      },
+      {
+        "from": "Price List Line",
+        "to": "Price Worksheet Line",
+        "mechanism": "transferfields",
+        "note": "CopyToWorksheetLine / InsertWorksheetLine copy by field number.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md"
+        ]
+      },
+      {
+        "from": "Price Worksheet Line",
+        "to": "Price List Line",
+        "mechanism": "transferfields",
+        "note": "ImplementNewPrices (Implement Price Change) copies back by field number and activates the draft lines.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md"
+        ]
+      },
+      {
+        "from": "Price List Line",
+        "to": "Price List Line (Copy Lines target)",
+        "mechanism": "other",
+        "note": "CopyLine assigns the whole source record, so custom fields survive without a subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md"
+        ]
+      },
+      {
+        "from": "Sales Channel",
+        "to": "Sales Line.Sales Channel Code",
+        "mechanism": "user-entry",
+        "note": "Order taker picks the channel on the sales order line; OnValidate calls UpdateUnitPrice so the price follows a change.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/data-modeling/new-price-source-must-add-candidate-and-trigger-recalculation.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Sales Channel Code",
+        "to": "Price Calculation Buffer.Sales Channel Code",
+        "mechanism": "event-copy",
+        "note": "OnAfterFillBuffer of Sales Line - Price.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md"
+        ]
+      },
+      {
+        "from": "Price Calculation Buffer.Sales Channel Code",
+        "to": "Price List Line filter",
+        "mechanism": "event-copy",
+        "note": "OnAfterSetFilters of Price Calculation Buffer Mgt. sets SetFilter(\"Sales Channel Code\", '%1|%2', channel, ''); RestoreFilters reapplies it for every source and level.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/document-line-price-selection-runs-by-source-level-then-best-price.md"
+        ]
+      },
+      {
+        "from": "Price List Line.Price Agreement No.",
+        "to": "Sales Line.Price Agreement No.",
+        "mechanism": "event-copy",
+        "note": "OnAfterSetPrice of Sales Line - Price receives the applied line; GetLineWithCalculatedPrice assigns the line back, so no Modify. Runs for the automatic calculation and the Get Price lookup.",
+        "knowledge": [
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md",
+          "microsoft/knowledge/pricing/document-line-price-selection-runs-by-source-level-then-best-price.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Shipment Line",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine during posting copies both fields by field number.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Invoice Line",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine during posting copies both fields by field number.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Cr.Memo Line",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine during posting copies both fields by field number.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Return Receipt Line",
+        "mechanism": "transferfields",
+        "note": "InitFromSalesLine during posting copies both fields by field number.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md"
+        ]
+      },
+      {
+        "from": "Sales Line",
+        "to": "Sales Line Archive",
+        "mechanism": "transferfields",
+        "note": "ArchiveManagement copies both fields by field number.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      },
+      {
+        "from": "Sales Line Archive",
+        "to": "Sales Line",
+        "mechanism": "transferfields",
+        "note": "RestoreSalesDocument copies the archived line back, then revalidates No., Quantity and Unit Price, which reruns the price calculation with the restored channel; see q-restore-agreement.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Sales Line - Price",
+        "event": "OnAfterFillBuffer",
+        "purpose": "Copy Sales Line.Sales Channel Code into the Price Calculation Buffer.",
+        "guards": [],
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md"
+        ]
+      },
+      {
+        "publisher": "Price Calculation Buffer Mgt.",
+        "event": "OnAfterSetFilters",
+        "purpose": "Narrow price list lines to the line's channel or blank, so lines without a channel apply to every channel and documents without a channel still find generic prices.",
+        "guards": [
+          "Exit unless PriceCalculationBuffer.\"Price Type\" = Sale, so purchase calculations (including the resource unit-cost pass of Sales Line - Price) are unaffected.",
+          "Use SetFilter with '%1|%2' (value or blank), never SetRange."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/document-line-price-selection-runs-by-source-level-then-best-price.md",
+          "microsoft/knowledge/pricing/purchase-and-project-prices-use-their-own-price-type-sources-and-fields.md"
+        ]
+      },
+      {
+        "publisher": "Price List Management",
+        "event": "OnAfterSetAssetFilters",
+        "purpose": "Make the channel part of the duplicate key, so lines that differ only by channel are not reported as duplicates when a price list is activated.",
+        "guards": [],
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md"
+        ]
+      },
+      {
+        "publisher": "Sales Line - Price",
+        "event": "OnAfterSetPrice",
+        "purpose": "Copy Price Agreement No. of the applied price list line to the sales line; clear it when the price comes from the fallback line.",
+        "guards": [
+          "Exit unless AmountType = Price, so the discount pass does not overwrite the value.",
+          "Exit unless the sales line is an Item line and PriceListLine.\"Price Type\" = Sale (resource lines also run a Purchase calculation for unit cost).",
+          "If PriceListLine.IsRealLine() is false, clear Price Agreement No.",
+          "Assign without Modify; the line is assigned back by GetLineWithCalculatedPrice."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md",
+          "microsoft/knowledge/pricing/purchase-and-project-prices-use-their-own-price-type-sources-and-fields.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "The feature requires the new pricing experience (SalesPrices feature key enabled, Price Calculation - V16 in Price Calculation Setup); with the key off, the Version 15.0 engine reads the old tables and ignores price list lines. State this requirement in the app documentation.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-custom-pricing-rule.md",
+          "microsoft/knowledge/pricing/document-line-price-selection-runs-by-source-level-then-best-price.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "Ship Sales Channel - Objects (non-assignable) included by Sales Channel - Edit (pricing staff, RIMD) and Sales Channel - Read (order takers, R); enumerate every object, no wildcards.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Sales Channel: table-level DataClassification CustomerContent. Every field added by a table extension declares its own DataClassification (CustomerContent on Sales Line, Price List Line, Price Worksheet Line and the posted/archive line tables; SystemMetadata on the temporary Price Calculation Buffer field).",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "t-channel-price-applied",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, an active All Customers sales price list with a generic line (no channel) and a WEB line with a lower unit price and agreement A-WEB",
+        "when": "a sales order line for the item is created and Sales Channel Code is validated to WEB",
+        "then": "Unit Price equals the WEB line price and Price Agreement No. is A-WEB",
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/create-price-lists-from-code-through-header-defaults-and-status-validation.md",
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-other-channel-line-ignored",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, an active price list with a generic line (agreement A-GEN) and a FIELD line with a lower price",
+        "when": "a sales order line is created with Sales Channel Code WEB",
+        "then": "Unit Price equals the generic line price and Price Agreement No. is A-GEN; the FIELD line is not used",
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/create-price-lists-from-code-through-header-defaults-and-status-validation.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-blank-channel-uses-generic",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, an active price list with a generic line and a WEB line",
+        "when": "a sales order line is created without a channel",
+        "then": "Unit Price equals the generic line price (SetFilter with blank fallback, not SetRange)",
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/create-price-lists-from-code-through-header-defaults-and-status-validation.md"
+        ]
+      },
+      {
+        "id": "t-channel-change-recalculates",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, an existing sales order line priced from the WEB line",
+        "when": "Sales Channel Code is validated from WEB to FIELD",
+        "then": "Unit Price and Price Agreement No. change to those of the FIELD line",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/new-price-source-must-add-candidate-and-trigger-recalculation.md",
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md"
+        ]
+      },
+      {
+        "id": "t-fallback-clears-agreement",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, a sales order line priced from a WEB line with agreement A-WEB",
+        "when": "the channel is changed to FIELD, for which no price list line exists and no generic line exists",
+        "then": "Unit Price falls back to the item price and Price Agreement No. is blank",
+        "knowledge": [
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md"
+        ]
+      },
+      {
+        "id": "t-discount-pass-keeps-agreement",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, an active price list line for the price with agreement A-P and an active line-discount price list line with agreement A-D",
+        "when": "a sales order line is created for the item",
+        "then": "Price Agreement No. is A-P, not A-D",
+        "knowledge": [
+          "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md"
+        ]
+      },
+      {
+        "id": "t-duplicate-check-ignores-channel-variants",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, a draft sales price list with two lines for the same item, unit of measure and dates, one for WEB and one for FIELD",
+        "when": "the header Status is validated to Active",
+        "then": "the price list activates without reporting duplicate price lines",
+        "knowledge": [
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+          "microsoft/knowledge/pricing/create-price-lists-from-code-through-header-defaults-and-status-validation.md"
+        ]
+      },
+      {
+        "id": "t-purchase-unaffected",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, a vendor and an active purchase price list line for the item",
+        "when": "a purchase order line for the item is created",
+        "then": "Direct Unit Cost equals the purchase price list line amount; the channel filter is not applied to purchase calculations",
+        "knowledge": [
+          "microsoft/knowledge/pricing/purchase-and-project-prices-use-their-own-price-type-sources-and-fields.md",
+          "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md"
+        ]
+      },
+      {
+        "id": "t-worksheet-round-trip",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, an active price list line with channel WEB and agreement A-WEB",
+        "when": "the line is copied into the Price Worksheet, its price changed, and Implement Price Change is run",
+        "then": "the resulting active Price List Line keeps Sales Channel Code WEB and Price Agreement No. A-WEB",
+        "knowledge": [
+          "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md"
+        ]
+      },
+      {
+        "id": "t-copy-lines-keeps-fields",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, a price list line with channel WEB and agreement A-WEB",
+        "when": "Copy Lines copies it into another sales price list",
+        "then": "the copied line has Sales Channel Code WEB and Price Agreement No. A-WEB",
+        "knowledge": [
+          "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md"
+        ]
+      },
+      {
+        "id": "t-posting-mirrors-fields",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, a sales order line priced from the WEB line with agreement A-WEB",
+        "when": "the order is posted with Ship and Invoice",
+        "then": "the Sales Shipment Line and Sales Invoice Line carry Sales Channel Code WEB and Price Agreement No. A-WEB; a return order and a credit memo posted the same way carry the values on Return Receipt Line and Sales Cr.Memo Line",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-archive-restore",
+        "given": "Given extended price calculation enabled with Library - Price Calculation (EnableExtendedPriceCalculation), sales channels WEB and FIELD, a customer and an item created with library codeunits, a sales order line with channel WEB and agreement A-WEB that is archived",
+        "when": "the archived version is restored",
+        "then": "Sales Line Archive held both values and the restored line has Sales Channel Code WEB and a Price Agreement No. per the answer to q-restore-agreement",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-pricing-rule.md",
+      "used-for": "Overall decision map for the pricing rule and the new-experience requirement",
+      "constraints": [
+        "Keep the rule in price list data plus events of the standard calculation; do not compute prices in OnUpdateUnitPriceOnBeforeFindPrice with IsHandled.",
+        "A pricing extension built on price lists must state that it requires the new pricing experience.",
+        "Whether a new rule should outrank existing prices is a business decision; raise it as a question."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.md",
+      "used-for": "Channel as a price list line attribute: buffer field, blank-fallback filter, duplicate key, recalculation",
+      "constraints": [
+        "Add the field to Price List Line, Price Worksheet Line (same number), Price Calculation Buffer and Sales Line.",
+        "Fill the buffer in OnAfterFillBuffer of each line type in scope.",
+        "Filter in OnAfterSetFilters with SetFilter(Field, '%1|%2', Value, ''), never SetRange.",
+        "A specific line wins over a cheaper generic one only if OnAfterIsImprovedLine/OnAfterIsDegradedLine say so.",
+        "Add the attribute to the duplicate filters in OnAfterSetAssetFilters of Price List Management.",
+        "Do not model the attribute as a new price source."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/pricing/custom-price-list-line-attribute-needs-buffer-filter-and-duplicate-check.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.md",
+      "used-for": "Carrying Price Agreement No. from the applied price list line to the sales line",
+      "constraints": [
+        "Copy in OnAfterSetPrice of Sales Line - Price, the only event that receives the applied line.",
+        "Copy only for AmountType Price; check the price type because resource lines also run a Purchase calculation.",
+        "Clear the value when IsRealLine() is false (fallback price).",
+        "Do not look the price list line up again in OnAfterApplyPrice/OnAfterUpdateUnitPrice.",
+        "Give the field a twin with the same number on Price Worksheet Line."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/pricing/copy-applied-price-list-line-fields-in-onaftersetprice.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/pricing/document-line-price-selection-runs-by-source-level-then-best-price.md",
+      "used-for": "How the standard calculation selects a line and which events change it",
+      "constraints": [
+        "Change the result through events of the calculation and leave selection to it.",
+        "Levels decide before amounts; within a level the cheapest line wins.",
+        "Tests call EnableExtendedPriceCalculation of Library - Price Calculation because the feature key decides the engine."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/pricing/document-line-price-selection-runs-by-source-level-then-best-price.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.md",
+      "used-for": "Keeping both fields through the price worksheet, Copy Lines and Suggest Lines",
+      "constraints": [
+        "Every custom Price List Line field needs a twin on Price Worksheet Line with the same number, name and type, shown on the worksheet page.",
+        "Copy Lines keeps custom fields by record assignment; Suggest Lines never fills them.",
+        "Implement worksheet lines through ImplementNewPrices, not by writing Price List Line."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/pricing/price-worksheet-and-copy-lines-carry-custom-fields-by-field-number.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/pricing/create-price-lists-from-code-through-header-defaults-and-status-validation.md",
+      "used-for": "Building active price lists in tests and the duplicate check on activation",
+      "constraints": [
+        "Create lines through CopyFrom(PriceListHeader) and activate with Validate(Status, Active) on the header, never by assigning Status.",
+        "Library - Price Calculation builds headers and lines the same way."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/pricing/create-price-lists-from-code-through-header-defaults-and-status-validation.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/new-price-source-must-add-candidate-and-trigger-recalculation.md",
+      "used-for": "Recalculating the price when the channel changes on an existing line",
+      "constraints": [
+        "Call SalesLine.UpdateUnitPrice(FieldNo(<field>)) from the field's validation; UpdateUnitPriceByField alone recalculates nothing unless the field was planned."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/pricing/purchase-and-project-prices-use-their-own-price-type-sources-and-fields.md",
+      "used-for": "Keeping the rule to sales and guarding purchase calculations",
+      "constraints": [
+        "Subscribe to the Line With Price codeunit of each document in scope; sales, purchase and project use different price types, sources and amount fields.",
+        "Sales Line - Price also runs with the Purchase price type for resource unit costs."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Deciding which posting stages the two sales line fields reach and the pages that show them",
+      "constraints": [
+        "Plan one step per stage the field must reach, the page extensions that show it, and a test that posts and reads the value back from every target."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the fields on posted line and archive tables",
+      "constraints": [
+        "Same field number, name, type and length on every TransferFields target the plan needs; keep mirrored fields non-editable on posted tables; no subscriber needed."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/restore-archived-sales-document-revalidates-custom-fields.md",
+      "used-for": "Archive and restore of sales lines",
+      "constraints": [
+        "Mirror the field on Sales Line Archive with the same number.",
+        "Restore revalidates standard fields, which reruns defaults; reassign archived values in OnAfterTransferFromArchToSalesLine without Modify only when needed."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length of the mirrored fields",
+      "constraints": [
+        "Mirrored fields must have the exact same field number, data type and length on every table in the cascade."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Decisions for the new Sales Channel entity: table type, privacy, pages, permissions",
+      "constraints": [
+        "Plan table type, privacy, pages and permission sets for a new record type; a row the request does not settle is a question, not a default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Sales Channel as a Supplemental table",
+      "constraints": [
+        "Supplemental table: primary key Code[10] named Code, one List page with plural name set as LookupPageID."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Length of fields related to Sales Channel",
+      "constraints": [
+        "A field with an unconditional TableRelation has the same type and exact length as the related key."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Data classification of the new table and extension fields",
+      "constraints": [
+        "A table-level classification is inherited by the table's own fields; every Normal field added by a tableextension must declare its own DataClassification."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Permission set structure",
+      "constraints": [
+        "Use non-assignable building blocks composed into assignable role sets through IncludedPermissionSets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Permission set grants",
+      "constraints": [
+        "Enumerate each object and grant only the needed letters; no * wildcards."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures",
+      "constraints": [
+        "Create customers, items and sales documents with the test library codeunits, parents before dependents; validate foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips on the new page fields",
+      "constraints": [
+        "User-facing page fields need an explicit or inherited tooltip; define shared text on the table field from runtime 13.0; add page-level tooltips on earlier targets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Tooltip inheritance from the table fields (applies from BC24)",
+      "constraints": [
+        "From BC24 a bound page field inherits the table field's ToolTip; do not duplicate it on the page."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "q-specific-vs-generic",
+      "question": "Within one price level the cheapest line wins, so a cheaper generic line beats a channel-specific one. Must a channel-specific line always win over a cheaper generic line? If yes, add OnAfterIsImprovedLine and OnAfterIsDegradedLine subscribers on Price Calculation - V16 and a test where the generic line is cheaper.",
+      "affects": [
+        "obj-channel-pricing-codeunit",
+        "t-channel-price-applied"
+      ]
+    },
+    {
+      "id": "q-channel-values",
+      "question": "Are sales channels user-maintained records (Sales Channel table, as designed) or a fixed list (enum)? Should installation create the web shop and field sales channels?",
+      "affects": [
+        "obj-sales-channel",
+        "obj-sales-channels-page",
+        "obj-sales-line-ext",
+        "obj-price-list-line-ext"
+      ]
+    },
+    {
+      "id": "q-discounts-per-channel",
+      "question": "The channel filter applies to every sales amount type, so line discounts on price lists can also be channel-specific. Is that wanted, or must the filter apply to prices only?",
+      "affects": [
+        "obj-channel-pricing-codeunit",
+        "obj-price-list-line-ext"
+      ]
+    },
+    {
+      "id": "q-mirror-targets",
+      "question": "The design mirrors Sales Channel Code and Price Agreement No. on Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line and Sales Line Archive so the values survive posting and archiving. Are any of these not needed, should the posted line pages show the fields, and must the values also reach Item Ledger Entry or Cust. Ledger Entry?",
+      "affects": [
+        "obj-sales-shipment-line-ext",
+        "obj-sales-invoice-line-ext",
+        "obj-sales-cr-memo-line-ext",
+        "obj-return-receipt-line-ext",
+        "obj-sales-line-archive-ext",
+        "t-posting-mirrors-fields"
+      ]
+    },
+    {
+      "id": "q-copy-document",
+      "question": "When Copy Document recalculates lines (Include Header off, or copying a posted shipment or return receipt), custom line fields are not copied. Must Sales Channel Code survive a document copy (subscriber to OnAfterRecalculateSalesLine of Copy Document Mgt.)?",
+      "affects": [
+        "obj-channel-pricing-codeunit",
+        "obj-sales-line-ext"
+      ]
+    },
+    {
+      "id": "q-restore-agreement",
+      "question": "Restoring an archived order revalidates the lines and reruns the price calculation. Should the restored line keep the archived Price Agreement No., or the one of the price list line that applies at restore time?",
+      "affects": [
+        "t-archive-restore",
+        "obj-sales-line-archive-ext"
+      ]
+    },
+    {
+      "id": "q-suggest-lines-channel",
+      "question": "Suggest Lines in the price list and worksheet builds lines without a channel (generic). Should it ever set a channel or an agreement number on suggested lines?",
+      "affects": [
+        "obj-price-worksheet-ext",
+        "obj-price-worksheet-line-ext"
+      ]
+    },
+    {
+      "id": "q-other-sales-documents",
+      "question": "The request names sales order lines. Should the channel also be entered on quotes, blanket orders, invoices, return orders and credit memos, and should it default from the header or the customer?",
+      "affects": [
+        "obj-sales-order-subform-ext",
+        "obj-sales-line-ext"
+      ]
+    },
+    {
+      "id": "q-agreement-number-source",
+      "question": "Is Price Agreement No. a free code typed by pricing staff (Code[20] as designed) or a reference to an agreement record or number series?",
+      "affects": [
+        "obj-price-list-line-ext",
+        "obj-price-worksheet-line-ext",
+        "obj-sales-line-ext"
+      ]
+    },
+    {
+      "id": "q-purchase-price-lists",
+      "question": "Should Sales Channel Code be blocked or hidden on purchase and project price list lines, where it has no effect?",
+      "affects": [
+        "obj-price-list-lines-ext",
+        "obj-price-list-line-ext"
+      ]
+    },
+    {
+      "id": "q-target-version",
+      "question": "Which Business Central version does the app target? From BC24 table-field tooltips are inherited by page fields; earlier targets need page-level tooltips.",
+      "affects": [
+        "obj-sales-order-subform-ext",
+        "obj-price-worksheet-ext",
+        "obj-price-list-lines-ext",
+        "obj-sales-channels-page"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined from the request; no repository was supplied.",
+    "obj-price-list-lines-ext (showing the fields on the Price List Lines page) is not covered by an opened BCQuality article and rests on the agent's judgment."
+  ]
+}

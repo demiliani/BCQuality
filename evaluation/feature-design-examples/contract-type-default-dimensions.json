@@ -1,0 +1,513 @@
+{
+  "skill": { "id": "al-feature-design", "version": 1 },
+  "outcome": "partial",
+  "outcome-reason": "The Service Contract Type master table, its default-dimension ownership and the type-to-contract hop on the new type field are designed. Material gap: inheriting from the contract type when the contract's customer changes needs an event in the service contract's own dimension computation, and no opened article or repository symbol confirms one (no repository was supplied).",
+  "summary": {
+    "request": "Add Service Contract Types as a new master list whose records carry default dimensions like customers and items, and make new service contracts inherit dimensions from both their contract type and their customer.",
+    "business-process": "Service contract management: master data setup and service contract creation (dimension inheritance)",
+    "candidates": 24,
+    "selected": 19
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": ["al"],
+    "countries": [],
+    "application-area": [],
+    "unknown": ["bc-version", "countries", "application-area"]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "tbl-service-contract-type",
+        "action": "create",
+        "object-type": "table",
+        "target": "Service Contract Type",
+        "purpose": "Master table for contract types (the request calls it a master list). Owns its default dimensions following the Customer pattern: global dimension fields validated through ValidateShortcutDimCode (ValidateDimValueCode + SaveDefaultDim), UpdateDefaultDim in OnInsert, RenameDefaultDim in OnRename, DeleteDefaultDim in OnDelete. Primary key is a single Code field so DefaultDimObjectNoList lists the table on the Default Dimensions lookup without a subscriber. Table-level DataClassification = CustomerContent. Declares Permissions on the Default Dimension rows it deletes. Whether the key is Master-style (No., Code[20], number series) or Supplemental-style (Code, Code[10]) is an open question.",
+        "fields": [
+          { "name": "No.", "type": "Code[20]", "note": "Master convention primary key; numbering open (see q-number-series). One Code field only, so the table qualifies for DefaultDimObjectNoList." },
+          { "name": "Description", "type": "Text[100]", "note": "Include in DataCaptionFields per the Master convention." },
+          { "name": "Global Dimension 1 Code", "type": "Code[20]", "note": "CaptionClass '1,1,1'; TableRelation \"Dimension Value\".Code where(\"Global Dimension No.\" = const(1), Blocked = const(false)); OnValidate calls ValidateShortcutDimCode(1, ...)." },
+          { "name": "Global Dimension 2 Code", "type": "Code[20]", "note": "CaptionClass '1,1,2'; TableRelation \"Dimension Value\".Code where(\"Global Dimension No.\" = const(2), Blocked = const(false)); OnValidate calls ValidateShortcutDimCode(2, ...)." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+          "microsoft/knowledge/data-modeling/dimension-management-wiring.md",
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "pag-service-contract-type-list",
+        "action": "create",
+        "object-type": "page",
+        "target": "Service Contract Types",
+        "purpose": "List page for the master list, named after its source table, set as LookupPageID/DrillDownPageID. Includes a Dimensions action opening the Default Dimensions page for the selected type. No business logic: dimension handling stays in the table.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "pag-service-contract-type-card",
+        "action": "create",
+        "object-type": "page",
+        "target": "Service Contract Type Card",
+        "purpose": "Card page required by the Master table convention, showing Description and the two global dimension fields, with the Dimensions action. Tooltips defined on the table fields (inherited from runtime 13.0 / BC24) or on the page for older targets.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+          "microsoft/knowledge/style/page-name-must-match-source-table.md",
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "cod-contract-type-dim-mgt",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Service Contract Type Dim. Mgt.",
+        "purpose": "Holds the OnAfterUpdateGlobalDimCode subscriber that keeps Service Contract Type global dimension fields in sync with the Default Dimensions page, and the procedure that recomputes a service contract's Dimension Set ID from AddDimSource entries for the contract type and the customer with GetDefaultDimID and InheritFromDimSetID = 0.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+          "microsoft/knowledge/data-modeling/dimension-management-wiring.md"
+        ]
+      },
+      {
+        "id": "ext-service-contract-header",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Service Contract Header",
+        "purpose": "Adds the contract type reference. Its OnValidate calls the codeunit recompute so the contract's Dimension Set ID inherits the type's and the customer's default dimensions. Applies only if service contracts are the standard Service Contract Header (see q-contract-object).",
+        "fields": [
+          { "name": "Service Contract Type Code", "type": "Code[20]", "note": "TableRelation \"Service Contract Type\".\"No.\"; same type and exact length as the related key. Explicit DataClassification = CustomerContent (a tableextension inherits no table-level default)." }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/dimension-management-wiring.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md"
+        ]
+      },
+      {
+        "id": "pex-service-contract",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Service Contract card page",
+        "purpose": "Shows Service Contract Type Code on the contract so users can set it; presentation only.",
+        "knowledge": [
+          "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "ps-contract-type-objects",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Contract Type - Objects",
+        "purpose": "Non-assignable building block listing the new table (tabledata RIMD), pages and codeunit explicitly, with no wildcard grants.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "id": "ps-contract-type-edit",
+        "action": "create",
+        "object-type": "permissionset",
+        "target": "Contract Type - Edit",
+        "purpose": "Assignable role-shaped set that includes the building block through IncludedPermissionSets.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md"
+        ]
+      },
+      {
+        "id": "cod-contract-type-dim-tests",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Contract Type Dimensions Tests",
+        "purpose": "Test codeunit tagged [FEATURE] with [SCENARIO]/[GIVEN]/[WHEN]/[THEN] per test; fixtures from library codeunits; permission test lowers the execution context.",
+        "knowledge": [
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Service Contract Type.Global Dimension 1/2 Code",
+        "to": "Default Dimension (Table ID = Service Contract Type, No.)",
+        "mechanism": "validate",
+        "note": "ValidateShortcutDimCode calls ValidateDimValueCode then SaveDefaultDim with the shortcut dimension number (1 or 2), not the field ID; skipped for temporary records.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+          "microsoft/knowledge/data-modeling/dimension-management-wiring.md"
+        ]
+      },
+      {
+        "from": "Default Dimension (edited on the Default Dimensions page)",
+        "to": "Service Contract Type.Global Dimension 1/2 Code",
+        "mechanism": "event-copy",
+        "note": "Default Dimension writes global values back only to standard tables it knows; for this table it raises OnAfterUpdateGlobalDimCode, which the subscriber handles.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md"
+        ]
+      },
+      {
+        "from": "Service Contract Type record (OnInsert / OnRename / OnDelete)",
+        "to": "Default Dimension rows of that type",
+        "mechanism": "other",
+        "note": "UpdateDefaultDim on insert, RenameDefaultDim on rename, DeleteDefaultDim on delete, so no orphaned Default Dimension rows remain. Callers must use Insert(true) and Delete(true).",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md",
+          "microsoft/knowledge/data-modeling/delete-master-data-with-trigger.md"
+        ]
+      },
+      {
+        "from": "User on the service contract card",
+        "to": "Service Contract Header.Service Contract Type Code",
+        "mechanism": "user-entry",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "from": "Default Dimension of Service Contract Type and of Customer",
+        "to": "Service Contract Header.Dimension Set ID",
+        "mechanism": "other",
+        "note": "On validate of Service Contract Type Code: clear the shortcut fields, AddDimSource for Customer (Customer No.) and for Service Contract Type when each Get succeeds, then GetDefaultDimID with InheritFromDimSetID = 0. Recompute the same way when the type is blank or invalid; never exit early. Whether this source list must also include the other sources the standard contract already uses is unresolved. The same recompute on a customer change needs an unconfirmed event (see unresolved).",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/dimension-management-wiring.md",
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+          "microsoft/knowledge/events/prefer-reusing-or-extending-existing-events.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Default Dimension\"",
+        "event": "OnAfterUpdateGlobalDimCode",
+        "purpose": "Copy a global dimension value changed on the Default Dimensions page to the matching Service Contract Type field.",
+        "guards": [
+          "Exit when TableID <> Database::\"Service Contract Type\".",
+          "Exit when the Service Contract Type record (AccNo) is not found.",
+          "Set only the field matching GlobalDimCodeNo (1 or 2)."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "permissions",
+        "step": "Ship the non-assignable building block and the assignable set composed with IncludedPermissionSets; enumerate each object explicitly, no wildcards. Declare Permissions = tabledata \"Default Dimension\" = rd on the Service Contract Type table so its OnDelete cleanup works for non-SUPER users.",
+        "knowledge": [
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Classify the new table at table level (CustomerContent) and the tableextension field explicitly; no ToBeClassified at release.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Any code that creates or deletes Service Contract Types (imports, demo data, tests) uses Insert(true) and Delete(true) so the table triggers maintain default dimensions.",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md",
+          "microsoft/knowledge/data-modeling/delete-master-data-with-trigger.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "t-type-dim-saved-as-default-dimension",
+        "given": "A Service Contract Type and a global dimension 1 value created with library codeunits",
+        "when": "Global Dimension 1 Code is validated on the type",
+        "then": "A Default Dimension row exists for Table ID Service Contract Type, the type's No. and that dimension value",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "t-default-dimension-edit-syncs-type",
+        "given": "A Service Contract Type with no global dimension 2",
+        "when": "A Default Dimension row for global dimension 2 is inserted or modified for that type through the Default Dimension table",
+        "then": "The type's Global Dimension 2 Code equals the new value",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md"
+        ]
+      },
+      {
+        "id": "t-subscriber-ignores-other-tables",
+        "given": "A customer and a Service Contract Type with the same No.",
+        "when": "A global dimension default is changed for the customer",
+        "then": "The Service Contract Type's global dimension fields are unchanged",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md"
+        ]
+      },
+      {
+        "id": "t-rename-and-delete-move-default-dimensions",
+        "given": "A Service Contract Type with default dimensions",
+        "when": "The type is renamed, then deleted with Delete(true)",
+        "then": "Default Dimension rows follow the new No. after rename and none remain after delete",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+          "microsoft/knowledge/data-modeling/delete-master-data-with-trigger.md"
+        ]
+      },
+      {
+        "id": "t-new-contract-inherits-type-and-customer",
+        "given": "A customer with a default for dimension A and a Service Contract Type with a default for dimension B",
+        "when": "A new service contract is created for the customer and Service Contract Type Code is validated",
+        "then": "The contract's Dimension Set ID contains dimension A with the customer's value and dimension B with the type's value",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/dimension-management-wiring.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "t-changing-type-drops-previous-type-dims",
+        "given": "A contract inheriting dimension B from type 1, and type 2 with no default for dimension B",
+        "when": "Service Contract Type Code is changed to type 2, and then cleared",
+        "then": "Dimension B is no longer in the contract's Dimension Set ID in either case, and the customer's dimension A remains",
+        "knowledge": [
+          "microsoft/knowledge/data-modeling/dimension-management-wiring.md"
+        ]
+      },
+      {
+        "id": "t-permission-set-allows-type-maintenance",
+        "given": "A test user lowered to the Contract Type - Edit permission set (TestPermissions Restrictive)",
+        "when": "The user creates a Service Contract Type, sets its global dimensions and deletes it",
+        "then": "All operations succeed, including Default Dimension cleanup on delete",
+        "knowledge": [
+          "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+          "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+          "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-new-business-entity-end-to-end.md",
+      "used-for": "Decision map for the new master table: table type, numbering, data rules, privacy, pages, permissions, install/upgrade and tests.",
+      "constraints": [
+        "Plan every decision row, not only the table and its page.",
+        "A row the request does not settle, such as whether a number series is needed, is a question for the requester, not a default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.md",
+      "used-for": "Default-dimension ownership of Service Contract Type and the Default Dimensions page sync.",
+      "constraints": [
+        "Add Global Dimension 1/2 Code with CaptionClass '1,1,1' and '1,1,2', validated through ValidateShortcutDimCode calling ValidateDimValueCode and SaveDefaultDim.",
+        "Call UpdateDefaultDim in OnInsert, RenameDefaultDim in OnRename and DeleteDefaultDim in OnDelete.",
+        "Subscribe to Default Dimension OnAfterUpdateGlobalDimCode and update the record only when its table ID matches.",
+        "The table appears in the Default Dimensions lookup automatically only when it has the Global Dimension Code[20] fields, no field related to Dimension Set Entry, and a single Code field primary key.",
+        "A document carrying dimensions stores a Dimension Set ID computed with AddDimSource and GetDefaultDimID, not copied dimension codes."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.good.al",
+        "microsoft/knowledge/finance-extensions/give-a-new-master-table-default-dimensions.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/dimension-management-wiring.md",
+      "used-for": "Master-vs-document dimension models and the contract's Dimension Set ID recompute from type and customer.",
+      "constraints": [
+        "The master table carries no Dimension Set ID; ValidateDimValueCode and SaveDefaultDim take the shortcut dimension number, not the field ID.",
+        "When the field linking the document to a master changes, AddDimSource for that master and call GetDefaultDimID with InheritFromDimSetID = 0.",
+        "Run the same recompute (clear the shortcut field, GetDefaultDimID with no source added) when the lookup on the new key fails; do not exit early.",
+        "Validate the document's own shortcut dimension fields through ValidateShortcutDimValues."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/data-modeling/dimension-management-wiring.good.al",
+        "microsoft/knowledge/data-modeling/dimension-management-wiring.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/table-design-must-match-bc-table-type-conventions.md",
+      "used-for": "Classify Service Contract Type and derive its key and pages.",
+      "constraints": [
+        "Master: primary key Code[20] named No., description in DataCaptionFields, Card + List pages.",
+        "Supplemental: primary key Code[10] named Code, one plural List page set as LookupPageID."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/master-data-must-be-inserted-with-trigger.md",
+      "used-for": "Callers creating contract types must run OnInsert so default dimensions are maintained.",
+      "constraints": [
+        "Create custom master records with initializing OnInsert logic with Insert(true), then validate and Modify(true).",
+        "Temporary and buffer records are out of scope."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/delete-master-data-with-trigger.md",
+      "used-for": "Callers deleting contract types must run OnDelete so default dimensions are removed.",
+      "constraints": [
+        "Outside the owning table's triggers, delete master and reference records with Delete(true)/DeleteAll(true)."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/owning-table-must-delete-dependents-in-ondelete.md",
+      "used-for": "Service Contract Type owns its Default Dimension rows.",
+      "constraints": [
+        "The owning table deletes its dependents in OnDelete; AL has no cascading delete.",
+        "Declare Permissions = tabledata <dependent> = rd on the owning table so the trigger works for non-SUPER users."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Size of Service Contract Type Code on the contract.",
+      "constraints": [
+        "A field with an unconditional TableRelation has the same type and exact length as the related field."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/table-level-data-classification-cascades.md",
+      "used-for": "Classification of the new table and the tableextension field.",
+      "constraints": [
+        "A table-level DataClassification is the default for the table's own Normal fields.",
+        "Fields added by a tableextension inherit nothing and must declare DataClassification explicitly."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Release readiness of the new fields.",
+      "constraints": [
+        "No field ships with DataClassification = ToBeClassified."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/page-name-must-match-source-table.md",
+      "used-for": "Names of the new list and card pages.",
+      "constraints": [
+        "The page name must describe the entity of its SourceTable."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/pages-must-not-contain-business-logic.md",
+      "used-for": "Keep dimension handling out of the new and extended pages.",
+      "constraints": [
+        "Business operations and invariants that must hold for every entry point belong in a codeunit or the table, not in a page trigger."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips for the new page fields; table-field inheritance applies from BC24 (runtime 13.0).",
+      "constraints": [
+        "From runtime 13.0, define tooltips on table fields and let bound page fields inherit them; for older targets, add page-level tooltips.",
+        "Tooltip text must say what the value is used for, not repeat the caption."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/compose-permission-sets-with-included-sets.md",
+      "used-for": "Structure of the shipped permission sets.",
+      "constraints": [
+        "Ship focused building blocks with Assignable = false and assignable role-shaped sets that include them through IncludedPermissionSets."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/security/permission-set-avoid-wildcard-grants.md",
+      "used-for": "Content of the permission sets.",
+      "constraints": [
+        "Enumerate each tabledata and table entry; no * grants.",
+        "Grant only the letters required (RIMD only for owners of the data)."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/events/prefer-reusing-or-extending-existing-events.md",
+      "used-for": "Hooking the contract type into the service contract's existing dimension computation.",
+      "constraints": [
+        "Subscribe to an existing event where the data is exposed; do not add a parallel event beside an existing one."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for customers, dimensions and contracts.",
+      "constraints": [
+        "Build prerequisite records with library codeunits, parents first, and Validate foreign-key fields."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/permission-tests-must-lower-the-execution-context.md",
+      "used-for": "Permission test for contract type maintenance.",
+      "constraints": [
+        "Use TestPermissions Restrictive and lower the test user with Permissions Mock or Library - Lower Permissions before the protected operation."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Structure of the test codeunit.",
+      "constraints": [
+        "[FEATURE] once per codeunit; [SCENARIO] first in each test body, then [GIVEN]/[WHEN]/[THEN]."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "q-contract-object",
+      "question": "Are the 'service contracts' the standard Service Contract Header (to be extended) or a new custom contract document in this app?",
+      "affects": ["ext-service-contract-header", "pex-service-contract", "cod-contract-type-dim-mgt", "t-new-contract-inherits-type-and-customer"]
+    },
+    {
+      "id": "q-table-type",
+      "question": "Should Service Contract Type follow the Master convention (No., Code[20], card + list) as the request's 'master list' suggests, or the Supplemental convention (Code, Code[10], one list page)?",
+      "affects": ["tbl-service-contract-type", "pag-service-contract-type-card", "ext-service-contract-header"]
+    },
+    {
+      "id": "q-number-series",
+      "question": "Are contract type numbers entered manually or assigned from a number series (which would also need a setup table)?",
+      "affects": ["tbl-service-contract-type"]
+    },
+    {
+      "id": "q-blocked",
+      "question": "Do contract types need a Blocked flag that prevents their use on new contracts?",
+      "affects": ["tbl-service-contract-type", "ext-service-contract-header"]
+    },
+    {
+      "id": "q-dimension-precedence",
+      "question": "When the contract type and the customer both define a default for the same dimension, which value must the contract get?",
+      "affects": ["cod-contract-type-dim-mgt", "t-new-contract-inherits-type-and-customer"]
+    },
+    {
+      "id": "q-type-required",
+      "question": "Is a contract type mandatory on every new service contract, and does it apply to contract quotes too?",
+      "affects": ["ext-service-contract-header", "pex-service-contract"]
+    },
+    {
+      "id": "q-existing-contracts",
+      "question": "Must existing contracts receive a type or recomputed dimensions on upgrade, or does the rule apply only to contracts created after installation?",
+      "affects": ["ext-service-contract-header"]
+    },
+    {
+      "id": "q-downstream-documents",
+      "question": "Should the inherited dimensions continue to contract lines and to invoices or credit memos created from the contract, beyond what the standard process already copies?",
+      "affects": ["cod-contract-type-dim-mgt"]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Material: no confirmed event on the service contract's own dimension computation (for example when Customer No. changes) to add the Service Contract Type as a dimension source; no opened article names one and no repository symbols were available. Without it, a later customer change recomputes dimensions without the contract type.",
+    "The full list of dimension sources the standard service contract already uses besides the customer is not covered by BCQuality knowledge; the type-field recompute must not drop them.",
+    "Context dimensions bc-version, countries and application-area are unknown; tooltip inheritance depends on runtime 13.0 (BC24) or later."
+  ]
+}

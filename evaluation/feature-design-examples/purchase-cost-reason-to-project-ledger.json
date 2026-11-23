@@ -1,0 +1,604 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Buyers set a Cost Reason on purchase invoice lines that are charged to a project. Project managers need to see the Cost Reason on project ledger entries for those purchases, including subcontractor hours we buy from vendors.",
+    "business-process": "Carry a custom Cost Reason from project-linked purchase lines through purchase posting and project usage posting (Purch.-Post, Job Post-Line, Job Transfer Line, Job Jnl.-Post Line) to the project ledger entries.",
+    "candidates": 16,
+    "selected": 13
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "purchase-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line",
+        "purpose": "Source of the value: the buyer enters Cost Reason on purchase lines charged to a project. Field number, name, type and length are reused unchanged on every mirror target and carrier table.",
+        "fields": [
+          {
+            "name": "Cost Reason",
+            "type": "Code[20]",
+            "note": "Type and any TableRelation depend on q-cost-reason-source; if a TableRelation is added, the length must equal the related key field and every mirror below must change with it. DataClassification = CustomerContent; ToolTip on the table field."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purch-inv-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Line",
+        "purpose": "Mirror of the purchase line field so the posted invoice line keeps the Cost Reason; filled by the standard TransferFields in InitFromPurchLine.",
+        "fields": [
+          {
+            "name": "Cost Reason",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purch-rcpt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Line",
+        "purpose": "Mirror on the posted receipt line, required by the mirroring article unless the requester excludes it (q-mirror-targets).",
+        "fields": [
+          {
+            "name": "Cost Reason",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purch-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Line",
+        "purpose": "Mirror on the posted credit memo line, required by the mirroring article unless the requester excludes it (q-mirror-targets).",
+        "fields": [
+          {
+            "name": "Cost Reason",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "return-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Line",
+        "purpose": "Mirror on the posted return shipment line, required by the mirroring article unless the requester excludes it (q-mirror-targets).",
+        "fields": [
+          {
+            "name": "Cost Reason",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purchase-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line Archive",
+        "purpose": "Mirror on the archived purchase line, required by the mirroring article unless the requester excludes it (q-mirror-targets).",
+        "fields": [
+          {
+            "name": "Cost Reason",
+            "type": "Code[20]",
+            "note": "Same field number, name, type and length as Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "job-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Job Journal Line",
+        "purpose": "Carrier for the value between the purchase line and the project ledger. Job Post-Line builds a separate project journal line for each project-linked item or G/L account purchase line; G/L account lines are posted later from a temporary copy of this line, so the value must be on it.",
+        "fields": [
+          {
+            "name": "Cost Reason",
+            "type": "Code[20]",
+            "note": "Same type and length as Purchase Line; copied by event, not by field number."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md"
+        ]
+      },
+      {
+        "id": "job-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Job Ledger Entry",
+        "purpose": "Target the project managers read. Filled while the entry is built in Job Transfer Line.FromJnlLineToLedgEntry; matching field numbers alone do nothing because the copy is field by field.",
+        "fields": [
+          {
+            "name": "Cost Reason",
+            "type": "Code[20]",
+            "note": "Same type and length as Job Journal Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md"
+        ]
+      },
+      {
+        "id": "cost-reason-posting-subscribers",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Purchase Cost Reason Posting",
+        "purpose": "Single-purpose subscriber codeunit holding the two Job Transfer Line subscribers: purchase line to project journal line, and project journal line to project ledger entry. One pair covers item and G/L account lines, including subcontractor hours bought as G/L account or item lines.",
+        "knowledge": [
+          "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+          "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+        ]
+      },
+      {
+        "id": "purchase-invoice-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purch. Invoice Subform",
+        "purpose": "Lets buyers enter Cost Reason on purchase invoice lines. Other purchase line pages (order, credit memo) are q-entry-pages. The page field is bound to the table field and inherits its ToolTip from BC24 (runtime 13.0); on earlier runtimes declare the ToolTip on the page control.",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "job-ledger-entries-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Job Ledger Entries",
+        "purpose": "Shows Cost Reason to project managers on the project ledger entries list (non-editable). Bound field inherits the table field ToolTip from BC24 (runtime 13.0).",
+        "knowledge": [
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Buyer",
+        "to": "Purchase Line.Cost Reason",
+        "mechanism": "user-entry",
+        "note": "Entered on project-linked purchase invoice lines through the Purch. Invoice Subform page extension.",
+        "knowledge": []
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Inv. Line",
+        "mechanism": "transferfields",
+        "note": "Standard InitFromPurchLine TransferFields; no subscriber needed.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Rcpt. Line",
+        "mechanism": "transferfields",
+        "note": "Standard InitFromPurchLine TransferFields; stage chosen by the mirroring article, see q-mirror-targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Cr. Memo Line",
+        "mechanism": "transferfields",
+        "note": "Standard InitFromPurchLine TransferFields; stage chosen by the mirroring article, see q-mirror-targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Return Shipment Line",
+        "mechanism": "transferfields",
+        "note": "Standard InitFromPurchLine TransferFields; stage chosen by the mirroring article, see q-mirror-targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purchase Line Archive",
+        "mechanism": "transferfields",
+        "note": "ArchiveManagement copies lines with TransferFields; stage chosen by the mirroring article, see q-mirror-targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Job Journal Line",
+        "mechanism": "event-copy",
+        "note": "Job Post-Line.PostJobOnPurchaseLine calls Job Transfer Line.FromPurchaseLineToJnlLine for Item and G/L Account lines only; copy in OnAfterFromPurchaseLineToJnlLine. Item lines post at once (Job Posting Only); G/L account lines are held in a temporary table and posted by PostJobPurchaseLines after the G/L entries exist, carrying the value with them.",
+        "knowledge": [
+          "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md"
+        ]
+      },
+      {
+        "from": "Job Journal Line",
+        "to": "Job Ledger Entry",
+        "mechanism": "event-copy",
+        "note": "Job Jnl.-Post Line.CreateJobLedgEntry calls Job Transfer Line.FromJnlLineToLedgEntry for every source; copy in OnAfterFromJnlLineToLedgEntry while the entry is built, never Modify after insert.",
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Job Transfer Line",
+        "event": "OnAfterFromPurchaseLineToJnlLine",
+        "purpose": "Copy PurchLine.\"Cost Reason\" to JobJnlLine.\"Cost Reason\" for project-linked Item and G/L Account purchase lines, so the value is set before the deferred G/L account project lines are posted.",
+        "guards": [
+          "Assign the field only; the journal line is still being built, so do not call Modify."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md"
+        ]
+      },
+      {
+        "publisher": "Job Transfer Line",
+        "event": "OnAfterFromJnlLineToLedgEntry",
+        "purpose": "Copy JobJournalLine.\"Cost Reason\" to JobLedgerEntry.\"Cost Reason\" while the entry is built in CreateJobLedgEntry; one subscriber covers every source of project journal lines.",
+        "guards": [
+          "Assign before insert; never subscribe to OnAfterJobLedgEntryInsert and Modify the inserted entry."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent explicitly on Cost Reason in every table extension (a tableextension has no table-level classification to inherit); never leave it ToBeClassified or SystemMetadata.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "upgrade",
+        "step": "No upgrade code: the field is new, has no InitValue, and blank is a valid state. Project ledger entries and posted lines created before installation stay blank unless back-fill is requested (q-history-backfill).",
+        "knowledge": [
+          "microsoft/knowledge/upgrade/unreleased-schema-change-needs-no-upgrade-path.md",
+          "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "No permission set: the feature adds only table extensions, a subscriber codeunit and page extensions, and no new table.",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "item-line-cost-reason-reaches-job-ledger",
+        "given": "A vendor, an item, a project with a project task (created with the test Library codeunits), and a purchase invoice with an Item line charged to the project task with a Cost Reason.",
+        "when": "The purchase invoice is posted.",
+        "then": "The Purch. Inv. Line and the project usage Job Ledger Entry for that document carry the same Cost Reason.",
+        "knowledge": [
+          "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md"
+        ]
+      },
+      {
+        "id": "gl-account-line-cost-reason-reaches-job-ledger",
+        "given": "A purchase invoice with a G/L Account line charged to a project task, with a Cost Reason (fixtures from library codeunits).",
+        "when": "The purchase invoice is posted.",
+        "then": "The Job Ledger Entry posted after the G/L entries (deferred PostJobPurchaseLines path) carries the Cost Reason.",
+        "knowledge": [
+          "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+          "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "subcontractor-hours-cost-reason-reaches-job-ledger",
+        "given": "Subcontractor hours bought from a vendor as a purchase invoice line of the agreed supported type (G/L Account or Item, per q-subcontractor-hours) charged to a project task, with a Cost Reason and a quantity of hours.",
+        "when": "The purchase invoice is posted.",
+        "then": "A Job Ledger Entry exists for the hours with the Cost Reason.",
+        "knowledge": [
+          "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "receipt-line-mirrors-cost-reason",
+        "given": "A purchase order with a project-linked Item line with a Cost Reason.",
+        "when": "The order is posted as receive only.",
+        "then": "The Purch. Rcpt. Line carries the Cost Reason.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "credit-memo-line-mirrors-cost-reason",
+        "given": "A purchase credit memo with a project-linked Item line with a Cost Reason.",
+        "when": "The credit memo is posted.",
+        "then": "The Purch. Cr. Memo Line and the resulting Job Ledger Entry carry the Cost Reason.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "return-shipment-line-mirrors-cost-reason",
+        "given": "A purchase return order with an Item line with a Cost Reason.",
+        "when": "The return order is posted as ship only.",
+        "then": "The Return Shipment Line carries the Cost Reason.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "archive-line-mirrors-cost-reason",
+        "given": "A purchase order with a line with a Cost Reason.",
+        "when": "The document is archived through ArchiveManagement.",
+        "then": "The Purchase Line Archive row carries the Cost Reason.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      }
+    ],
+    "dependencies": []
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Map that selected the Purchase and Projects row groups and the cross-cutting rows (mirrored definitions, copy document, checks before posting, upgrade back-fill, privacy, tests).",
+      "constraints": [
+        "Plan one row group per process the request touches and open every linked article for the stages chosen.",
+        "Whether a field should reach a stage the request does not name is a question for the requester; raise one question per group of stages.",
+        "Do not fill other records with subscribers that find and modify them after posting."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.md",
+      "used-for": "Core path Purchase Line -> Job Journal Line -> Job Ledger Entry, and the design of subcontractor hours as supported line types.",
+      "constraints": [
+        "Add the field to Job Journal Line and Job Ledger Entry; copy it in OnAfterFromPurchaseLineToJnlLine, then in OnAfterFromJnlLineToLedgEntry.",
+        "Only Item and G/L Account purchase lines with a project post project usage; Resource purchase lines post only a resource ledger entry and no project usage.",
+        "When project cost comes from a purchase, design it as an item or G/L account line with the project; post resource time through a project journal resource line.",
+        "Matching field numbers between Purchase Line and Job Ledger Entry do not copy the value."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.good.al",
+        "microsoft/knowledge/projects/project-purchases-post-usage-only-for-item-and-gl-account-lines.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.md",
+      "used-for": "Purchase line to project journal line hop, and the list of other Job Transfer Line sources raised as an open question.",
+      "constraints": [
+        "Decide which sources must carry the value and subscribe to the matching Job Transfer Line events.",
+        "A field that exists only on the project journal is empty for usage posted from a purchase invoice and every other generated line."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/carry-document-fields-to-job-journal-line-on-every-source-path.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.md",
+      "used-for": "Project journal line to project ledger entry hop.",
+      "constraints": [
+        "Subscribe to OnAfterFromJnlLineToLedgEntry on Job Transfer Line to copy the value while the entry is built; one subscriber covers every source.",
+        "Do not rely on matching field numbers, and do not Modify the entry in OnAfterJobLedgEntryInsert."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/projects/carry-job-journal-fields-to-job-ledger-through-job-transfer-line.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the line field on posted purchase lines and the line archive.",
+      "constraints": [
+        "Give the field the same number, name, type and length on Purchase Line and every target: Purch. Rcpt. Line, Purch. Inv. Line, Purch. Cr. Memo Line, Return Shipment Line and Purchase Line Archive, unless the plan states a document type never needs it.",
+        "No subscriber is needed for these stages; keep the mirrored fields non-editable on posted tables.",
+        "Do not patch posted records with Modify in a subscriber."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Field definitions of the mirrored Cost Reason fields.",
+      "constraints": [
+        "Define the mirrored field with exactly the same field number, data type and length on every table in the TransferFields cascade."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing Cost Reason if it gets a TableRelation (q-cost-reason-source).",
+      "constraints": [
+        "For an unconditional relation, give the field the same type and exact length as the related field; read the related field's declared length rather than assuming Code[10] or Code[20]."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of every Cost Reason field.",
+      "constraints": [
+        "Every Normal field added by a tableextension must set its own DataClassification matching the data it stores; never leave ToBeClassified or use SystemMetadata for customer data."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "ToolTip placement for the page extension fields; applies from BC24 (runtime 13.0).",
+      "constraints": [
+        "On runtime 13.0 or later a bound page field inherits the table field's ToolTip; do not add a duplicate page-level ToolTip.",
+        "On earlier runtimes, or with no inheritable ToolTip, the page control must declare one."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/unreleased-schema-change-needs-no-upgrade-path.md",
+      "used-for": "No upgrade code for the new field.",
+      "constraints": [
+        "A schema element that is new in an unreleased version needs no upgrade or migration path."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/upgrade/initvalue-does-not-update-existing-rows.md",
+      "used-for": "Confirms existing rows stay blank; no InitValue is used, so no back-fill is required by the field definition.",
+      "constraints": [
+        "InitValue does not back-fill existing rows; if existing rows must carry a value, ship upgrade code guarded by an upgrade tag."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Fixtures for every posting test.",
+      "constraints": [
+        "Build vendors, items, G/L accounts and documents with the test Library codeunits, parents first, validating foreign-key fields."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-data-must-be-random-and-complete.md",
+      "used-for": "Test values.",
+      "constraints": [
+        "Generate incidental fixture values with library codeunits; keep scenario-defining values such as quantities and the Cost Reason explicit; do not rely on pre-existing records."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "q-cost-reason-source",
+      "question": "What is a Cost Reason: a free code, a relation to the standard Reason Code table, or a new Cost Reason table maintained by users? This sets the field's type, length and TableRelation on every table, and a new table would need its own page, permissions and setup.",
+      "affects": [
+        "purchase-line-ext",
+        "purch-inv-line-ext",
+        "purch-rcpt-line-ext",
+        "purch-cr-memo-line-ext",
+        "return-shipment-line-ext",
+        "purchase-line-archive-ext",
+        "job-journal-line-ext",
+        "job-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "q-subcontractor-hours",
+      "question": "How are subcontractor hours bought today? Purchase lines of type Resource with a project post only a resource ledger entry and no project usage, so they never reach the project ledger. Should buyers buy subcontractor hours as G/L Account (or Item) lines charged to the project, or post them through a project journal resource line, where the Cost Reason would be entered on the project journal? Should Cost Reason also reach Resource Ledger Entries?",
+      "affects": [
+        "cost-reason-posting-subscribers",
+        "subcontractor-hours-cost-reason-reaches-job-ledger",
+        "job-journal-line-ext"
+      ]
+    },
+    {
+      "id": "q-mirror-targets",
+      "question": "The design mirrors Cost Reason on posted receipt, invoice, credit memo and return shipment lines and on the purchase line archive. Should any of these document types be excluded?",
+      "affects": [
+        "purch-rcpt-line-ext",
+        "purch-cr-memo-line-ext",
+        "return-shipment-line-ext",
+        "purchase-line-archive-ext",
+        "receipt-line-mirrors-cost-reason",
+        "credit-memo-line-mirrors-cost-reason",
+        "return-shipment-line-mirrors-cost-reason",
+        "archive-line-mirrors-cost-reason"
+      ]
+    },
+    {
+      "id": "q-other-project-sources",
+      "question": "Should Cost Reason also be carried on project ledger entries that do not come from purchases: manual project journal lines, project planning lines, planning lines invoiced through sales, and general journal lines with a project?",
+      "affects": [
+        "job-journal-line-ext",
+        "cost-reason-posting-subscribers"
+      ]
+    },
+    {
+      "id": "q-entry-pages",
+      "question": "Should buyers also enter Cost Reason on purchase order and purchase credit memo lines, and should it be shown on posted purchase document line pages?",
+      "affects": [
+        "purchase-invoice-subform-ext"
+      ]
+    },
+    {
+      "id": "q-required",
+      "question": "Is Cost Reason mandatory on project-linked purchase lines before posting? If so, the check belongs in OnAfterCheckPurchDoc so it also stops the posting preview.",
+      "affects": [
+        "purchase-line-ext"
+      ]
+    },
+    {
+      "id": "q-copy-document",
+      "question": "Must Cost Reason survive Copy Document (including the recalculate-lines path, which drops custom line fields) and corrective credit memos?",
+      "affects": [
+        "purchase-line-ext"
+      ]
+    },
+    {
+      "id": "q-history-backfill",
+      "question": "Do existing project ledger entries and posted purchase lines need a Cost Reason back-filled, and from what source?",
+      "affects": [
+        "job-ledger-entry-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area are unknown; the ToolTip inheritance rule applies only from BC24 (runtime 13.0).",
+    "Page extensions Purch. Invoice Subform and Job Ledger Entries, beyond ToolTip placement, rest on the agent's judgment: no BCQuality article covers which pages show the field.",
+    "The buyer's user-entry hop on Purchase Line is not covered by BCQuality knowledge; it rests on the agent's judgment.",
+    "No permission set is designed because no table is added; this rests on the agent's judgment and changes if q-cost-reason-source introduces a new table."
+  ]
+}

@@ -169,3 +169,54 @@ pwsh ./tools/Test-ReviewFixtures.ps1 -Root . -ChangedPathsFile .changed-paths.tx
    For a single combined stress-test result, use `-ResultsPath` instead.
 
 The committed gate requires full expected recall, the exact convention-derived article ID, and no findings on clean controls.
+
+## Feature design evaluation (experimental)
+
+`feature-design-fixtures.json` holds plain-language feature requests for the
+experimental `al-feature-design` skill. Each case lists what a reviewer would
+insist on in the design, not one exact answer: articles it must cite, objects
+it must extend, events it must or must not subscribe to, guards it must apply,
+and gaps it must either design or raise as an open question. A `must-cover-any`
+rule passes when any of its options holds: `object-target`,
+`open-question-contains`, `lifecycle-concern`, `subscribes-to` (an event name),
+`design-contains` (text in an element's purpose, note or step), `cites` (an
+article path) or `object-type-count`.
+
+Score a report produced for one case with:
+
+    python tools/score_feature_design.py <case-id> <report.json>
+
+The scorer validates the report against
+`schemas/feature-design-report.schema.json`, checks that every cited article
+exists and that every path a design element uses is listed in `knowledge`, then
+applies the case's checks. It exits 1 when any check fails. It requires
+`jsonschema`.
+
+`feature-design-examples/` holds one report per case. Each `.json` file was
+produced by an agent that ran the skill with only the request and the plugin.
+Each `.md` file is the readable version that
+`tools/ConvertTo-FeatureDesignMarkdown.ps1` renders from it, which is what a
+user sees. Reports were generated as the knowledge grew, so a few reflect an
+earlier state:
+
+- The three first sales reports used the first version of the skill.
+- `sales-defaults-propagation-and-gl` was generated before the
+  `OnAfterInitHeaderDefaults` guidance existed; it reported that gap as
+  `partial`, and the fixture now also checks that event.
+- `collection-agent-on-reminders` is `partial`: no article yet names the event
+  for defaulting a customer field onto `Reminder Header` and
+  `Finance Charge Memo Header`, and the report says so.
+- `customer-po-ref-through-prepayment-and-drop-shipment` misses one check: the
+  agent read "sales order lines carry the customer's PO reference" as an
+  existing field and did not extend `Sales Line`. The request is ambiguous.
+- `contracts-api-and-nightly-sync` is not fully blind: the agent saw one line
+  of its fixture while searching. The skill now forbids reading `evaluation/`.
+- The 18 cases added with the five new feature-design maps and the wave-6
+  articles were run with version 3 of the skill. Three of their fixtures were
+  widened after the run, because the reports met the requirement in an element's
+  text or with an equivalent pattern: `contract-ref-on-deferral-gl-entries`,
+  `ic-settlement-journal-with-reference` and `nightly-customer-csv-import`.
+- `carry-carrier-seal-from-warehouse-shipment-to-posted-sales-shipment` was run
+  with version 4 and misses one check: it does not ask how the seal behaves
+  when one warehouse shipment holds several orders or an order ships in
+  several shipments.

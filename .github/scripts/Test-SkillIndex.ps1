@@ -98,7 +98,18 @@ try {
         'microsoft/skills/review/al-telemetry-review.md',
         'microsoft/skills/review/al-scm-review.md',
         'microsoft/skills/review/al-finance-review.md',
-        'microsoft/skills/review/al-xmlport-review.md'
+        'microsoft/skills/review/al-xmlport-review.md',
+        'microsoft/skills/review/al-sales-purchase-review.md',
+        'microsoft/skills/review/al-warehouse-review.md',
+        'microsoft/skills/review/al-inventory-review.md',
+        'microsoft/skills/review/al-manufacturing-review.md',
+        'microsoft/skills/review/al-projects-review.md',
+        'microsoft/skills/review/al-finance-extensions-review.md',
+        'microsoft/skills/review/al-service-review.md',
+        'microsoft/skills/review/al-e-documents-review.md',
+        'microsoft/skills/review/al-shopify-review.md',
+        'microsoft/skills/review/al-subscription-billing-review.md',
+        'microsoft/skills/review/al-pricing-review.md'
     )
     $review = @($skills | Where-Object id -eq 'al-code-review')
     $knowledge = @($skills | Where-Object id -eq 'al-knowledge')

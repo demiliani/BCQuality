@@ -33,6 +33,7 @@ READ and DO are read on demand — typically by the first action skill the agent
 | [`al-code-review/SKILL.md`](al-code-review/SKILL.md) | Review AL code: an app folder, files, or changes. |
 | [`al-knowledge/SKILL.md`](al-knowledge/SKILL.md) | Answer a focused development question with cited knowledge, without code review. |
 | [`al-plan-guidance/SKILL.md`](al-plan-guidance/SKILL.md) | Preview. Enrich an existing AL development plan with applicable guidance, read-only. |
+| [`al-feature-design/SKILL.md`](al-feature-design/SKILL.md) | Experimental. Design a new feature from a plain-language request: objects, data flow, subscriptions, lifecycle and tests, read-only. |
 
 Each adapter is deliberately thin. It translates the caller's request into an
 Entry task context, then follows Entry's dispatch without owning routing,

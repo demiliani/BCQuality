@@ -1,0 +1,733 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Routing operations get a Coating Spec code. It must appear on production order routing lines, whether the order is created and refreshed by hand or created from the planning worksheet, and on the subcontracting purchase order line created for that operation.",
+    "business-process": "Manufacturing: routings, production order creation (refresh and planning carry-out), production order status changes and subcontracting purchasing",
+    "candidates": 16,
+    "selected": 14
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "routing-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Routing Line",
+        "purpose": "Master value: the Coating Spec code the user enters per routing operation. Source for both the refresh path and the planning path.",
+        "fields": [
+          {
+            "name": "Coating Spec",
+            "type": "Code[20] (same number, type and length on every table; final length depends on q-coating-spec-master)",
+            "note": "Editable; user-entered on the routing. Real DataClassification, never ToBeClassified. Add a TableRelation only if q-coating-spec-master confirms a master table, sized to the related key."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md"
+        ]
+      },
+      {
+        "id": "planning-routing-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Planning Routing Line",
+        "purpose": "Carries the value through the planning worksheet so orders created by carrying out planning get it from the planning routing lines they are built from.",
+        "fields": [
+          {
+            "name": "Coating Spec",
+            "type": "Code[20] (same number, type and length on every table; final length depends on q-coating-spec-master)",
+            "note": "Same field number as on Routing Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "prod-order-routing-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Prod. Order Routing Line",
+        "purpose": "Holds the value on production order routing lines. Filled before insert on refresh and on carry-out; survives status changes (Planned/Firm Planned -> Released -> Finished) by record assignment, so no status-change code is needed. A refresh that recalculates routings deletes and rebuilds these lines, so a per-order manual change is reset to the routing value (see q-per-order-edit).",
+        "fields": [
+          {
+            "name": "Coating Spec",
+            "type": "Code[20] (same number, type and length on every table; final length depends on q-coating-spec-master)",
+            "note": "Same field number as on Routing Line. Editability depends on q-per-order-edit."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+          "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purchase-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line",
+        "purpose": "Holds the value on the subcontracting purchase order line created for the operation; set at the make-order step before the line is inserted.",
+        "fields": [
+          {
+            "name": "Coating Spec",
+            "type": "Code[20] (same number, type and length on every table; final length depends on q-coating-spec-master)",
+            "note": "Same field number and length on every purchase TransferFields target below."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purch-rcpt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Line",
+        "purpose": "Mirror target: posted receipt lines are created by InitFromPurchLine/TransferFields. Chosen by the mirroring article, not by the request; see q-posted-purchase-targets.",
+        "fields": [
+          {
+            "name": "Coating Spec",
+            "type": "Code[20] (same number, type and length on every table; final length depends on q-coating-spec-master)",
+            "note": "Same field number, type and length as Purchase Line; non-editable."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purch-inv-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Line",
+        "purpose": "Mirror target for posted invoice lines (TransferFields from Purchase Line). Chosen by the mirroring article; see q-posted-purchase-targets.",
+        "fields": [
+          {
+            "name": "Coating Spec",
+            "type": "Code[20] (same number, type and length on every table; final length depends on q-coating-spec-master)",
+            "note": "Same field number, type and length as Purchase Line; non-editable."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purch-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Line",
+        "purpose": "Mirror target for posted credit memo lines (TransferFields from Purchase Line). Chosen by the mirroring article; see q-posted-purchase-targets.",
+        "fields": [
+          {
+            "name": "Coating Spec",
+            "type": "Code[20] (same number, type and length on every table; final length depends on q-coating-spec-master)",
+            "note": "Same field number, type and length as Purchase Line; non-editable."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "return-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Line",
+        "purpose": "Mirror target for return shipment lines (TransferFields from Purchase Line). Chosen by the mirroring article; see q-posted-purchase-targets.",
+        "fields": [
+          {
+            "name": "Coating Spec",
+            "type": "Code[20] (same number, type and length on every table; final length depends on q-coating-spec-master)",
+            "note": "Same field number, type and length as Purchase Line; non-editable."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "purchase-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line Archive",
+        "purpose": "Mirror target for archived purchase lines. Chosen by the mirroring article; see q-posted-purchase-targets.",
+        "fields": [
+          {
+            "name": "Coating Spec",
+            "type": "Code[20] (same number, type and length on every table; final length depends on q-coating-spec-master)",
+            "note": "Same field number, type and length as Purchase Line; non-editable."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "coating-spec-copy-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Coating Spec Copy (new subscriber codeunit)",
+        "purpose": "Event subscribers that copy Coating Spec on the refresh path, the planning path, carry-out, and the subcontracting make-order step.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+          "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      },
+      {
+        "id": "routing-lines-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Routing lines subpage (page that lists Routing Line on the Routing card)",
+        "purpose": "Lets users enter Coating Spec per operation. Tooltip on the table field (runtime 13.0+) or on the page control for earlier targets.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "prod-order-routing-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Prod. Order Routing (page listing Prod. Order Routing Line)",
+        "purpose": "Shows Coating Spec on production order routing lines, as the request requires.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "id": "purchase-order-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purchase Order Subform",
+        "purpose": "Shows Coating Spec on the subcontracting purchase order line.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "Routing Line.Coating Spec",
+        "mechanism": "user-entry",
+        "note": "Entered per operation on the routing.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md"
+        ]
+      },
+      {
+        "from": "Routing Line",
+        "to": "Prod. Order Routing Line (refresh: Refresh Production Order -> Calculate Prod. Order -> CopyFromRoutingLine)",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyFromRoutingLine runs before insert; no Modify. Covers orders created by hand and refreshed.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md"
+        ]
+      },
+      {
+        "from": "Routing Line",
+        "to": "Planning Routing Line (Mfg. Planning Line Management -> TransferFromRoutingLine)",
+        "mechanism": "event-copy",
+        "note": "OnAfterTransferFromRoutingLine runs before insert.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md"
+        ]
+      },
+      {
+        "from": "Planning Routing Line",
+        "to": "Prod. Order Routing Line (Mfg. Carry Out Action.TransferRouting -> CopyFromPlanningRoutingLine)",
+        "mechanism": "event-copy",
+        "note": "OnAfterCopyFromPlanningRoutingLine; this path never reads Routing Line.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md"
+        ]
+      },
+      {
+        "from": "Prod. Order Routing Line (old status)",
+        "to": "Prod. Order Routing Line (new status: Released, Finished)",
+        "mechanism": "other",
+        "note": "Prod. Order Status Management copies the whole record by assignment, including extension fields; no subscriber.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.md"
+        ]
+      },
+      {
+        "from": "Prod. Order Routing Line (Released), read via Requisition Line keys",
+        "to": "Purchase Line (Req. Wksh.-Make Order.InsertPurchOrderLine)",
+        "mechanism": "event-copy",
+        "note": "OnInsertPurchOrderLineOnAfterTransferFromReqLineToPurchLine, before insert. Every subcontracting path (base Calculate Subcontracts, Subc. Calculate Subcontracts, Subcontracting app direct creation) meets here.",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Rcpt. Line",
+        "mechanism": "transferfields",
+        "note": "InitFromPurchLine; field number match.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Inv. Line",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Cr. Memo Line",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Return Shipment Line",
+        "mechanism": "transferfields",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purchase Line Archive",
+        "mechanism": "transferfields",
+        "note": "Archiving copies lines by field number.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Table \"Prod. Order Routing Line\"",
+        "event": "OnAfterCopyFromRoutingLine",
+        "purpose": "Refresh path: ProdOrderRoutingLine.\"Coating Spec\" := RoutingLine.\"Coating Spec\".",
+        "guards": [
+          "Assign only; runs before insert, so no Modify."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Planning Routing Line\"",
+        "event": "OnAfterTransferFromRoutingLine",
+        "purpose": "Planning path: PlanningRoutingLine.\"Coating Spec\" := RoutingLine.\"Coating Spec\".",
+        "guards": [
+          "Assign only; runs before insert, so no Modify."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Prod. Order Routing Line\"",
+        "event": "OnAfterCopyFromPlanningRoutingLine",
+        "purpose": "Carry-out path: ProdOrderRoutingLine.\"Coating Spec\" := PlanningRoutingLine.\"Coating Spec\".",
+        "guards": [
+          "Copy from the Planning Routing Line, not by looking up the master Routing Line.",
+          "Assign only; runs before insert, so no Modify."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Req. Wksh.-Make Order\"",
+        "event": "OnInsertPurchOrderLineOnAfterTransferFromReqLineToPurchLine",
+        "purpose": "Set PurchOrderLine.\"Coating Spec\" from the released Prod. Order Routing Line before the purchase line is inserted.",
+        "guards": [
+          "Exit unless RequisitionLine.\"Prod. Order No.\" and \"Operation No.\" are filled (ordinary purchase lines use the same code) - cheap in-memory check before any database call.",
+          "Get(Status::Released, \"Prod. Order No.\", \"Routing Reference No.\", \"Routing No.\", \"Operation No.\") with SetLoadFields(\"Coating Spec\"); only assign when found.",
+          "Do not use the obsolete Calculate Subcontracts report events and do not patch purchase lines after carry-out."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification on every Coating Spec table field (all nine table extensions) to a real classification - the manufacturing samples use CustomerContent - never ToBeClassified. Classification lives on the table fields, not on the page extensions.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+          "microsoft/knowledge/privacy/data-classification-is-table-field-property.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Tooltip: on runtime 13.0 (BC24) or later, define one ToolTip on the table field and let the bound page fields inherit it; for earlier targets add a page-level ToolTip on each page extension control. Text should say what the coating spec is used for, without inventing behavior.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+          "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md"
+        ]
+      },
+      {
+        "concern": "permissions",
+        "step": "No new table or exposed object is designed, so no new permission set entry is required unless q-coating-spec-master adds a Coating Spec master table (then design its permissions with that entity).",
+        "knowledge": []
+      }
+    ],
+    "tests": [
+      {
+        "id": "refresh-copies-coating-spec",
+        "given": "An item with a routing whose operation has a random Coating Spec (fixtures built with the manufacturing/inventory Library codeunits, full chain: item, work center, routing certified, assigned to item)",
+        "when": "A released production order is created for the item and refreshed with routings calculated",
+        "then": "The Prod. Order Routing Line for that operation has the routing line's Coating Spec",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "planning-copies-to-planning-routing-line",
+        "given": "An item with demand, a certified routing whose operation has a Coating Spec, and a planning worksheet",
+        "when": "Calculate regenerative plan runs",
+        "then": "The Planning Routing Line for that operation carries the Coating Spec",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "carry-out-copies-from-planning-routing-line",
+        "given": "A planning line with Planning Routing Lines holding a Coating Spec (the value on the Planning Routing Line is changed so it differs from the master Routing Line)",
+        "when": "Carry Out Action Message creates a production order",
+        "then": "The Prod. Order Routing Line has the Planning Routing Line value, not the master routing value",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "status-change-keeps-coating-spec",
+        "given": "A firm planned production order whose routing line has a Coating Spec",
+        "when": "The order is changed to Released",
+        "then": "The released Prod. Order Routing Line has the same Coating Spec, with no custom status-change code",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "refresh-resets-manual-value",
+        "given": "A released production order whose routing line Coating Spec was changed by hand",
+        "when": "The order is refreshed with routings recalculated",
+        "then": "The value is back to the master routing value (documents the behaviour for q-per-order-edit)",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "subcontracting-po-line-gets-coating-spec",
+        "given": "A released production order whose operation runs on a work center with a subcontractor vendor and has a Coating Spec, plus the full vendor and posting setup",
+        "when": "Calculate Subcontracts runs and the subcontracting worksheet is carried out",
+        "then": "The created Purchase Line for that operation has the routing line's Coating Spec",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "subcontracting-direct-creation-gets-coating-spec",
+        "given": "The Microsoft Subcontracting app installed and a released order routing line with a Coating Spec on a subcontracting work center",
+        "when": "A subcontracting purchase order is created directly from the routing line",
+        "then": "The Purchase Line has the Coating Spec (only if the app is in scope; see q-subcontracting-app)",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "ordinary-purchase-line-unaffected",
+        "given": "A requisition line for an item with no Prod. Order No. or Operation No.",
+        "when": "The requisition worksheet is carried out",
+        "then": "The Purchase Line Coating Spec is blank and no error is raised (guard exits)",
+        "knowledge": [
+          "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.md",
+          "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "posting-mirrors-coating-spec",
+        "given": "A subcontracting purchase order line with a Coating Spec and the full posting-group chain",
+        "when": "The purchase order is posted (receive and invoice)",
+        "then": "Purch. Rcpt. Line and Purch. Inv. Line carry the Coating Spec",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "archive-mirrors-coating-spec",
+        "given": "A subcontracting purchase order line with a Coating Spec",
+        "when": "The purchase order is archived",
+        "then": "Purchase Line Archive carries the Coating Spec",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.md",
+      "used-for": "Core mechanism: fields on Routing Line, Planning Routing Line and Prod. Order Routing Line, and the three copy subscriptions for refresh, planning and carry-out.",
+      "constraints": [
+        "Add the field to Routing Line, Planning Routing Line and Prod. Order Routing Line.",
+        "Subscribe to OnAfterCopyFromRoutingLine and OnAfterCopyFromPlanningRoutingLine on Prod. Order Routing Line and OnAfterTransferFromRoutingLine on Planning Routing Line; all run before insert, so no Modify.",
+        "Do not rely only on Calculate Prod. Order OnAfterTransferRoutingLine: orders from the planning worksheet would have an empty field.",
+        "Do not fill the field in OnAfterInsertEvent by looking up Routing Line: extra Modify per operation and the wrong source for planned orders.",
+        "A refresh that recalculates routings deletes and rebuilds routing lines; a value typed per order is reset. State in the design whether per-order changes are allowed."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.good.al",
+        "microsoft/knowledge/manufacturing/copy-routing-line-fields-on-refresh-and-planning-paths.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.md",
+      "used-for": "Subcontracting purchase line: where every creation path meets and how to read the routing line.",
+      "constraints": [
+        "Copy at the make-order step: subscribe to OnInsertPurchOrderLineOnAfterTransferFromReqLineToPurchLine on Req. Wksh.-Make Order.",
+        "Exit unless RequisitionLine \"Prod. Order No.\" and \"Operation No.\" are filled.",
+        "Read the routing line with Get(Status::Released, Prod. Order No., Routing Reference No., Routing No., Operation No.) and set the purchase line field before insert.",
+        "Do not depend on the obsolete Calculate Subcontracts report events (obsolete pending, tag 28.0; events obsolete for 29.0); the Subcontracting app direct path never passes through it.",
+        "Add the field to Requisition Line only if planners must see it, and the direct path does not fill it.",
+        "Do not patch purchase lines after Carry Out Action."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.good.al",
+        "microsoft/knowledge/manufacturing/carry-routing-fields-to-subcontracting-purchase-lines.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.md",
+      "used-for": "Status changes of the production order carry the routing line field; no subscriber needed.",
+      "constraints": [
+        "Add the field once on the production order table and rely on the status change record assignment to carry it.",
+        "Use the OnCopyFrom... events only to change a value on the way.",
+        "Do not re-copy in OnAfterTransProdOrder with Modify."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/manufacturing/production-order-status-change-copies-whole-records.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+      "used-for": "Posted purchase line and archive targets of the Purchase Line field.",
+      "constraints": [
+        "Give the field the same number, name, type and length on Purchase Line and on every TransferFields target the plan needs; unless the plan states a document type never needs it, that means all four posted tables and the archive.",
+        "No subscriber is needed for these stages.",
+        "Keep the mirrored fields non-editable on the posted tables."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length agreement for every mirrored Coating Spec field.",
+      "constraints": [
+        "Define mirrored fields with the exact same field number, data type and length on every table in the cascade at creation time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Field length if Coating Spec gets a TableRelation to a master table (depends on q-coating-spec-master).",
+      "constraints": [
+        "For an unconditional relation, give the field the same type and exact length as the related field; read the related field's declared length rather than assuming Code[20]."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/guard-event-subscribers-before-db-call.md",
+      "used-for": "Make-order subscriber guard.",
+      "constraints": [
+        "Open the subscriber with a cheap in-memory predicate before any database call.",
+        "Use SetLoadFields for the columns the body reads."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/resolve-tobeclassified-before-release.md",
+      "used-for": "Data classification of the new fields.",
+      "constraints": [
+        "Do not ship ToBeClassified; resolve to a real classification decided from the data's content."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-is-table-field-property.md",
+      "used-for": "Where classification is set.",
+      "constraints": [
+        "DataClassification belongs on the table fields, not on page fields."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips for the page extension controls.",
+      "constraints": [
+        "User-facing page fields need an explicit or inherited ToolTip; on runtime 13.0+ define it on the table field and omit duplicates; earlier targets need page-level tooltips.",
+        "Tooltip text should say what the value is used for and must not invent behaviour."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/ui/bound-page-field-inherits-source-field-tooltip.md",
+      "used-for": "Tooltip inheritance on bound page fields; applies from BC24 (bc-version unknown).",
+      "constraints": [
+        "On runtime 13.0 or later a bound page field inherits the table field ToolTip; do not add a duplicate page-level property."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-one-when-per-test.md",
+      "used-for": "Test shape.",
+      "constraints": [
+        "Exactly one WHEN per test; precondition actions (refresh, release, posting) go in GIVEN unless they are the action under test."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures.",
+      "constraints": [
+        "Build items, routings, work centers, vendors and orders with the Library codeunits, parents first, validating foreign keys; no hand-rolled Init/Insert."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/given-blocks-must-cover-full-precondition-chain.md",
+      "used-for": "Test preconditions for subcontracting and posting tests.",
+      "constraints": [
+        "GIVEN must set up every precondition the process reads, e.g. the full posting-group chain for posting tests and the subcontracting work center and vendor for subcontracting tests."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "q-coating-spec-master",
+      "question": "Is Coating Spec a free code, or must it be validated against a master list (a new Coating Spec table or an existing table)? If a master table is needed, its key length sets the field length and it needs its own table, pages and permissions.",
+      "affects": [
+        "routing-line-ext",
+        "planning-routing-line-ext",
+        "prod-order-routing-line-ext",
+        "purchase-line-ext",
+        "purch-rcpt-line-ext",
+        "purch-inv-line-ext",
+        "purch-cr-memo-line-ext",
+        "return-shipment-line-ext",
+        "purchase-line-archive-ext"
+      ]
+    },
+    {
+      "id": "q-per-order-edit",
+      "question": "May users change the Coating Spec on a production order routing line? If yes, they must accept that a refresh that recalculates routings resets it to the routing value.",
+      "affects": [
+        "prod-order-routing-line-ext",
+        "prod-order-routing-page-ext",
+        "refresh-resets-manual-value"
+      ]
+    },
+    {
+      "id": "q-posted-purchase-targets",
+      "question": "Must the Coating Spec also reach posted receipt, invoice, credit memo and return shipment lines and archived purchase lines? The design includes them because the mirroring guidance requires every TransferFields target unless you exclude a document type.",
+      "affects": [
+        "purch-rcpt-line-ext",
+        "purch-inv-line-ext",
+        "purch-cr-memo-line-ext",
+        "return-shipment-line-ext",
+        "purchase-line-archive-ext",
+        "posting-mirrors-coating-spec",
+        "archive-mirrors-coating-spec"
+      ]
+    },
+    {
+      "id": "q-subcontracting-worksheet",
+      "question": "Must planners see the Coating Spec on the subcontracting worksheet (Requisition Line)? It is not designed; if needed it is filled from OnAfterTransferProdOrderRoutingLine of the report your version uses and is not filled by the Subcontracting app's direct creation path.",
+      "affects": [
+        "coating-spec-copy-codeunit"
+      ]
+    },
+    {
+      "id": "q-subcontracting-app",
+      "question": "Which BC version is targeted, and is the Microsoft Subcontracting app in use? This decides which subcontracting creation paths the tests must cover.",
+      "affects": [
+        "subcontracting-po-line-gets-coating-spec",
+        "subcontracting-direct-creation-gets-coating-spec"
+      ]
+    },
+    {
+      "id": "q-other-pages-reports",
+      "question": "Must the Coating Spec appear anywhere else, such as the Planning Routing page, the purchase order printout, or the vendor's subcontracting documents?",
+      "affects": [
+        "routing-lines-page-ext",
+        "prod-order-routing-page-ext",
+        "purchase-order-subform-ext"
+      ]
+    },
+    {
+      "id": "q-existing-data",
+      "question": "Must existing routings, open production orders or open subcontracting purchase lines be back-filled, or does the value apply only to new orders?",
+      "affects": [
+        "routing-line-ext",
+        "prod-order-routing-line-ext",
+        "purchase-line-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Page object names for the routing lines, production order routing and purchase order subform extensions are the agent's judgment; BCQuality knowledge does not name them. Confirm against symbols.",
+    "Permission step rests on the agent's judgment (no BCQuality article covers this case).",
+    "bc-version, countries and application-area are unknown; ui/bound-page-field-inherits-source-field-tooltip.md applies only from BC24, and the Calculate Subcontracts obsolescence depends on the target version."
+  ]
+}

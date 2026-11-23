@@ -23,6 +23,8 @@ Standalone item reclassification journals and bin movements are legitimate separ
 
 See sample: [`post-transfers-through-shipment-and-receipt-codeunits.good.al`](post-transfers-through-shipment-and-receipt-codeunits.good.al).
 
+To design a feature that carries its own data through this process, see [carry transfer line fields to the item ledger through the posting codeunits](../warehouse/carry-transfer-line-fields-to-item-ledger.md) and [posted transfer documents copy fields one by one, not by field number](../warehouse/posted-transfer-documents-copy-fields-one-by-one.md).
+
 ## Anti Pattern
 
 Ad-hoc item postings, independent positive/negative adjustments, manually created posted-transfer rows, and direct shipment/receipt-counter changes cannot substitute for transfer-order posting. Updating `"Last Shipment No."` after a bare item-journal call does not create the posted shipment, source-line progress, or transfer application lineage.

@@ -1,0 +1,827 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 3
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "We resell cloud services with usage-based subscription billing. The monthly usage file from our supplier has a data center region column, and the region must be shown on the customer contract invoice lines and on the posted invoices. Each subscription line also has a support level that customers can change when the contract is renewed. The new support level must apply to the renewed term.",
+    "business-process": "Carry a data center region from the supplier's usage file to customer contract invoice lines and posted invoices, and renew a per-subscription-line support level through contract renewal, both in the Subscription Billing app (usage-based billing and contract renewal).",
+    "candidates": 14,
+    "selected": 12
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "usage-billing-region",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Usage Data Billing",
+        "purpose": "Holds the data center region of each usage data billing row, copied from the imported usage line before the row is inserted. Nothing copies by field number in the usage path, so the value is assigned in a subscriber.",
+        "fields": [
+          {
+            "name": "Usage Region",
+            "type": "Code[20]",
+            "note": "DataClassification CustomerContent. Filled only for customer-side rows (Partner = Customer) unless q-vendor-side says otherwise."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-region",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line",
+        "purpose": "Carries the region on contract invoice (and contract credit memo) lines. Set in OnBeforeInsertSalesLineFromContractLine before the insert, because contract invoice lines are locked once created.",
+        "fields": [
+          {
+            "name": "Usage Region",
+            "type": "Code[20]",
+            "note": "Same number, type and length as on the posted and archive line tables; non-editable on contract invoices is not enforced by the app for extension fields, decide editability in q-region-editable."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-line-region",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Invoice Line",
+        "purpose": "Mirror of the Sales Line field so posting (InitFromSalesLine / TransferFields) carries the region to the posted invoice line without a subscriber. Non-editable.",
+        "fields": [
+          {
+            "name": "Usage Region",
+            "type": "Code[20]",
+            "note": "Same field number, type and length as Sales Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-cr-memo-line-region",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Cr.Memo Line",
+        "purpose": "Mirror target for posted contract credit memos (credit memos follow the same contract-line path). Chosen by the mirroring article; may be excluded through q-mirror-targets.",
+        "fields": [
+          {
+            "name": "Usage Region",
+            "type": "Code[20]",
+            "note": "Same field number, type and length as Sales Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-shipment-line-region",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Shipment Line",
+        "purpose": "Mirror target required by the sales mirroring rule for every posted line table the line field reaches. May be excluded through q-mirror-targets.",
+        "fields": [
+          {
+            "name": "Usage Region",
+            "type": "Code[20]",
+            "note": "Same field number, type and length as Sales Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-receipt-line-region",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Receipt Line",
+        "purpose": "Mirror target required by the sales mirroring rule for every posted line table. May be excluded through q-mirror-targets.",
+        "fields": [
+          {
+            "name": "Usage Region",
+            "type": "Code[20]",
+            "note": "Same field number, type and length as Sales Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-line-archive-region",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Line Archive",
+        "purpose": "Mirror target for archived sales lines (archiving copies lines with TransferFields). May be excluded through q-mirror-targets.",
+        "fields": [
+          {
+            "name": "Usage Region",
+            "type": "Code[20]",
+            "note": "Same field number, type and length as Sales Line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "usage-region-flow",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Usage Region Flow",
+        "purpose": "Event subscriber codeunit for the region path: imported usage line to Usage Data Billing, and open Usage Data Billing rows to the contract invoice line. Contains no UI because contract billing can run from a job queue.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "id": "sales-invoice-subform-region",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Sales Invoice Subform",
+        "purpose": "Shows the region on the lines of the contract invoice before posting.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "posted-sales-invoice-subform-region",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Posted Sales Invoice Subform",
+        "purpose": "Shows the region on posted invoice lines (read-only).",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "subscription-line-support-level",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Subscription Line",
+        "purpose": "Holds the current support level of each subscription line. Updated by renewal only when the planned subscription line is applied, so the renewed term gets the new level.",
+        "fields": [
+          {
+            "name": "Support Level",
+            "type": "Code[20]",
+            "note": "Data type to be settled in q-support-level-type; same number and type as on Planned Subscription Line. DataClassification CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "sales-subscription-line-support-level",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Sales Subscription Line",
+        "purpose": "Holds the support level on the renewal quote and order, where the customer's new choice is entered.",
+        "fields": [
+          {
+            "name": "Support Level",
+            "type": "Code[20]",
+            "note": "Same type as on Subscription Line. DataClassification CustomerContent."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "planned-subscription-line-support-level",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Planned Subscription Line",
+        "purpose": "Carries the renewed support level while the renewal waits to be applied; filled by the app's TransferFields from the temporary subscription line.",
+        "fields": [
+          {
+            "name": "Support Level",
+            "type": "Code[20]",
+            "note": "Same field number and type as on Subscription Line so TransferFields copies it."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "support-level-renewal",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Support Level Renewal",
+        "purpose": "Event subscriber codeunit for the renewal path: current level onto the renewal quote, sales subscription line to temporary subscription line, planned line to subscription line, and the update rule that keeps the old level until the old term is billed.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "Supplier usage file region column",
+        "to": "Usage Data Generic Import.Text1",
+        "mechanism": "other",
+        "note": "Data Exch. Field Mapping in the supplier's Data Exchange Definition maps the region column to the spare Text1 field (or a field added to Usage Data Generic Import, see q-region-import-field). Run by the Create Imported Lines step of Usage Data Import.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md"
+        ]
+      },
+      {
+        "from": "Usage Data Generic Import.Text1",
+        "to": "Usage Data Billing.Usage Region",
+        "mechanism": "event-copy",
+        "note": "Assigned in OnBeforInsertUsageDataBilling from UsageDataGenericImportGlobal; no Modify, the app inserts right after.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md"
+        ]
+      },
+      {
+        "from": "Usage Data Billing.Usage Region",
+        "to": "Sales Line.Usage Region (contract invoice line)",
+        "mechanism": "event-copy",
+        "note": "In OnBeforeInsertSalesLineFromContractLine, read open Usage Data Billing rows with the app's filters (Partner Customer, contract no. and line no. from TempBillingLine, Document Type None, empty Document No.) and apply the winner rule of q-region-winner. Covers contract credit memos created by the same routine.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Usage Region",
+        "to": "Sales Invoice Line.Usage Region",
+        "mechanism": "transferfields",
+        "note": "Standard posting (InitFromSalesLine); same field number and type.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Sales Line.Usage Region",
+        "to": "Sales Cr.Memo Line, Sales Shipment Line, Return Receipt Line, Sales Line Archive",
+        "mechanism": "transferfields",
+        "note": "Standard posting and archiving; same field number and type. Subject to q-mirror-targets.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Subscription Line.Support Level",
+        "to": "Sales Subscription Line.Support Level (renewal quote)",
+        "mechanism": "event-copy",
+        "note": "In OnAfterInsertSubscriptionLine, Get the subscription line by SalesSubscriptionLine.\"Subscription Line Entry No.\", assign and Modify (the line is already inserted).",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      },
+      {
+        "from": "User on the renewal quote or order",
+        "to": "Sales Subscription Line.Support Level",
+        "mechanism": "user-entry",
+        "note": "The customer's new support level is entered on the renewal sales subscription line. The page that shows these lines is not named by any opened article (see unresolved).",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      },
+      {
+        "from": "Sales Subscription Line.Support Level",
+        "to": "temporary Subscription Line.Support Level",
+        "mechanism": "event-copy",
+        "note": "In OnAfterCopyFromSalesSubscriptionLine on table Subscription Line, run by Post Sub. Contract Renewal when the renewal order is posted (no invoice is posted for renewal lines).",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      },
+      {
+        "from": "temporary Subscription Line.Support Level",
+        "to": "Planned Subscription Line.Support Level",
+        "mechanism": "transferfields",
+        "note": "The app copies the temporary line into the planned line with TransferFields; same field number and type.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "from": "Planned Subscription Line.Support Level",
+        "to": "Subscription Line.Support Level",
+        "mechanism": "event-copy",
+        "note": "In OnBeforeUpdateSubscriptionLineFromPlannedSubscriptionLine, assign without Modify. Takes effect when the planned line is applied, not when the renewal order is posted.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Create Usage Data Billing",
+        "event": "OnBeforInsertUsageDataBilling",
+        "purpose": "Copy the region from UsageDataGenericImportGlobal (Text1 or the added field) to the Usage Data Billing row before its insert.",
+        "guards": [
+          "Assign only; no Modify (the app calls Insert(true) right after).",
+          "Exit unless UsageDataBilling.Partner is Customer, if the region is for the customer side only (q-vendor-side).",
+          "Copy with CopyStr to the target length."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md"
+        ]
+      },
+      {
+        "publisher": "Create Billing Documents",
+        "event": "OnBeforeInsertSalesLineFromContractLine",
+        "purpose": "Read the open Usage Data Billing rows of the contract line and set the region on the contract invoice line before it is inserted.",
+        "guards": [
+          "Filter Usage Data Billing exactly as the app does: Partner Customer, Subscription Contract No. and Line No. from TempBillingLine, Document Type None, Document No. empty; never by the sales line's Document No.",
+          "Apply the agreed winner/combination rule when several rows cover one invoice line (q-region-winner).",
+          "Assign only, no Modify; never patch the line after insert (Document Change Management).",
+          "No UI: billing may run from Auto Contract Billing in a job queue."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "publisher": "Create Sub. Contract Renewal",
+        "event": "OnAfterInsertSubscriptionLine",
+        "purpose": "Prefill the renewal quote's sales subscription line with the current support level so the customer sees and can change it.",
+        "guards": [
+          "Exit if the subscription line cannot be found by Subscription Line Entry No.",
+          "The record is already inserted: assign then Modify."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      },
+      {
+        "publisher": "Subscription Line",
+        "event": "OnAfterCopyFromSalesSubscriptionLine",
+        "purpose": "Copy the renewed support level from the sales subscription line to the temporary subscription line, from which TransferFields fills the planned line.",
+        "guards": [
+          "Assign only."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      },
+      {
+        "publisher": "Post Sub. Contract Renewal",
+        "event": "OnBeforeUpdateSubscriptionLineFromPlannedSubscriptionLine",
+        "purpose": "Apply the renewed support level to the subscription line when the planned line is applied.",
+        "guards": [
+          "Assign only; the app archives old values and calls Modify(false) right after."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      },
+      {
+        "publisher": "Post Sub. Contract Renewal",
+        "event": "OnCheckPerformSubscriptionLineUpdate",
+        "purpose": "Change the update rule so a renewal whose price, discount, calculation base and billing rhythm are unchanged but whose support level changed waits until the subscription line is billed to its end date, so the new level applies to the renewed term only (subject to q-support-level-timing).",
+        "guards": [
+          "Only defer when the support level differs and the line is not yet billed up to its end date; leave all other cases to the app's rule.",
+          "Parameter list must be confirmed in the Subscription Billing symbols before implementation."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "setup",
+        "step": "In the supplier's Data Exchange Definition, add a Data Exch. Field Mapping from the region column to Usage Data Generic Import Text1 (or the added field). Decide whether the app ships this mapping or the customer maintains it (q-region-import-field).",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Add a dependency on the Subscription Billing app (publisher Microsoft, id 3099ffc7-4cf7-4df6-9b96-7e4bc2bb587c).",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md"
+        ]
+      },
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification = CustomerContent on every added table extension field (Usage Region, Support Level); table extensions have no table-level value to inherit.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "background",
+        "step": "Keep both subscriber codeunits free of Confirm, Message-only feedback, RunModal and other UI: contract billing can run from Auto Contract Billing in a job queue, and an error stops the run while documents committed before it stay.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "concern": "other",
+        "step": "Page fields for Usage Region and Support Level get tooltip text on the table field (inherited by bound page fields from runtime 13.0 / BC24) or on the page for earlier targets.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "import-region-to-usage-billing",
+        "given": "A usage data supplier with a Data Exchange Definition mapping the region column to Text1, a customer subscription with a usage-based subscription line, and a usage file row with region WEU",
+        "when": "Usage Data Import runs Create Imported Lines, Process Imported Lines and Create Usage Data Billing",
+        "then": "The customer-side Usage Data Billing row has Usage Region WEU",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "usage-billing-region-to-contract-invoice-line",
+        "given": "Processed Usage Data Billing rows with region WEU for a customer contract line",
+        "when": "Create Billing Documents creates the contract invoice",
+        "then": "The sales line for that contract line has Usage Region WEU, set before insert (no Document Change Management error)",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md",
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md"
+        ]
+      },
+      {
+        "id": "posted-invoice-line-has-region",
+        "given": "A contract invoice whose line has Usage Region WEU",
+        "when": "The invoice is posted",
+        "then": "The Sales Invoice Line has Usage Region WEU",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "credit-memo-and-archive-carry-region",
+        "given": "A contract credit memo line and an archived sales line carrying a region (for the targets kept after q-mirror-targets)",
+        "when": "The credit memo is posted and the document is archived",
+        "then": "Sales Cr.Memo Line, Return Receipt Line/Sales Shipment Line where created, and Sales Line Archive carry the same region",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md"
+        ]
+      },
+      {
+        "id": "several-usage-rows-winner-rule",
+        "given": "Two open Usage Data Billing rows for one contract line with different regions and charge periods",
+        "when": "The contract invoice is created",
+        "then": "The invoice line carries the region chosen by the agreed rule (q-region-winner)",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md"
+        ]
+      },
+      {
+        "id": "vendor-side-row-guard",
+        "given": "A usage file row linked to both customer and vendor usage-based subscription lines",
+        "when": "Create Usage Data Billing runs",
+        "then": "Only the customer-side row gets the region (or both, per q-vendor-side)",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md"
+        ]
+      },
+      {
+        "id": "background-billing-without-ui",
+        "given": "A billing template run by Auto Contract Billing from a job queue entry",
+        "when": "The job creates contract invoices for lines with usage regions",
+        "then": "Invoices are created with regions and no UI callback error occurs",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+          "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md"
+        ]
+      },
+      {
+        "id": "renewal-quote-prefills-support-level",
+        "given": "A subscription line with Support Level SILVER and a Sub. Contract Renewal Line for it",
+        "when": "Create Sub. Contract Renewal creates the renewal quote",
+        "then": "The Sales Subscription Line has Support Level SILVER",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      },
+      {
+        "id": "renewal-applies-new-level-after-old-term-billed",
+        "given": "A renewal order whose sales subscription line has Support Level GOLD, for a subscription line billed up to its end date",
+        "when": "The renewal order is posted",
+        "then": "The planned line is applied and the Subscription Line has Support Level GOLD for the renewed term",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md"
+        ]
+      },
+      {
+        "id": "renewal-waits-while-old-term-unbilled",
+        "given": "A renewal order changing the support level to GOLD (and price), for a subscription line not yet billed to its end date",
+        "when": "The renewal order is posted, then the last contract invoice of the old term is posted",
+        "then": "After order posting the Subscription Line keeps the old level and the Planned Subscription Line holds GOLD; after the old term's last invoice is posted the Subscription Line has GOLD",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      },
+      {
+        "id": "support-level-only-change-is-deferred",
+        "given": "A renewal that changes only the support level (price, discount, calculation base and billing rhythm unchanged) for a line not billed to its end date",
+        "when": "The renewal order is posted",
+        "then": "The subscription line keeps the old support level until it is billed to its end date (OnCheckPerformSubscriptionLineUpdate guard)",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md"
+        ]
+      }
+    ],
+    "dependencies": [
+      {
+        "app": "Subscription Billing",
+        "id": "3099ffc7-4cf7-4df6-9b96-7e4bc2bb587c",
+        "publisher": "Microsoft",
+        "reason": "Extends Usage Data Billing, Subscription Line, Sales Subscription Line and Planned Subscription Line and subscribes to Create Usage Data Billing, Create Billing Documents, Create Sub. Contract Renewal and Post Sub. Contract Renewal events.",
+        "knowledge": [
+          "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.md",
+      "used-for": "Region path from the usage file through Usage Data Billing to the contract invoice line.",
+      "constraints": [
+        "Map the region column to a spare field such as Text1 (or an added Usage Data Generic Import field) in the supplier's Data Exch. Field Mapping.",
+        "Copy to Usage Data Billing in OnBeforInsertUsageDataBilling without Modify; check Partner if the value is customer-side only.",
+        "In OnBeforeInsertSalesLineFromContractLine read Usage Data Billing with the app's filters (Partner Customer, contract no./line no. from TempBillingLine, Document Type None, empty Document No.).",
+        "The design must say which value wins, or how values are combined, when one invoice line covers many usage rows.",
+        "Nothing copies by field number in this path; do not assign in OnAfterCreateUsageDataBillingFromTempSubscriptionLine; do not read rows by the sales line's Document No."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/subscription-billing/carry-usage-data-values-to-contract-invoices-through-usage-data-billing.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.md",
+      "used-for": "Subscription Billing dependency, posted-line mirroring of contract invoice lines, and credit memos following the same path.",
+      "constraints": [
+        "A design that extends Subscription Billing needs the dependency on app 3099ffc7-4cf7-4df6-9b96-7e4bc2bb587c, publisher Microsoft.",
+        "Posting copies the sales line to Sales Invoice Line with TransferFields: use the same number and type on sales and posted line tables.",
+        "Credit memos follow the same path.",
+        "Do not patch the sales line later with Modify(true)."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/subscription-billing/carry-contract-line-fields-to-billing-lines-and-contract-invoices.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/subscription-billing/contract-invoice-documents-are-locked-set-values-before-insert.md",
+      "used-for": "Setting the region before the contract invoice line is inserted, and background-run constraints.",
+      "constraints": [
+        "Decide every locked value before the document exists; line values go in OnBeforeInsertSalesLineFromContractLine.",
+        "Do not adjust the created invoice afterwards with Modify(true) or Modify(false).",
+        "Subscribers in this path must not need UI, because billing can run in a job queue; an error stops the run but committed documents stay."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.md",
+      "used-for": "Renewal path for the support level through the renewal quote, planned subscription line and subscription line update.",
+      "constraints": [
+        "Add the field to Subscription Line, Sales Subscription Line and Planned Subscription Line, with the same number and type on the subscription line and planned line.",
+        "Fill the quote in OnAfterInsertSubscriptionLine (read the subscription line by Subscription Line Entry No., assign, Modify).",
+        "Copy in OnAfterCopyFromSalesSubscriptionLine; TransferFields carries it to the planned line.",
+        "Apply in OnBeforeUpdateSubscriptionLineFromPlannedSubscriptionLine without Modify.",
+        "The new value takes effect when the planned line is applied, not when the order is posted; use OnCheckPerformSubscriptionLineUpdate to change the update rule.",
+        "Do not write the subscription line in OnAfterInsertPlannedSubscriptionLineFromSalesSubscriptionLine; do not subscribe to sales invoice posting events for renewals."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/subscription-billing/contract-renewal-updates-subscription-lines-through-planned-lines.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/feature-design/plan-a-custom-field-across-a-process.md",
+      "used-for": "Process map: selected the Subscription Billing row (usage data, set before insert, renewal) and the shared rows (mirrored definitions, privacy, tests, upgrade back-fill question).",
+      "constraints": [
+        "Open every linked article for the stages chosen.",
+        "Whether a field should reach a stage the request does not name is a question for the requester; one question per group of stages.",
+        "Do not fill other records with subscribers that modify them after posting."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-sales-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the Sales Line region on posted line tables and the line archive.",
+      "constraints": [
+        "Same field number, name, type and length on the source and every target table the plan needs: Sales Shipment Line, Sales Invoice Line, Sales Cr.Memo Line, Return Receipt Line and Sales Line Archive, unless the plan states a document type never needs it.",
+        "No subscriber needed for these stages; keep mirrored fields non-editable on posted tables."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/plan-the-full-path-of-a-custom-sales-field.md",
+      "used-for": "Posted line stages and the page extensions and tests each stage needs.",
+      "constraints": [
+        "Posted lines and Sales Line Archive are reached by TransferFields from Sales Line: same rule on the line tables.",
+        "Name the page extensions that show the field and a test that posts a document and reads the value back from every target."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length of every mirrored field (region on sales/posted lines; support level on subscription and planned lines).",
+      "constraints": [
+        "Define mirrored fields with the exact same field number, data type and length on every table in the cascade, at creation time."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "Data classification of the added fields.",
+      "constraints": [
+        "Every Normal field added in a tableextension must set its own DataClassification matching the data stored; never SystemMetadata for customer data."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for customers, items and sales documents.",
+      "constraints": [
+        "Build fixtures with the test Library codeunits (LibrarySales, LibraryInventory, LibraryRandom), parents before dependents, validating foreign keys."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/job-queue-handlers-must-not-require-ui.md",
+      "used-for": "Billing subscribers run in background job queue sessions.",
+      "constraints": [
+        "No Confirm, RunModal, Page.Run, Report.Run or Message-only feedback in code run by the job queue; let failures propagate."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips for the region and support level page fields.",
+      "constraints": [
+        "From runtime 13.0 (BC24) define tooltip text on the table field and let bound page fields inherit it; before that, add page-level tooltips. Applies from BC24 for inheritance."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "q-region-winner",
+      "question": "One contract invoice line can cover several usage data billing rows (several imported lines or charge periods). If their regions differ, which region is shown: the latest charge period, the first, or should the line be split / the values combined?",
+      "affects": [
+        "usage-region-flow",
+        "several-usage-rows-winner-rule"
+      ]
+    },
+    {
+      "id": "q-region-import-field",
+      "question": "Should the region column be mapped to the spare Usage Data Generic Import Text1 field or to a new field added to Usage Data Generic Import, and will the app ship the Data Exch. Field Mapping or will each customer configure it on the supplier's definition?",
+      "affects": [
+        "usage-billing-region",
+        "usage-region-flow"
+      ]
+    },
+    {
+      "id": "q-region-format",
+      "question": "What is the format and maximum length of the supplier's region value (for example a code like WEU or a free-text name), and should it relate to a region master table?",
+      "affects": [
+        "usage-billing-region",
+        "sales-line-region",
+        "sales-invoice-line-region",
+        "sales-cr-memo-line-region",
+        "sales-shipment-line-region",
+        "return-receipt-line-region",
+        "sales-line-archive-region"
+      ]
+    },
+    {
+      "id": "q-vendor-side",
+      "question": "Is the region needed only on customer invoices, or also on vendor-side usage data billing rows and vendor contract invoices (which would use OnBeforeInsertPurchaseLineFromContractLine and purchase mirror tables)?",
+      "affects": [
+        "usage-billing-region",
+        "usage-region-flow",
+        "vendor-side-row-guard"
+      ]
+    },
+    {
+      "id": "q-mirror-targets",
+      "question": "Besides Sales Invoice Line, should the region also be kept on Sales Cr.Memo Line, Sales Shipment Line, Return Receipt Line and Sales Line Archive (the mirroring rule includes them by default), and should it flow back when a posted invoice is copied or corrected?",
+      "affects": [
+        "sales-cr-memo-line-region",
+        "sales-shipment-line-region",
+        "return-receipt-line-region",
+        "sales-line-archive-region",
+        "credit-memo-and-archive-carry-region"
+      ]
+    },
+    {
+      "id": "q-region-editable",
+      "question": "May users change the region on a contract invoice line before posting, or must it stay as imported?",
+      "affects": [
+        "sales-line-region",
+        "sales-invoice-subform-region"
+      ]
+    },
+    {
+      "id": "q-support-level-type",
+      "question": "What are the possible support levels: a fixed list (enum) or a code table maintained by users, and does a level carry other data such as price?",
+      "affects": [
+        "subscription-line-support-level",
+        "sales-subscription-line-support-level",
+        "planned-subscription-line-support-level"
+      ]
+    },
+    {
+      "id": "q-support-level-initial",
+      "question": "How is the support level set when a subscription line is first created (from the sales order, the item's subscription package, or manually on the contract)?",
+      "affects": [
+        "subscription-line-support-level"
+      ]
+    },
+    {
+      "id": "q-support-level-timing",
+      "question": "If a renewal changes only the support level and the old term is not yet fully billed, the app would apply it immediately. Should the design defer it to the renewed term (OnCheckPerformSubscriptionLineUpdate), as designed, accepting that the subscription line then cannot be selected for another renewal while it waits?",
+      "affects": [
+        "support-level-renewal",
+        "support-level-only-change-is-deferred"
+      ]
+    },
+    {
+      "id": "q-support-level-on-invoice",
+      "question": "Should the support level also appear on contract invoice lines and posted invoices (billing line path), or only on the subscription line?",
+      "affects": [
+        "subscription-line-support-level",
+        "support-level-renewal"
+      ]
+    },
+    {
+      "id": "q-backfill",
+      "question": "Do existing subscription lines need an initial support level, and existing open usage data billing rows a region, through upgrade or install code, or do they stay blank?",
+      "affects": [
+        "subscription-line-support-level",
+        "usage-billing-region"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "Page that shows Sales Subscription Lines on the renewal quote/order (where the customer's new support level is entered) and the contract/subscription line pages that display the support level: no opened article names these pages; confirm the page names in the Subscription Billing symbols and add page extensions (judgment).",
+    "OnCheckPerformSubscriptionLineUpdate: the event is named in an opened article but its parameters are not; confirm the signature and publisher in the Subscription Billing symbols before implementing the deferral guard.",
+    "Whether Subscription Line Archive (old values archived on renewal) should mirror the support level is not covered by BCQuality knowledge (judgment).",
+    "Permission sets: the design adds no new tables or exposed objects; no permission set is designed (judgment).",
+    "Page extensions Sales Invoice Subform and Posted Sales Invoice Subform are standard base application page names chosen by judgment; no opened article names them.",
+    "context: bc-version, countries and application-area are unknown (no repository); tooltip inheritance applies from BC24."
+  ]
+}

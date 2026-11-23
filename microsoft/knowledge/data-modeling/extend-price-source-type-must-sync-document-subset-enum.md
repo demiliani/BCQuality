@@ -41,6 +41,8 @@ Source Type`) together, using the identical numeric ID in both.
 
 See sample: [`extend-price-source-type-must-sync-document-subset-enum.good.al`](extend-price-source-type-must-sync-document-subset-enum.good.al).
 
+For designing a pricing feature end to end, start from [plan a custom pricing rule](../feature-design/plan-a-custom-pricing-rule.md).
+
 ## Anti Pattern
 
 Extending `Price Source Type` with a new value intended for sales price

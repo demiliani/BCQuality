@@ -1,0 +1,877 @@
+{
+  "skill": {
+    "id": "al-feature-design",
+    "version": 1
+  },
+  "outcome": "completed",
+  "summary": {
+    "request": "Fixed asset postings need an Asset Project Code so controllers can group acquisition and depreciation costs by investment project. Users enter it on FA journal and FA G/L journal lines and on purchase invoice lines that acquire a fixed asset, and depreciation calculated by the Calculate Depreciation batch must carry the project from the asset's setup. The code must be stored on the FA ledger entries.",
+    "business-process": "Fixed asset posting: FA journals, FA G/L journals, purchase invoice posting of fixed asset lines and the Calculate Depreciation batch, ending in FA ledger entries.",
+    "candidates": 16,
+    "selected": 14
+  },
+  "context": {
+    "bc-version": "unknown",
+    "technologies": [
+      "al"
+    ],
+    "countries": [],
+    "application-area": [],
+    "unknown": [
+      "bc-version",
+      "countries",
+      "application-area"
+    ]
+  },
+  "design": {
+    "objects": [
+      {
+        "id": "fa-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "FA Journal Line",
+        "purpose": "Holds the code the user enters on FA journal lines and the value Calculate Depreciation sets when depreciation is not integrated with G/L.",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "DataClassification set on the field (a tableextension has no table-level value to inherit). Same number, type and length as on every other table in this design."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "id": "gen-journal-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Gen. Journal Line",
+        "purpose": "Holds the code on FA G/L journal lines (account type Fixed Asset), on journal lines built from purchase invoice fixed asset lines, and on depreciation lines when depreciation is integrated with G/L.",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "DataClassification set on the field. Same number, type and length as on every other table in this design."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "id": "fa-ledger-entry-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "FA Ledger Entry",
+        "purpose": "Stores the code on every FA ledger entry, whichever source posted it, so acquisition and depreciation costs can be grouped by investment project. Stored as a field because the request requires storage on the FA ledger entry; set only in the copy events, never by modifying entries after posting.",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "Editable = false. DataClassification set on the field. A code, not an amount, so no sign handling is needed if the entry is reversed (see open question fa-reversal)."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+          "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+          "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "fixed-asset-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Fixed Asset",
+        "purpose": "The asset's setup value that Calculate Depreciation copies onto the depreciation lines it creates.",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "DataClassification set on the field. Placement on Fixed Asset rather than FA Depreciation Book is pending open question depreciation-source."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "id": "purchase-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line",
+        "purpose": "Holds the code the user enters on a purchase invoice line of type Fixed Asset.",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "DataClassification set on the field. Same field number, type and length as on the posted line tables and the archive, because those are filled by TransferFields."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+          "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md"
+        ]
+      },
+      {
+        "id": "invoice-posting-buffer-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Invoice Posting Buffer",
+        "purpose": "Carries the purchase line value through invoice posting, because a fixed asset purchase line never posts through an FA journal and no hop on this path uses TransferFields from the purchase line.",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "Part of Group ID so that lines with different codes are not merged into one buffer line."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purch-inv-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Inv. Line",
+        "purpose": "Mirror target of Purchase Line; TransferFields copies the value when the invoice is posted.",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "Same field number, name, type and length as on Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purch-rcpt-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Rcpt. Line",
+        "purpose": "Mirror target of Purchase Line, chosen by the mirroring article unless the requester excludes it (open question posted-mirrors).",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "Same field number, name, type and length as on Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purch-cr-memo-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purch. Cr. Memo Line",
+        "purpose": "Mirror target of Purchase Line, chosen by the mirroring article unless the requester excludes it (open question posted-mirrors).",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "Same field number, name, type and length as on Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "return-shipment-line-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Return Shipment Line",
+        "purpose": "Mirror target of Purchase Line, chosen by the mirroring article unless the requester excludes it (open question posted-mirrors).",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "Same field number, name, type and length as on Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "purchase-line-archive-ext",
+        "action": "extend",
+        "object-type": "tableextension",
+        "target": "Purchase Line Archive",
+        "purpose": "Mirror target of Purchase Line for archiving, chosen by the mirroring article unless the requester excludes it (open question posted-mirrors).",
+        "fields": [
+          {
+            "name": "Asset Project Code",
+            "type": "Code[20] (provisional; see open question project-code-source)",
+            "note": "Same field number, name, type and length as on Purchase Line; Editable = false."
+          }
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "id": "fa-journal-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Fixed Asset Journal",
+        "purpose": "Lets users enter the code on FA journal lines. Tooltip inherited from the table field on runtime 13.0 (BC24) or later; on earlier targets add a page-level ToolTip.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "fa-gl-journal-page-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Fixed Asset G/L Journal",
+        "purpose": "Lets users enter the code on FA G/L journal lines. Tooltip rule as for the FA journal page.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "purch-invoice-subform-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Purch. Invoice Subform",
+        "purpose": "Lets users enter the code on purchase invoice lines that acquire a fixed asset. Tooltip rule as for the FA journal page.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "fixed-asset-card-ext",
+        "action": "extend",
+        "object-type": "pageextension",
+        "target": "Fixed Asset Card",
+        "purpose": "Lets users maintain the asset's setup value used for depreciation. Tooltip rule as for the FA journal page.",
+        "knowledge": [
+          "microsoft/knowledge/style/tooltip-required-on-page-fields.md"
+        ]
+      },
+      {
+        "id": "asset-project-posting-codeunit",
+        "action": "create",
+        "object-type": "codeunit",
+        "target": "Asset Project FA Posting",
+        "purpose": "Holds every event subscriber of the feature: both copy events of Make FA Ledger Entry, the purchase invoice buffer hops, and both Calculate Depreciation insert events.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      }
+    ],
+    "data-flow": [
+      {
+        "from": "User",
+        "to": "FA Journal Line",
+        "mechanism": "user-entry",
+        "note": "Entered on the Fixed Asset Journal page.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Gen. Journal Line",
+        "mechanism": "user-entry",
+        "note": "Entered on the Fixed Asset G/L Journal page.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Purchase Line",
+        "mechanism": "user-entry",
+        "note": "Entered on purchase invoice lines of type Fixed Asset.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "from": "User",
+        "to": "Fixed Asset",
+        "mechanism": "user-entry",
+        "note": "The asset's setup value, entered on the Fixed Asset Card.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "from": "FA Journal Line",
+        "to": "FA Ledger Entry",
+        "mechanism": "event-copy",
+        "note": "Make FA Ledger Entry.OnAfterCopyFromFAJnlLine; used for posting types the depreciation book does not integrate with G/L. FA Insert Ledger Entry.InsertFA keeps the value.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md"
+        ]
+      },
+      {
+        "from": "Gen. Journal Line",
+        "to": "FA Ledger Entry",
+        "mechanism": "event-copy",
+        "note": "Make FA Ledger Entry.OnAfterCopyFromGenJnlLine; covers FA G/L journals, purchase invoice fixed asset lines and G/L-integrated depreciation.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Invoice Posting Buffer",
+        "mechanism": "event-copy",
+        "note": "Purch. Post Invoice Events.OnPrepareLineOnAfterFillInvoicePostingBuffer; the field is also added to Group ID in Invoice Posting Buffer.OnAfterBuildPrimaryKey.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md"
+        ]
+      },
+      {
+        "from": "Invoice Posting Buffer",
+        "to": "Gen. Journal Line",
+        "mechanism": "event-copy",
+        "note": "Invoice Posting Buffer.OnAfterCopyToGenJnlLineFA, raised when Purch. Post Invoice builds the journal line for a fixed asset buffer line. The journal line then reaches the FA ledger entry through the Gen. Journal Line hop above.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "from": "Fixed Asset",
+        "to": "FA Journal Line",
+        "mechanism": "event-copy",
+        "note": "Calculate Depreciation.OnBeforeFAJnlLineInsert, when depreciation is not integrated with G/L; the subscriber reads the Fixed Asset of the line's FA No.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "from": "Fixed Asset",
+        "to": "Gen. Journal Line",
+        "mechanism": "event-copy",
+        "note": "Calculate Depreciation.OnBeforeGenJnlLineInsert, when depreciation is integrated with G/L; the subscriber reads the Fixed Asset of the line's account.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Inv. Line",
+        "mechanism": "transferfields",
+        "note": "InitFromPurchLine; no subscriber needed.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Rcpt. Line",
+        "mechanism": "transferfields",
+        "note": "InitFromPurchLine; no subscriber needed.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purch. Cr. Memo Line",
+        "mechanism": "transferfields",
+        "note": "InitFromPurchLine; no subscriber needed.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Return Shipment Line",
+        "mechanism": "transferfields",
+        "note": "InitFromPurchLine; no subscriber needed.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      },
+      {
+        "from": "Purchase Line",
+        "to": "Purchase Line Archive",
+        "mechanism": "transferfields",
+        "note": "Archiving copies the line; no subscriber needed.",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md"
+        ]
+      }
+    ],
+    "subscriptions": [
+      {
+        "publisher": "Codeunit \"Make FA Ledger Entry\"",
+        "event": "OnAfterCopyFromFAJnlLine",
+        "purpose": "Copy the code from the FA journal line to the FA ledger entry.",
+        "guards": [
+          "Assign the field only; do not find and Modify FA ledger entries after posting."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Make FA Ledger Entry\"",
+        "event": "OnAfterCopyFromGenJnlLine",
+        "purpose": "Copy the code from the general journal line to the FA ledger entry.",
+        "guards": [
+          "Name the publisher exactly: VAT Entry and Bank Account Ledger Entry publish events with the same name.",
+          "Assign the field only; do not find and Modify FA ledger entries after posting."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+          "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md"
+        ]
+      },
+      {
+        "publisher": "Codeunit \"Purch. Post Invoice Events\"",
+        "event": "OnPrepareLineOnAfterFillInvoicePostingBuffer",
+        "purpose": "Copy the purchase line code into the invoice posting buffer.",
+        "guards": [
+          "Leave IsHandled untouched so the standard buffer update still runs.",
+          "Subscribe on Purch. Post Invoice Events, not on Purch. Post Invoice."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Invoice Posting Buffer\"",
+        "event": "OnAfterBuildPrimaryKey",
+        "purpose": "Add the code to Group ID so fixed asset lines with different codes do not merge and keep only the first line's value.",
+        "guards": [
+          "Pad the value with PadField as the standard key does; Group ID is Text[1000]."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "publisher": "Table \"Invoice Posting Buffer\"",
+        "event": "OnAfterCopyToGenJnlLineFA",
+        "purpose": "Copy the code from the fixed asset buffer line to the general journal line that is posted to the FA ledger.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "publisher": "Report \"Calculate Depreciation\"",
+        "event": "OnBeforeFAJnlLineInsert",
+        "purpose": "Set the asset's code on depreciation FA journal lines (book not integrated with G/L for depreciation).",
+        "guards": [
+          "Handle together with OnBeforeGenJnlLineInsert so the value does not depend on the book's G/L integration."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      },
+      {
+        "publisher": "Report \"Calculate Depreciation\"",
+        "event": "OnBeforeGenJnlLineInsert",
+        "purpose": "Set the asset's code on depreciation general journal lines (book integrated with G/L for depreciation).",
+        "guards": [
+          "Handle together with OnBeforeFAJnlLineInsert so the value does not depend on the book's G/L integration."
+        ],
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      }
+    ],
+    "lifecycle": [
+      {
+        "concern": "privacy",
+        "step": "Set DataClassification on the Asset Project Code field in every table extension; a tableextension has no table-level value to inherit, and ToBeClassified is not a valid default.",
+        "knowledge": [
+          "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md"
+        ]
+      },
+      {
+        "concern": "setup",
+        "step": "Users maintain the asset's Asset Project Code on the Fixed Asset Card before running Calculate Depreciation; depreciation lines take the value from there.",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md"
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "id": "fa-journal-acquisition-carries-code",
+        "given": "A fixed asset and a depreciation book that does not integrate acquisition cost with G/L, created with the library codeunits, and an FA journal acquisition line with a random Asset Project Code",
+        "when": "The FA journal line is posted",
+        "then": "The FA ledger entry for the asset has the same Asset Project Code",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "fa-gl-journal-acquisition-carries-code",
+        "given": "A fixed asset and a depreciation book that integrates acquisition cost with G/L, and an FA G/L journal line of account type Fixed Asset with a random Asset Project Code",
+        "when": "The general journal line is posted",
+        "then": "The FA ledger entry for the asset has the same Asset Project Code",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "purchase-invoice-fa-line-carries-code",
+        "given": "A purchase invoice with one line of type Fixed Asset (acquisition cost) and a random Asset Project Code on the line",
+        "when": "The purchase invoice is posted",
+        "then": "The FA ledger entry for the asset has the same Asset Project Code, and its amount equals the line amount (standard buffer update not skipped)",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "purchase-invoice-lines-with-different-codes-stay-separate",
+        "given": "A purchase invoice with two Fixed Asset lines for the same asset and posting setup but different Asset Project Codes",
+        "when": "The purchase invoice is posted",
+        "then": "Two FA ledger entries exist, each carrying its own line's Asset Project Code and amount",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "posted-purchase-invoice-line-mirrors-code",
+        "given": "A purchase invoice with a Fixed Asset line carrying a random Asset Project Code",
+        "when": "The purchase invoice is posted",
+        "then": "The Purch. Inv. Line has the same Asset Project Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "archived-purchase-line-mirrors-code",
+        "given": "A purchase invoice with a Fixed Asset line carrying a random Asset Project Code",
+        "when": "The document is archived",
+        "then": "The Purchase Line Archive line has the same Asset Project Code",
+        "knowledge": [
+          "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "depreciation-fa-journal-line-carries-asset-code",
+        "given": "A fixed asset with an Asset Project Code and posted acquisition cost in a depreciation book that does not integrate depreciation with G/L",
+        "when": "Calculate Depreciation is run for the asset",
+        "then": "The created FA Journal Line has the asset's Asset Project Code",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      },
+      {
+        "id": "depreciation-gen-journal-line-carries-asset-code",
+        "given": "A fixed asset with an Asset Project Code and posted acquisition cost in a depreciation book that integrates depreciation with G/L",
+        "when": "Calculate Depreciation is run for the asset",
+        "then": "The created Gen. Journal Line has the asset's Asset Project Code",
+        "knowledge": [
+          "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+          "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+          "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+          "microsoft/knowledge/testing/test-one-when-per-test.md"
+        ]
+      }
+    ]
+  },
+  "knowledge": [
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.md",
+      "used-for": "FA ledger entry copy events from both FA journal and general journal lines; fields on FA Journal Line, Gen. Journal Line and FA Ledger Entry.",
+      "constraints": [
+        "Add the field to FA Journal Line, Gen. Journal Line and FA Ledger Entry, and to Maintenance Ledger Entry when maintenance is in scope.",
+        "Subscribe to both OnAfterCopyFromFAJnlLine and OnAfterCopyFromGenJnlLine on Make FA Ledger Entry; which source is used depends on the depreciation book's G/L integration.",
+        "Name the publisher exactly; OnAfterCopyFromGenJnlLine also exists on VAT Entry and Bank Account Ledger Entry.",
+        "Do not find FA ledger entries after posting and Modify them."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.good.al",
+        "microsoft/knowledge/finance-extensions/carry-fields-to-fa-ledger-entries-from-fa-and-gen-journal-lines.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.md",
+      "used-for": "Purchase invoice fixed asset path through Invoice Posting Buffer and depreciation path through Calculate Depreciation.",
+      "constraints": [
+        "A purchase line field must be put into Invoice Posting Buffer, including its grouping key when values may differ per line.",
+        "Copy it from buffer to journal line in OnAfterCopyToGenJnlLine or OnAfterCopyToGenJnlLineFA on Invoice Posting Buffer.",
+        "The last hop is OnAfterCopyFromGenJnlLine on Make FA Ledger Entry.",
+        "Set a depreciation value in both OnBeforeFAJnlLineInsert and OnBeforeGenJnlLineInsert of Calculate Depreciation.",
+        "Do not rely on matching field numbers: no hop on the purchase-to-FA path uses TransferFields from the purchase line."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.good.al",
+        "microsoft/knowledge/finance-extensions/carry-purchase-and-depreciation-fields-to-fixed-asset-entries.bad.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.md",
+      "used-for": "Filling the buffer from the purchase line and keeping lines with different codes in separate groups.",
+      "constraints": [
+        "Subscribe to OnPrepareLineOnAfterFillInvoicePostingBuffer on Purch. Post Invoice Events and leave IsHandled untouched.",
+        "Add the field to Group ID in OnAfterBuildPrimaryKey when lines with different values must post separately, padded with PadField; Group ID is Text[1000].",
+        "Leaving the field out of Group ID merges lines and keeps only the first line's value."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/carry-sales-and-purchase-line-fields-to-gl-through-the-invoice-posting-buffer.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance-extensions/carry-gen-journal-line-fields-to-gl-vat-and-bank-entries.md",
+      "used-for": "Deciding which entries besides the FA ledger entry store the code, and what reversal does to it.",
+      "constraints": [
+        "Decide per entry whether it needs the value; do not store the field on a ledger entry only because it exists on the journal line.",
+        "For every custom field on an entry, state what reversal must do; a reference or code can stay as copied, a custom amount or quantity must be negated."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/finance/do-not-modify-or-delete-posted-ledger-entries.md",
+      "used-for": "Guard: the code is set during posting, never by editing posted entries.",
+      "constraints": [
+        "Do not persist changes to posted financial entries outside the supported posting, correction and entry-edit workflows."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.md",
+      "used-for": "Mirroring the purchase line field on posted purchase lines and the archive.",
+      "constraints": [
+        "Give the field the same number, name, type and length on Purchase Line and every TransferFields target the plan needs; unless the plan excludes a document type, that means all four posted line tables and the archive.",
+        "No subscriber is needed for these stages; keep the mirrored fields non-editable on posted tables."
+      ],
+      "sample-paths": [
+        "microsoft/knowledge/sales-purchase/mirror-purchase-fields-on-every-transferfields-target.good.al"
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/transferfields-mirrored-fields-must-match-type-and-length.md",
+      "used-for": "Type and length agreement across the mirrored purchase line tables.",
+      "constraints": [
+        "Define a mirrored field with the exact same field number, data type and length on every table in the TransferFields cascade."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/performance/prefer-related-table-over-extension-on-hot-ledgers.md",
+      "used-for": "Choice between a stored field and a related table on ledger entries.",
+      "constraints": [
+        "Put optional, sparse or integration attributes in a related table keyed by the ledger entry number.",
+        "Use a stored tableextension field only when the value must appear as a native list column and is read on almost every access."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/data-modeling/tablerelation-field-length-must-match-related-field.md",
+      "used-for": "Sizing the Asset Project Code field once its TableRelation target is decided.",
+      "constraints": [
+        "For an unconditional TableRelation, give the field the same type and exact length as the related field.",
+        "Read the related field's declared type and length before adding the relation; do not assume Code[10] or Code[20]."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/privacy/data-classification-required-on-pii-fields.md",
+      "used-for": "DataClassification on every new table extension field.",
+      "constraints": [
+        "A tableextension has no table-level classification to inherit, so every Normal field it adds must set its own.",
+        "Set the classification that matches the stored data; ToBeClassified is not a safe default."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/style/tooltip-required-on-page-fields.md",
+      "used-for": "Tooltips for the new page fields.",
+      "constraints": [
+        "On runtime 13.0 (BC24) or later, define the tooltip on the table field and let bound page fields inherit it.",
+        "Before runtime 13.0, user-facing page fields need page-level tooltips.",
+        "Describe what the value is used for; do not invent effects or constraints."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/use-library-codeunits-for-test-fixtures.md",
+      "used-for": "Test fixtures for fixed assets, depreciation books, journals and purchase invoices.",
+      "constraints": [
+        "Create prerequisite records with the test Library codeunits, parents first, and Validate foreign keys; do not hand-roll Init/Insert."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-feature-scenario-tags.md",
+      "used-for": "Structure of the test codeunit.",
+      "constraints": [
+        "Tag the codeunit with [FEATURE] and each test with [SCENARIO], [GIVEN], [WHEN] and [THEN]."
+      ]
+    },
+    {
+      "path": "microsoft/knowledge/testing/test-one-when-per-test.md",
+      "used-for": "Shape of each test scenario.",
+      "constraints": [
+        "Give each test exactly one [WHEN]; a precondition action such as posting belongs in [GIVEN]."
+      ]
+    }
+  ],
+  "open-questions": [
+    {
+      "id": "project-code-source",
+      "question": "What does Asset Project Code refer to: an existing table (for example a dimension value or a project), a new Asset Project master table, or free text? This decides the TableRelation and the exact type and length on every table; a new master table would also need its own pages, permissions and setup.",
+      "affects": [
+        "fa-journal-line-ext",
+        "gen-journal-line-ext",
+        "fa-ledger-entry-ext",
+        "fixed-asset-ext",
+        "purchase-line-ext",
+        "invoice-posting-buffer-ext",
+        "purch-inv-line-ext"
+      ]
+    },
+    {
+      "id": "depreciation-source",
+      "question": "Which record is the asset's setup for depreciation: the Fixed Asset card, or the FA Depreciation Book (so the code can differ per depreciation book)?",
+      "affects": [
+        "fixed-asset-ext",
+        "fixed-asset-card-ext",
+        "depreciation-fa-journal-line-carries-asset-code",
+        "depreciation-gen-journal-line-carries-asset-code"
+      ]
+    },
+    {
+      "id": "journal-default-from-asset",
+      "question": "Should FA journal, FA G/L journal and purchase invoice lines default the code from the asset when the FA No. is entered, or is it entered manually only?",
+      "affects": [
+        "fa-journal-line-ext",
+        "gen-journal-line-ext",
+        "purchase-line-ext"
+      ]
+    },
+    {
+      "id": "purchase-line-scope",
+      "question": "Should the code be editable on purchase lines of other types, and on purchase orders and credit memos, or only on invoice lines of type Fixed Asset? Credit memos and orders post through the same buffer path.",
+      "affects": [
+        "purchase-line-ext",
+        "purch-invoice-subform-ext"
+      ]
+    },
+    {
+      "id": "posted-mirrors",
+      "question": "The mirroring guidance adds the field to Purch. Rcpt. Line, Purch. Cr. Memo Line, Return Shipment Line and Purchase Line Archive unless excluded. Are any of these not needed?",
+      "affects": [
+        "purch-rcpt-line-ext",
+        "purch-cr-memo-line-ext",
+        "return-shipment-line-ext",
+        "purchase-line-archive-ext"
+      ]
+    },
+    {
+      "id": "maintenance-scope",
+      "question": "Are maintenance postings in scope? If so, Maintenance Ledger Entry also needs the field and both copy events of Make Maintenance Ledger Entry.",
+      "affects": [
+        "asset-project-posting-codeunit"
+      ]
+    },
+    {
+      "id": "gl-entry-storage",
+      "question": "Do controllers also need the code on G/L entries, or only on FA ledger entries? The request names only FA ledger entries, so G/L Entry is not extended.",
+      "affects": [
+        "gen-journal-line-ext",
+        "fa-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "fa-ledger-storage-form",
+      "question": "Is a stored FA Ledger Entry field required for list grouping, or is a related table keyed by Entry No. acceptable? The request says stored; the performance guidance prefers a related table for sparse attributes.",
+      "affects": [
+        "fa-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "reporting-surface",
+      "question": "Where will controllers group the costs: a column on the FA Ledger Entries page, a report, or an analysis view? No page or report is designed for this yet.",
+      "affects": [
+        "fa-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "existing-entries",
+      "question": "Should FA ledger entries posted before installation get a value, or stay blank?",
+      "affects": [
+        "fa-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "fa-reversal",
+      "question": "Must reversed FA transactions keep the original code on the reversing FA ledger entries? Confirm the expected behavior with a reversal test.",
+      "affects": [
+        "fa-ledger-entry-ext"
+      ]
+    },
+    {
+      "id": "target-version",
+      "question": "Which Business Central version does the app target? It decides whether tooltips can be inherited from table fields (runtime 13.0, BC24) or must be declared on each page.",
+      "affects": [
+        "fa-journal-page-ext",
+        "fa-gl-journal-page-ext",
+        "purch-invoice-subform-ext",
+        "fixed-asset-card-ext"
+      ]
+    }
+  ],
+  "suppressed": [],
+  "unresolved": [
+    "bc-version, countries and application-area could not be determined; no repository or app.json was supplied.",
+    "Page names Fixed Asset Journal, Fixed Asset G/L Journal, Purch. Invoice Subform and Fixed Asset Card are not named by an opened article; confirm against the target's symbols.",
+    "Reading the asset's code inside the Calculate Depreciation subscribers (from the line's FA No. or account) rests on agent judgment; the article sample leaves the lookup to a setup function.",
+    "Behavior of FA ledger entries under reversal is not covered by an opened article."
+  ]
+}

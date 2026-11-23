@@ -21,6 +21,8 @@ For already-posted G/L dimensions, use the supported dimension-correction workfl
 
 See sample: [`do-not-edit-shared-dimension-sets.good.al`](do-not-edit-shared-dimension-sets.good.al).
 
+To design a feature that carries its own data through this process, see [plan the dimension sources of a custom document](../feature-design/plan-the-dimension-sources-of-a-custom-document.md).
+
 ## Anti Pattern
 
 Follow a general-journal, financial-document, or Finance-ledger `Dimension Set ID` to a **persistent** `Dimension Set Entry` and modify, rename, or delete its dimension/value membership in order to change that one transaction. Inspect `IsTemporary` guards, aliases, and the fields written before reporting: the same operations on a temporary working copy are expected.

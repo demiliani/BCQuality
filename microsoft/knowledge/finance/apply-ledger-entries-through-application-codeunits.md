@@ -21,6 +21,8 @@ For programmatic posting, use the target version's public `Apply` / `PostUnApply
 
 See sample: [`apply-ledger-entries-through-application-codeunits.good.al`](apply-ledger-entries-through-application-codeunits.good.al).
 
+To design a feature that carries its own data through this process, see [carry cash receipt fields to customer and detailed ledger entries](../finance-extensions/carry-cash-receipt-fields-to-customer-and-detailed-ledger-entries.md).
+
 ## Anti Pattern
 
 Implement customer/vendor payment matching, settlement, or reopening by directly persisting `Open`, `"Closed by Entry No."`, closure amounts/dates, or detailed-entry unapplication flags, or by deleting/rewriting detailed application amounts. Require confirmed writes to existing non-temporary customer/vendor or detailed customer/vendor entries and settlement intent. Item/inventory application records belong to SCM, not this rule. Do not suggest assigning a `Remaining Amount` FlowField as a fix.
