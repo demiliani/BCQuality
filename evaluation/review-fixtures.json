@@ -99,6 +99,17 @@
     "interfaces": {
       "article": "set-defaultimplementation-on-enum"
     },
+    "manufacturing": {
+      "articles": [
+        "carry-assembly-fields-through-assembly-posting",
+        "let-standard-flushing-post-consumption-for-partial-output"
+      ],
+      "articleOverrides": {
+        "let-standard-flushing-post-consumption-for-partial-output": {
+          "context": "The caller filters the released production order and line, calls this procedure, then stages and posts manual consumption for every selected component with positive remaining quantity. Actual quantities come from the shop floor. The caller also posts partial operation output through standard posting, and the order can include both Manual and routing-linked Backward components. Standard flushing must remain enabled."
+        }
+      }
+    },
     "performance": {
       "articles": [
         "use-isempty-for-existence-check",
@@ -174,6 +185,25 @@
         "stop-when-runrequestpage-returns-empty-parameters"
       ]
     },
+    "sales-purchase": {
+      "articles": [
+        "carry-purchase-fields-to-vendor-ledger-through-the-journal-line",
+        "extend-partial-sales-shipments-and-invoices",
+        "extend-the-undo-purchase-receipt-flow",
+        "link-sales-returns-to-the-original-item-entry"
+      ],
+      "articleOverrides": {
+        "extend-partial-sales-shipments-and-invoices": {
+          "context": "The feature awards two loyalty points per item unit invoiced, on each posted invoice line. Sales orders can be shipped and invoiced in separate partial postings."
+        },
+        "extend-the-undo-purchase-receipt-flow": {
+          "context": "The exporter sends original and corrective purchase receipt lines separately. It assigns Export Message ID after sending each line and skips any line that already has one. Partner Receipt Reference identifies the underlying receipt across both lines."
+        },
+        "link-sales-returns-to-the-original-item-entry": {
+          "context": "The integration creates a sales return order line for an untracked item and requires exact reversal of the original inventory cost. The caller has validated item, variant and quantity, uses the base unit of measure, and passes the original outbound Item Ledger Entry for the single shipment being returned. The caller persists the changed line after this procedure."
+        }
+      }
+    },
     "scm": {
       "articles": [
         "post-item-ledger-changes-through-item-journals",
@@ -185,8 +215,14 @@
         "post-transfers-through-shipment-and-receipt-codeunits",
         "use-date-aware-availability-for-promising",
         "carry-out-requisition-actions-through-the-standard-workflow",
-        "derive-base-quantities-through-the-line-unit-of-measure"
-      ]
+        "derive-base-quantities-through-the-line-unit-of-measure",
+        "read-adjusted-sales-cost-from-value-entries"
+      ],
+      "articleOverrides": {
+        "read-adjusted-sales-cost-from-value-entries": {
+          "context": "The report requires the current signed actual inventory cost, including cost adjustments, for the known outbound Item Ledger Entry. It runs after standard cost adjustment and does not require that inventory cost has already been posted to G/L."
+        }
+      }
     },
     "security": {
       "articles": [
